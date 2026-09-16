@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Plus,
@@ -16,6 +16,9 @@ import {
   BookOpen,
   Award
 } from 'lucide-react';
+import { examService } from '../../services/examService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const ExaminationsModule = () => {
   const { activeTab, setActiveTab } = useTheme();
@@ -35,6 +38,11 @@ export const ExaminationsModule = () => {
   const [viewingItem, setViewingItem] = useState(null);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const [selectedRows, setSelectedRows] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { busyKey, runAction } = useApiAction();
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     setCurrentSubTab(getSubTabFromActiveTab());
@@ -42,37 +50,39 @@ export const ExaminationsModule = () => {
   }, [activeTab]);
 
   // 1. Exam List State & Data (Screenshots 1 & 2)
-  const [exams, setExams] = useState([
-    { id: 1, sl: '01', name: 'Monthly Test', date: '05 Jun 2015', startTime: '10:00 AM', endTime: '01:00 PM', status: 'Active' },
-    { id: 2, sl: '02', name: 'Weekly Assessment', date: '10 Jun 2015', startTime: '09:00 AM', endTime: '11:00 AM', status: 'Pending' },
-    { id: 3, sl: '03', name: 'Mid Term Exam', date: '15 Jun 2015', startTime: '12:00 PM', endTime: '03:00 PM', status: 'Scheduled' },
-    { id: 4, sl: '04', name: 'Final Term Exam', date: '22 Jun 2015', startTime: '10:00 AM', endTime: '01:30 PM', status: 'Closed' },
-    { id: 5, sl: '05', name: 'Mock Test', date: '28 Jun 2015', startTime: '11:00 AM', endTime: '01:00 PM', status: 'Active' },
-    { id: 6, sl: '06', name: 'Quiz Exam', date: '03 Jul 2015', startTime: '02:00 PM', endTime: '02:30 PM', status: 'Pending' },
-    { id: 7, sl: '07', name: 'Group Discussion', date: '08 Jul 2015', startTime: '03:30 PM', endTime: '05:00 PM', status: 'Scheduled' }
-  ]);
+  const [exams, setExams] = useState([]);
 
   // 2. Exam Schedule State & Data (Screenshots 3 & 4)
-  const [schedules, setSchedules] = useState([
-    { id: 1, sl: '01', className: 'Class 1 (A)', subject: 'English', date: '05 Jun 2015', startTime: '10:00 AM', endTime: '01:00 PM', duration: '3 hrs', room: '101' },
-    { id: 2, sl: '02', className: 'Class 2 (B)', subject: 'Mathematics', date: '12 Jul 2016', startTime: '09:30 AM', endTime: '12:30 PM', duration: '3 hrs', room: '102' },
-    { id: 3, sl: '03', className: 'Class 3 (C)', subject: 'Science', date: '18 Sep 2017', startTime: '11:00 AM', endTime: '02:00 PM', duration: '3 hrs', room: '103' },
-    { id: 4, sl: '04', className: 'Class 4 (A)', subject: 'History', date: '02 Jan 2018', startTime: '08:30 AM', endTime: '11:30 AM', duration: '3 hrs', room: '104' },
-    { id: 5, sl: '05', className: 'Class 5 (B)', subject: 'Geography', date: '10 Mar 2019', startTime: '12:00 PM', endTime: '03:00 PM', duration: '3 hrs', room: '105' },
-    { id: 6, sl: '06', className: 'Class 6 (A)', subject: 'Bangla', date: '20 Apr 2020', startTime: '09:00 AM', endTime: '12:00 PM', duration: '3 hrs', room: '106' },
-    { id: 7, sl: '07', className: 'Class 7 (C)', subject: 'Computer', date: '15 Aug 2021', startTime: '01:00 PM', endTime: '04:00 PM', duration: '3 hrs', room: '107' },
-    { id: 8, sl: '08', className: 'Class 8 (B)', subject: 'Physics', date: '09 Oct 2022', startTime: '10:30 AM', endTime: '01:30 PM', duration: '3 hrs', room: '108' }
-  ]);
+  const [schedules, setSchedules] = useState([]);
 
   // 3. Exam Result State & Data (Screenshot 5)
-  const [results, setResults] = useState([
-    { id: 1, sl: '01', admissionNo: 'AD52365', name: 'Kathryn Murphy', rollNo: '12', className: 'Class 1 (A)', exam: 'Monthly Test', total: 644, percent: 92, grade: 'A+', result: 'Pass', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 2, sl: '02', admissionNo: 'AD52366', name: 'Jerome Bell', rollNo: '14', className: 'Class 2 (B)', exam: 'Final Exam', total: 578, percent: 82, grade: 'A', result: 'Pass', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' },
-    { id: 3, sl: '03', admissionNo: 'AD52367', name: 'Theresa Webb', rollNo: '16', className: 'Class 3 (C)', exam: 'Mid Term', total: 430, percent: 70, grade: 'B+', result: 'Pass', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80' },
-    { id: 4, sl: '04', admissionNo: 'AD52368', name: 'Cody Fisher', rollNo: '19', className: 'Class 4 (A)', exam: 'Quarterly Test', total: 380, percent: 64, grade: 'B', result: 'Fail', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80' },
-    { id: 5, sl: '05', admissionNo: 'AD52369', name: 'Annette Black', rollNo: '10', className: 'Class 5 (B)', exam: 'Final Exam', total: 698, percent: 96, grade: 'A+', result: 'Pass', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80' },
-    { id: 6, sl: '06', admissionNo: 'AD52370', name: 'Jenny Wilson', rollNo: '07', className: 'Class 6 (A)', exam: 'Half Yearly', total: 612, percent: 89, grade: 'A', result: 'Pass', avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=100&q=80' }
-  ]);
+  const [results, setResults] = useState([]);
+
+  const fetchExamsData = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const [examRes, schedRes, resultRes] = await Promise.all([
+        examService.exams.list(),
+        examService.schedules.list(),
+        examService.results.list()
+      ]);
+      const examItems = Array.isArray(examRes) ? examRes : [];
+      const schedItems = Array.isArray(schedRes) ? schedRes : [];
+      const resultItems = Array.isArray(resultRes) ? resultRes : [];
+      setExams((prev) => (examItems.length ? examItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setSchedules((prev) => (schedItems.length ? schedItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setResults((prev) => (resultItems.length ? resultItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+    } catch (e) {
+      setError(e.message || 'Failed to load examination data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchExamsData();
+  }, [fetchExamsData]);
 
   // Modal Form State
   const [modalFormData, setModalFormData] = useState({
@@ -155,119 +165,115 @@ export const ExaminationsModule = () => {
     setIsDetailModalOpen(true);
   };
 
-  const handleDeleteItem = (id) => {
+  const handleDeleteItem = async (id) => {
     setActiveDropdownId(null);
-    if (currentSubTab === 'exam') {
-      setExams((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'schedule') {
-      setSchedules((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'result') {
-      setResults((prev) => prev.filter((item) => item.id !== id));
+    try {
+      if (currentSubTab === 'exam') {
+        await examService.exams.remove(id);
+        setExams((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'schedule') {
+        await examService.schedules.remove(id);
+        setSchedules((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'result') {
+        await examService.results.remove(id);
+        setResults((prev) => prev.filter((item) => item.id !== id));
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to delete item');
     }
   };
 
-  const handleSaveModal = (e) => {
+  const handleSaveModal = async (e) => {
     e.preventDefault();
 
-    if (editingItem) {
-      if (currentSubTab === 'exam') {
-        setExams((prev) =>
-          prev.map((ex) =>
-            ex.id === editingItem.id
-              ? {
-                  ...ex,
-                  name: modalFormData.name,
-                  date: modalFormData.date,
-                  startTime: modalFormData.startTime,
-                  endTime: modalFormData.endTime,
-                  status: modalFormData.status
-                }
-              : ex
-          )
-        );
-      } else if (currentSubTab === 'schedule') {
-        setSchedules((prev) =>
-          prev.map((sc) =>
-            sc.id === editingItem.id
-              ? {
-                  ...sc,
-                  className: modalFormData.className,
-                  subject: modalFormData.subject,
-                  date: modalFormData.date,
-                  startTime: modalFormData.startTime,
-                  endTime: modalFormData.endTime,
-                  duration: modalFormData.duration,
-                  room: modalFormData.room
-                }
-              : sc
-          )
-        );
-      } else if (currentSubTab === 'result') {
-        setResults((prev) =>
-          prev.map((rs) =>
-            rs.id === editingItem.id
-              ? {
-                  ...rs,
-                  name: modalFormData.name,
-                  admissionNo: modalFormData.admissionNo,
-                  rollNo: modalFormData.rollNo,
-                  className: modalFormData.className,
-                  exam: modalFormData.subject,
-                  total: modalFormData.total,
-                  percent: modalFormData.percent,
-                  grade: modalFormData.grade,
-                  result: modalFormData.result
-                }
-              : rs
-          )
-        );
-      }
-    } else {
-      if (currentSubTab === 'exam') {
-        const newExam = {
-          id: Date.now(),
-          sl: `0${exams.length + 1}`,
-          name: modalFormData.name || 'New Exam',
-          date: modalFormData.date || '05 Jun 2015',
-          startTime: modalFormData.startTime || '10:00 AM',
-          endTime: modalFormData.endTime || '01:00 PM',
-          status: modalFormData.status
-        };
-        setExams([newExam, ...exams]);
-      } else if (currentSubTab === 'schedule') {
-        const newSched = {
-          id: Date.now(),
-          sl: `0${schedules.length + 1}`,
-          className: modalFormData.className || 'Class 1 (A)',
-          subject: modalFormData.subject || 'English',
-          date: modalFormData.date || '05 Jun 2015',
-          startTime: modalFormData.startTime || '10:00 AM',
-          endTime: modalFormData.endTime || '01:00 PM',
-          duration: modalFormData.duration || '3 hrs',
-          room: modalFormData.room || '101'
-        };
-        setSchedules([newSched, ...schedules]);
-      } else if (currentSubTab === 'result') {
-        const newRes = {
-          id: Date.now(),
-          sl: `0${results.length + 1}`,
-          admissionNo: modalFormData.admissionNo || 'AD52372',
-          name: modalFormData.name || 'New Student Result',
-          rollNo: modalFormData.rollNo || '21',
-          className: modalFormData.className || 'Class 1 (A)',
-          exam: 'Monthly Test',
-          total: modalFormData.total || 620,
-          percent: modalFormData.percent || 88,
-          grade: modalFormData.grade || 'A',
-          result: modalFormData.result || 'Pass',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'
-        };
-        setResults([newRes, ...results]);
-      }
+    if (savingRef.current) {
+      return;
     }
+    savingRef.current = true;
+    setIsSaving(true);
 
-    setIsModalOpen(false);
-    setEditingItem(null);
+    try {
+      if (editingItem) {
+        const id = editingItem.id;
+        if (currentSubTab === 'exam') {
+          const updated = await examService.exams.update(id, {
+            name: modalFormData.name,
+            date: modalFormData.date,
+            startTime: modalFormData.startTime,
+            endTime: modalFormData.endTime,
+            status: modalFormData.status
+          });
+          setExams((prev) => prev.map((ex) => (ex.id === id ? { ...ex, ...updated } : ex)));
+        } else if (currentSubTab === 'schedule') {
+          const updated = await examService.schedules.update(id, {
+            className: modalFormData.className,
+            subject: modalFormData.subject,
+            date: modalFormData.date,
+            startTime: modalFormData.startTime,
+            endTime: modalFormData.endTime,
+            duration: modalFormData.duration,
+            room: modalFormData.room
+          });
+          setSchedules((prev) => prev.map((sc) => (sc.id === id ? { ...sc, ...updated } : sc)));
+        } else if (currentSubTab === 'result') {
+          const updated = await examService.results.update(id, {
+            name: modalFormData.name,
+            admissionNo: modalFormData.admissionNo,
+            rollNo: modalFormData.rollNo,
+            className: modalFormData.className,
+            exam: modalFormData.subject,
+            total: modalFormData.total,
+            percent: modalFormData.percent,
+            grade: modalFormData.grade,
+            result: modalFormData.result
+          });
+          setResults((prev) => prev.map((rs) => (rs.id === id ? { ...rs, ...updated } : rs)));
+        }
+      } else {
+        if (currentSubTab === 'exam') {
+          const created = await examService.exams.create({
+            name: modalFormData.name || 'New Exam',
+            date: modalFormData.date || '05 Jun 2015',
+            startTime: modalFormData.startTime || '10:00 AM',
+            endTime: modalFormData.endTime || '01:00 PM',
+            status: modalFormData.status
+          });
+          setExams((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'schedule') {
+          const created = await examService.schedules.create({
+            className: modalFormData.className || 'Class 1 (A)',
+            subject: modalFormData.subject || 'English',
+            date: modalFormData.date || '05 Jun 2015',
+            startTime: modalFormData.startTime || '10:00 AM',
+            endTime: modalFormData.endTime || '01:00 PM',
+            duration: modalFormData.duration || '3 hrs',
+            room: modalFormData.room || '101'
+          });
+          setSchedules((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'result') {
+          const created = await examService.results.create({
+            admissionNo: modalFormData.admissionNo || 'AD52372',
+            name: modalFormData.name || 'New Student Result',
+            rollNo: modalFormData.rollNo || '21',
+            className: modalFormData.className || 'Class 1 (A)',
+            exam: 'Monthly Test',
+            total: modalFormData.total || 620,
+            percent: modalFormData.percent || 88,
+            grade: modalFormData.grade || 'A',
+            result: modalFormData.result || 'Pass'
+          });
+          setResults((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        }
+      }
+
+      setIsModalOpen(false);
+      setEditingItem(null);
+    } catch (e) {
+      setError(e.message || 'Failed to save item');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const toggleSelectAll = (list) => {
@@ -402,6 +408,27 @@ export const ExaminationsModule = () => {
           )}
         </div>
       </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !exams.length && !schedules.length && !results.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading examination data...
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
@@ -554,11 +581,13 @@ export const ExaminationsModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
+                          row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onView={() => handleOpenViewModal(row)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -588,11 +617,13 @@ export const ExaminationsModule = () => {
                       <td style={{ padding: '14px 16px', fontWeight: 600 }}>{row.room}</td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
+                          row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onView={() => handleOpenViewModal(row)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -631,11 +662,13 @@ export const ExaminationsModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
+                          row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onView={() => handleOpenViewModal(row)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -1052,6 +1085,7 @@ export const ExaminationsModule = () => {
                 type="submit"
                 form="exam-modal-form"
                 className="btn btn-primary"
+                disabled={isSaving}
                 style={{
                   padding: '10px 36px',
                   backgroundColor: '#0d9488',
@@ -1061,7 +1095,7 @@ export const ExaminationsModule = () => {
                   boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)'
                 }}
               >
-                Save
+                {isSaving ? <><Spinner size={16} color="#ffffff" /> Saving...</> : 'Save'}
               </button>
             </div>
           </div>
@@ -1168,7 +1202,8 @@ export const ExaminationsModule = () => {
 };
 
 // Action Dropdown Cell Component with View Details, Edit, and Delete options
-const ActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onDelete }) => {
+const ActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onDelete, row, busyKey }) => {
+  const isDeleting = busyKey === `delete-${row.id}`;
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -1231,6 +1266,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onDelete }) => {
           </button>
           <button
             onClick={onDelete}
+            disabled={isDeleting}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1246,7 +1282,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onDelete }) => {
               borderTop: '1px solid var(--border-light)'
             }}
           >
-            <Trash2 size={14} /> Delete
+            {isDeleting ? <Spinner size={14} color="#ef4444" /> : <Trash2 size={14} />} Delete
           </button>
         </div>
       )}

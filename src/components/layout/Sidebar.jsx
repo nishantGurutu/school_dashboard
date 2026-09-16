@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { authStorage } from '../../services/api';
 import {
   Home,
   GraduationCap,
@@ -24,6 +25,7 @@ import {
 export const Sidebar = () => {
   const { activeTab, setActiveTab, isSidebarCollapsed } = useTheme();
   const [openSubMenu, setOpenSubMenu] = useState('classes'); // Default open classes sub-menu
+  const currentUser = authStorage.getUser();
 
   const menuItems = [
     { key: 'dashboard', label: 'Dashboard', icon: Home, hasSub: true },
@@ -230,8 +232,8 @@ export const Sidebar = () => {
               style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
             />
             <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1.2 }}>Jone Copper</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Admin</div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1.2 }}>{(currentUser && currentUser.name) || 'Admin'}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{(currentUser && currentUser.role) || 'Admin'}</div>
             </div>
           </div>
           <ChevronRight size={16} color="var(--text-muted)" />

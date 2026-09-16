@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Plus,
@@ -15,94 +15,43 @@ import {
   UploadCloud,
   Star
 } from 'lucide-react';
+import { certificateService } from '../../services/certificateService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const CertificateModule = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedRows, setSelectedRows] = useState([]);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
+  const { busyKey, runAction } = useApiAction();
 
-  // Default Certificates List (Screenshot 1)
-  const [certificates, setCertificates] = useState([
-    {
-      id: 1,
-      sl: '01',
-      name: 'Marvin McKinney',
-      rollNo: '12',
-      className: 'Class 1 (A)',
-      certificateName: 'Transfer Certificate',
-      bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
-      date: '15 May 2025',
-      footerLeft: 'Principal Signature',
-      footerRight: 'Class Teacher Signature'
-    },
-    {
-      id: 2,
-      sl: '02',
-      name: 'Kathryn Murphy',
-      rollNo: '18',
-      className: 'Class 2 (B)',
-      certificateName: 'Character Certificate',
-      bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-      avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80',
-      date: '16 May 2025',
-      footerLeft: 'Principal Signature',
-      footerRight: 'Headmaster Signature'
-    },
-    {
-      id: 3,
-      sl: '03',
-      name: 'Devon Lane',
-      rollNo: '21',
-      className: 'Class 3 (A)',
-      certificateName: 'Sports Achievement Certificate',
-      bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80',
-      date: '18 May 2025',
-      footerLeft: 'Sports Director',
-      footerRight: 'Principal Signature'
-    },
-    {
-      id: 4,
-      sl: '04',
-      name: 'Cody Fisher',
-      rollNo: '9',
-      className: 'Class 4 (C)',
-      certificateName: 'Merit Certificate',
-      bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80',
-      date: '20 May 2025',
-      footerLeft: 'Academic Dean',
-      footerRight: 'Principal Signature'
-    },
-    {
-      id: 5,
-      sl: '05',
-      name: 'Theresa Webb',
-      rollNo: '15',
-      className: 'Class 5 (B)',
-      certificateName: 'Attendance Certificate',
-      bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-      avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80',
-      date: '22 May 2025',
-      footerLeft: 'Class Teacher',
-      footerRight: 'Principal Signature'
-    },
-    {
-      id: 6,
-      sl: '06',
-      name: 'Darrell Steward',
-      rollNo: '5',
-      className: 'Class 6 (A)',
-      certificateName: 'Scholarship Certificate',
-      bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
-      date: '25 May 2025',
-      footerLeft: 'Board Committee',
-      footerRight: 'Principal Signature'
+  // Certificates loaded from backend
+  const [certificates, setCertificates] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  const fetchCertificates = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const result = await certificateService.list();
+      const items = (Array.isArray(result) ? result : []).map((c, i) => ({
+        ...c,
+        sl: String(i + 1).padStart(2, '0')
+      }));
+      setCertificates(items);
+    } catch (e) {
+      setError(e.message || 'Failed to load certificates');
+    } finally {
+      setIsLoading(false);
     }
-  ]);
+  }, []);
+
+  useEffect(() => {
+    fetchCertificates();
+  }, [fetchCertificates]);
 
   // Drawer Modal State (Add / Edit)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -169,47 +118,59 @@ export const CertificateModule = () => {
   };
 
   // Delete Certificate Row
-  const handleDeleteCertificate = (id) => {
+  const handleDeleteCertificate = async (id) => {
     setActiveDropdownId(null);
-    setCertificates((prev) => prev.filter((c) => c.id !== id));
+    try {
+      await certificateService.remove(id);
+      setCertificates((prev) => prev.filter((c) => c.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete certificate');
+    }
   };
 
   // Save Drawer Form
-  const handleSaveForm = (e) => {
+  const handleSaveForm = async (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setCertificates((prev) =>
-        prev.map((c) =>
-          c.id === editingItem.id
-            ? {
-                ...c,
-                certificateName: formData.certificateName || c.certificateName,
-                className: formData.className !== 'Select Class' ? formData.className : c.className,
-                name: formData.studentName !== 'Select Student' ? formData.studentName : c.name,
-                date: formData.date || c.date,
-                footerLeft: formData.footerLeftText || c.footerLeft,
-                footerRight: formData.footerRightText || c.footerRight
-              }
-            : c
-        )
-      );
-    } else {
-      const newCert = {
-        id: Date.now(),
-        sl: `${certificates.length + 1 < 10 ? '0' : ''}${certificates.length + 1}`,
-        name: formData.studentName !== 'Select Student' ? formData.studentName : 'New Student',
-        rollNo: '10',
-        className: formData.className !== 'Select Class' ? formData.className : 'Class 1 (A)',
-        certificateName: formData.certificateName || 'Excellence Certificate',
-        bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
-        date: formData.date || '15 May 2025',
-        footerLeft: formData.footerLeftText || 'Principal Signature',
-        footerRight: formData.footerRightText || 'Class Teacher'
-      };
-      setCertificates([newCert, ...certificates]);
+    setIsSaving(true);
+    try {
+      if (editingItem) {
+        const updated = await certificateService.update(editingItem.id, {
+          ...editingItem,
+          certificateName: formData.certificateName || editingItem.certificateName,
+          className: formData.className !== 'Select Class' ? formData.className : editingItem.className,
+          name: formData.studentName !== 'Select Student' ? formData.studentName : editingItem.name,
+          date: formData.date || editingItem.date,
+          footerLeft: formData.footerLeftText || editingItem.footerLeft,
+          footerRight: formData.footerRightText || editingItem.footerRight
+        });
+        setCertificates((prev) => prev.map((c) => (c.id === editingItem.id ? { ...c, ...updated } : c)));
+        setEditingItem(null);
+      } else {
+        const created = await certificateService.create({
+          name: formData.studentName !== 'Select Student' ? formData.studentName : 'New Student',
+          rollNo: '10',
+          className: formData.className !== 'Select Class' ? formData.className : 'Class 1 (A)',
+          certificateName: formData.certificateName || 'Excellence Certificate',
+          bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
+          date: formData.date || '15 May 2025',
+          footerLeft: formData.footerLeftText || 'Principal Signature',
+          footerRight: formData.footerRightText || 'Class Teacher'
+        });
+        setCertificates((prev) => [
+          {
+            ...created,
+            sl: String(prev.length + 1).padStart(2, '0')
+          },
+          ...prev
+        ]);
+      }
+      setIsDrawerOpen(false);
+    } catch (e) {
+      setError(e.message || 'Failed to save certificate');
+    } finally {
+      setIsSaving(false);
     }
-    setIsDrawerOpen(false);
   };
 
   const toggleSelectAll = () => {
@@ -259,6 +220,27 @@ export const CertificateModule = () => {
           <Plus size={18} /> + Add Certificate
         </button>
       </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !certificates.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading certificates...
+        </div>
+      )}
 
       {/* Main Table Card (Screenshot 1) */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
@@ -388,7 +370,8 @@ export const CertificateModule = () => {
                         onView={() => handleOpenViewModal(row)}
                         onPrint={() => handlePrintCertificateRow(row)}
                         onEdit={() => handleOpenEditModal(row)}
-                        onDelete={() => handleDeleteCertificate(row.id)}
+                        onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteCertificate(row.id))}
+                        deleteBusy={busyKey === `delete-${row.id}`}
                       />
                     </td>
                   </tr>
@@ -621,6 +604,7 @@ export const CertificateModule = () => {
                 type="submit"
                 form="certificate-form"
                 className="btn btn-primary"
+                disabled={isSaving}
                 style={{
                   padding: '10px 36px',
                   backgroundColor: '#0d9488',
@@ -629,7 +613,7 @@ export const CertificateModule = () => {
                   fontSize: '0.9rem'
                 }}
               >
-                Save
+                {isSaving ? <Spinner size={16} color="#ffffff" /> : null} {isSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>
@@ -789,7 +773,7 @@ export const CertificateModule = () => {
 };
 
 // Certificate Action Dropdown Cell with View, Print, Edit, and Delete options (User prompt)
-const CertificateActionDropdownCell = ({ isOpen, onToggle, onView, onPrint, onEdit, onDelete }) => {
+const CertificateActionDropdownCell = ({ isOpen, onToggle, onView, onPrint, onEdit, onDelete, deleteBusy }) => {
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -874,6 +858,7 @@ const CertificateActionDropdownCell = ({ isOpen, onToggle, onView, onPrint, onEd
 
           <button
             onClick={onDelete}
+            disabled={deleteBusy}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -889,7 +874,7 @@ const CertificateActionDropdownCell = ({ isOpen, onToggle, onView, onPrint, onEd
               borderTop: '1px solid var(--border-light)'
             }}
           >
-            <Trash2 size={14} /> Delete
+            {deleteBusy ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={14} />} {deleteBusy ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       )}

@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
+import { authStorage } from './services/api';
+import { authService } from './services/authService';
 
 import { SchoolAdminDashboard } from './components/dashboard/SchoolAdminDashboard';
 import { ProjectDashboard } from './components/dashboard/ProjectDashboard';
@@ -22,8 +24,9 @@ import { HrmModule } from './components/modules/HrmModule';
 import { NoticeBoardModule } from './components/modules/NoticeBoardModule';
 
 import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerModal';
+import { LoginScreen } from './components/auth/LoginScreen';
 
-const MainLayout = () => {
+const MainLayout = ({ onLogout }) => {
   const { activeTab, isSidebarCollapsed } = useTheme();
 
   const renderModule = () => {
@@ -94,7 +97,7 @@ const MainLayout = () => {
           marginLeft: isSidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)'
         }}
       >
-        <Header />
+        <Header onLogout={onLogout} />
         <main className="page-body">
           {renderModule()}
         </main>
@@ -105,9 +108,28 @@ const MainLayout = () => {
 };
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    const accessToken = authStorage.getAccessToken();
+    return Boolean(accessToken);
+  });
+
+  const handleLogout = useCallback(async () => {
+    try {
+      await authService.logout();
+    } finally {
+      setIsAuthenticated(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handleSessionExpired = () => setIsAuthenticated(false);
+    window.addEventListener('auth:expired', handleSessionExpired);
+    return () => window.removeEventListener('auth:expired', handleSessionExpired);
+  }, []);
+
   return (
     <ThemeProvider>
-      <MainLayout />
+      {isAuthenticated ? <MainLayout onLogout={handleLogout} /> : <LoginScreen onLogin={() => setIsAuthenticated(true)} />}
     </ThemeProvider>
   );
 }

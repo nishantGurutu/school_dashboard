@@ -1,8 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Eye, EyeOff, ArrowLeft } from 'lucide-react';
+import { Spinner } from '../ui/Spinner';
 
 export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEditMode = false }) => {
   const [showPassword, setShowPassword] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   // Form State containing all fields from guardian screenshot
   const [formData, setFormData] = useState({
@@ -34,10 +37,18 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (onSaveGuardian) {
-      onSaveGuardian(formData);
+    if (!onSaveGuardian || savingRef.current) {
+      return;
+    }
+    savingRef.current = true;
+    setIsSaving(true);
+    try {
+      await onSaveGuardian(formData);
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -250,16 +261,20 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
           <button
             type="submit"
             className="btn btn-primary"
+            disabled={isSaving}
             style={{
               padding: '12px 40px',
               backgroundColor: '#0d9488',
               color: '#ffffff',
               fontWeight: 700,
               fontSize: '0.95rem',
-              boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)'
+              boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px'
             }}
           >
-            {isEditMode ? 'Update Guardian Details' : 'Save Changes'}
+            {isSaving ? (<><Spinner size={16} color="#ffffff" /> Saving...</>) : (isEditMode ? 'Update Guardian Details' : 'Save Changes')}
           </button>
         </div>
       </form>

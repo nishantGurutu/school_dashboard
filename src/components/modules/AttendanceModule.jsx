@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Search,
@@ -12,6 +12,9 @@ import {
   UserCheck,
   Award
 } from 'lucide-react';
+import { attendanceService } from '../../services/attendanceService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const AttendanceModule = () => {
   const { activeTab, setActiveTab } = useTheme();
@@ -27,44 +30,54 @@ export const AttendanceModule = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedRows, setSelectedRows] = useState([]);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const { busyKey, runAction } = useApiAction();
 
   useEffect(() => {
     setCurrentSubTab(getSubTabFromActiveTab());
     setIsFilterOpen(false);
   }, [activeTab]);
 
-  // 1. Student Attendance Data (Screenshot 1)
-  const [studentList, setStudentList] = useState([
-    { id: 1, sl: '01', admissionNo: 'AD52365', name: 'Marvin McKinney', rollNo: '12', className: 'Class 1 (A)', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 2, sl: '02', admissionNo: 'AD52366', name: 'Cody Fisher', rollNo: '8', className: 'Class 2 (B)', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' },
-    { id: 3, sl: '03', admissionNo: 'AD52367', name: 'Jenny Wilson', rollNo: '9', className: 'Class 3 (C)', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80' },
-    { id: 4, sl: '04', admissionNo: 'AD52368', name: 'Guy Hawkins', rollNo: '5', className: 'Class 2 (A)', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80' },
-    { id: 5, sl: '05', admissionNo: 'AD52369', name: 'Esther Howard', rollNo: '15', className: 'Class 3 (B)', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80' },
-    { id: 6, sl: '06', admissionNo: 'AD52370', name: 'Jane Cooper', rollNo: '18', className: 'Class 4 (A)', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 7, sl: '07', admissionNo: 'AD52371', name: 'Robert Fox', rollNo: '21', className: 'Class 5 (B)', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' }
-  ]);
+  // Attendance data loaded from backend per active tab
+  const [studentList, setStudentList] = useState([]);
+  const [teacherList, setTeacherList] = useState([]);
+  const [employeeList, setEmployeeList] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // 2. Teacher Attendance Data (Screenshot 2)
-  const [teacherList, setTeacherList] = useState([
-    { id: 1, sl: '01', admissionNo: 'AD52365', name: 'Marvin McKinney', className: 'Mathematics', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 2, sl: '02', admissionNo: 'AD52366', name: 'Cody Fisher', className: 'Physics', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' },
-    { id: 3, sl: '03', admissionNo: 'AD52367', name: 'Jenny Wilson', className: 'Biology', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80' },
-    { id: 4, sl: '04', admissionNo: 'AD52368', name: 'Guy Hawkins', className: 'English', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80' },
-    { id: 5, sl: '05', admissionNo: 'AD52369', name: 'Esther Howard', className: 'Math', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80' },
-    { id: 6, sl: '06', admissionNo: 'AD52370', name: 'Jane Cooper', className: 'Chemistry', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 7, sl: '07', admissionNo: 'AD52371', name: 'Robert Fox', className: 'Biology', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' }
-  ]);
+  const normalizeStatus = (status) => {
+    if (!status) return 'Present';
+    const s = String(status).toLowerCase().replace(/[_ -]/g, '');
+    if (s.includes('half')) return 'Halfday';
+    if (s.includes('late')) return 'Late';
+    if (s.includes('absent')) return 'Absent';
+    if (s.includes('holiday')) return 'Holiday';
+    return 'Present';
+  };
 
-  // 3. Employee Attendance Data (Screenshot 3)
-  const [employeeList, setEmployeeList] = useState([
-    { id: 1, sl: '01', admissionNo: 'AD52365', name: 'Marvin McKinney', department: 'Mathematics', designation: 'Principal', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 2, sl: '02', admissionNo: 'AD52366', name: 'Cody Fisher', department: 'Physics', designation: 'Senior Teacher', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' },
-    { id: 3, sl: '03', admissionNo: 'AD52367', name: 'Jenny Wilson', department: 'Biology', designation: 'Subject Teacher', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80' },
-    { id: 4, sl: '04', admissionNo: 'AD52368', name: 'Guy Hawkins', department: 'English', designation: 'Assistant Teacher', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80' },
-    { id: 5, sl: '05', admissionNo: 'AD52369', name: 'Esther Howard', department: 'Math', designation: 'Pre-Primary Teacher', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80' },
-    { id: 6, sl: '06', admissionNo: 'AD52370', name: 'Jane Cooper', department: 'Chemistry', designation: 'Librarian', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 7, sl: '07', admissionNo: 'AD52371', name: 'Robert Fox', department: 'Biology', designation: 'Lab Assistant', attendance: 'Present', note: '', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' }
-  ]);
+  const fetchAttendance = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const type = currentSubTab === 'teacher' ? 'TEACHER' : currentSubTab === 'employee' ? 'EMPLOYEE' : 'STUDENT';
+      const result = await attendanceService.list(`type=${type}`);
+      const items = (Array.isArray(result) ? result : []).map((r, i) => ({
+        ...r,
+        sl: String(i + 1).padStart(2, '0'),
+        attendance: normalizeStatus(r.status)
+      }));
+      if (currentSubTab === 'student') setStudentList(items);
+      else if (currentSubTab === 'teacher') setTeacherList(items);
+      else setEmployeeList(items);
+    } catch (e) {
+      setError(e.message || 'Failed to load attendance');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentSubTab]);
+
+  useEffect(() => {
+    fetchAttendance();
+  }, [fetchAttendance]);
 
   // Filter Form State
   const [studentFilter, setStudentFilter] = useState({
@@ -97,13 +110,26 @@ export const AttendanceModule = () => {
   };
 
   // Toggle Attendance Radio selection
-  const handleAttendanceChange = (id, status) => {
-    if (currentSubTab === 'student') {
-      setStudentList((prev) => prev.map((s) => (s.id === id ? { ...s, attendance: status } : s)));
-    } else if (currentSubTab === 'teacher') {
-      setTeacherList((prev) => prev.map((t) => (t.id === id ? { ...t, attendance: status } : t)));
-    } else if (currentSubTab === 'employee') {
-      setEmployeeList((prev) => prev.map((e) => (e.id === id ? { ...e, attendance: status } : e)));
+  const handleAttendanceChange = async (id, status) => {
+    try {
+      const currentRow =
+        currentSubTab === 'student'
+          ? studentList.find((s) => s.id === id)
+          : currentSubTab === 'teacher'
+          ? teacherList.find((t) => t.id === id)
+          : employeeList.find((e) => e.id === id);
+      if (currentRow) {
+        await attendanceService.update(id, { ...currentRow, status });
+      }
+      if (currentSubTab === 'student') {
+        setStudentList((prev) => prev.map((s) => (s.id === id ? { ...s, attendance: status } : s)));
+      } else if (currentSubTab === 'teacher') {
+        setTeacherList((prev) => prev.map((t) => (t.id === id ? { ...t, attendance: status } : t)));
+      } else if (currentSubTab === 'employee') {
+        setEmployeeList((prev) => prev.map((e) => (e.id === id ? { ...e, attendance: status } : e)));
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to update attendance');
     }
   };
 
@@ -249,6 +275,27 @@ export const AttendanceModule = () => {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !studentList.length && !teacherList.length && !employeeList.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading attendance...
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px', position: 'relative' }}>
@@ -606,7 +653,8 @@ export const AttendanceModule = () => {
                         <AttendanceRadioGroup
                           id={row.id}
                           selectedStatus={row.attendance}
-                          onChange={(status) => handleAttendanceChange(row.id, status)}
+                          busy={busyKey === `attendance-${row.id}`}
+                          onChange={(status) => runAction(`attendance-${row.id}`, () => handleAttendanceChange(row.id, status))}
                         />
                       </td>
                       <td style={{ padding: '14px 16px' }}>
@@ -652,7 +700,8 @@ export const AttendanceModule = () => {
                         <AttendanceRadioGroup
                           id={row.id}
                           selectedStatus={row.attendance}
-                          onChange={(status) => handleAttendanceChange(row.id, status)}
+                          busy={busyKey === `attendance-${row.id}`}
+                          onChange={(status) => runAction(`attendance-${row.id}`, () => handleAttendanceChange(row.id, status))}
                         />
                       </td>
                       <td style={{ padding: '14px 16px' }}>
@@ -699,7 +748,8 @@ export const AttendanceModule = () => {
                         <AttendanceRadioGroup
                           id={row.id}
                           selectedStatus={row.attendance}
-                          onChange={(status) => handleAttendanceChange(row.id, status)}
+                          busy={busyKey === `attendance-${row.id}`}
+                          onChange={(status) => runAction(`attendance-${row.id}`, () => handleAttendanceChange(row.id, status))}
                         />
                       </td>
                       <td style={{ padding: '14px 16px' }}>
@@ -722,8 +772,16 @@ export const AttendanceModule = () => {
 };
 
 // Inline Attendance Radio Group Component matching screenshots
-const AttendanceRadioGroup = ({ id, selectedStatus, onChange }) => {
+const AttendanceRadioGroup = ({ id, selectedStatus, onChange, busy }) => {
   const options = ['Present', 'Late', 'Absent', 'Halfday', 'Holiday'];
+
+  if (busy) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'nowrap' }}>
+        <Spinner size={16} color="#0d9488" />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'nowrap' }}>

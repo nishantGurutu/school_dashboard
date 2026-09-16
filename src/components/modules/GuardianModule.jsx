@@ -1,11 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserCheck, Plus, Search, Phone, Mail, MapPin, Edit, Trash2 } from 'lucide-react';
 import { GuardianForm } from './GuardianForm';
+import { guardianService } from '../../services/guardianService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const GuardianModule = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingGuardian, setEditingGuardian] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { busyKey, runAction } = useApiAction();
 
   const [guardians, setGuardians] = useState([
     {
@@ -43,48 +49,64 @@ export const GuardianModule = () => {
     }
   ]);
 
+  const fetchGuardians = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      let result;
+      if (searchTerm.trim()) {
+        result = await guardianService.search(searchTerm.trim());
+      } else {
+        result = await guardianService.list('page=0&size=200');
+      }
+      const items = Array.isArray(result) ? result : result && result.content ? result.content : [];
+      if (items.length) {
+        setGuardians(items.map((g) => ({ ...g, relation: g.relation ? String(g.relation).toLowerCase() : '' })));
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to load guardians');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchGuardians();
+  }, [fetchGuardians]);
+
   const handleEditClick = (guardian) => {
     setEditingGuardian(guardian);
   };
 
-  const handleSaveGuardian = (formData) => {
+  const handleSaveGuardian = async (formData) => {
     if (editingGuardian) {
-      setGuardians((prev) =>
-        prev.map((g) =>
-          g.id === editingGuardian.id
-            ? {
-                ...g,
-                name: formData.guardianName || g.name,
-                relation: formData.guardianType || g.relation,
-                occupation: formData.occupation || g.occupation,
-                phone: formData.instagram || g.phone,
-                email: formData.email || g.email,
-                address: formData.guardianAddress || g.address
-              }
-            : g
-        )
-      );
-      setEditingGuardian(null);
+      try {
+        const updated = await guardianService.update(editingGuardian.id, formData);
+        setGuardians((prev) =>
+          prev.map((g) => (g.id === editingGuardian.id ? { ...g, ...updated } : g))
+        );
+        setEditingGuardian(null);
+      } catch (e) {
+        setError(e.message || 'Failed to update guardian');
+      }
     } else {
-      const newGuardianObj = {
-        id: `GRD-90${guardians.length + 1}`,
-        name: formData.guardianName || 'New Guardian',
-        relation: formData.guardianType || 'Father',
-        studentName: 'Unassigned Ward',
-        occupation: formData.occupation || 'General Employment',
-        phone: formData.instagram || '+1 555-0000',
-        email: formData.email || 'guardian@auroraschool.edu',
-        address: formData.guardianAddress || 'Springfield, USA',
-        feeStatus: 'Clear'
-      };
-
-      setGuardians([newGuardianObj, ...guardians]);
-      setShowAddForm(false);
+      try {
+        const created = await guardianService.create(formData);
+        setGuardians((prev) => [{ ...created }, ...prev]);
+        setShowAddForm(false);
+      } catch (e) {
+        setError(e.message || 'Failed to create guardian');
+      }
     }
   };
 
-  const handleDeleteGuardian = (id) => {
-    setGuardians((prev) => prev.filter((g) => g.id !== id));
+  const handleDeleteGuardian = async (id) => {
+    try {
+      await guardianService.remove(id);
+      setGuardians((prev) => prev.filter((g) => g.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete guardian');
+    }
   };
 
   if (showAddForm || editingGuardian) {
@@ -151,6 +173,27 @@ export const GuardianModule = () => {
       </div>
 
       {/* Guardians Table */}
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !guardians.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading guardians...
+        </div>
+      )}
+
       <div className="card animate-fade-in" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
@@ -196,11 +239,12 @@ export const GuardianModule = () => {
                       </button>
                       <button
                         className="btn-icon"
-                        onClick={() => handleDeleteGuardian(g.id)}
+                        onClick={() => runAction(`delete-${g.id}`, () => handleDeleteGuardian(g.id))}
+                        disabled={busyKey === `delete-${g.id}`}
                         style={{ width: '32px', height: '32px', color: '#ef4444' }}
                         title="Delete Guardian"
                       >
-                        <Trash2 size={16} />
+                        {busyKey === `delete-${g.id}` ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={16} />}
                       </button>
                     </div>
                   </td>

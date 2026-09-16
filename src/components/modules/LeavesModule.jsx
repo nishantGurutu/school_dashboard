@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Plus,
@@ -14,6 +14,9 @@ import {
   CheckCircle,
   FileText
 } from 'lucide-react';
+import { leaveService } from '../../services/leaveService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const LeavesModule = () => {
   const { activeTab, setActiveTab } = useTheme();
@@ -28,6 +31,7 @@ export const LeavesModule = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedRows, setSelectedRows] = useState([]);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
+  const { busyKey, runAction } = useApiAction();
 
   // Modals state
   const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
@@ -49,29 +53,43 @@ export const LeavesModule = () => {
     setActiveDropdownId(null);
   }, [activeTab]);
 
-  // 1. Leave Types Data (Screenshot 1)
-  const [leaveTypes, setLeaveTypes] = useState([
-    { id: 1, sl: '01', name: 'Medical Leave', status: 'Active' },
-    { id: 2, sl: '02', name: 'Special Leave', status: 'Inactive' },
-    { id: 3, sl: '03', name: 'Medical Leave', status: 'Active' },
-    { id: 4, sl: '04', name: 'Casual Leave', status: 'Inactive' },
-    { id: 5, sl: '05', name: 'Casual Leave', status: 'Active' },
-    { id: 6, sl: '06', name: 'Special Leave', status: 'Inactive' },
-    { id: 7, sl: '07', name: 'Special Leave', status: 'Active' },
-    { id: 8, sl: '08', name: 'Special Leave', status: 'Inactive' }
-  ]);
+  // Leave data loaded from backend per active tab
+  const [leaveTypes, setLeaveTypes] = useState([]);
+  const [leaveRequests, setLeaveRequests] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  // 2. Leave Request Data (Screenshots 3 & 4)
-  const [leaveRequests, setLeaveRequests] = useState([
-    { id: 1, sl: '01', applyDate: '07 May 2025', name: 'Jerome Bell', userType: 'Teacher', leaveType: 'Medical Leave', icon: '🏥', date: '07 May 2025 - 08 May 2025', duration: '1', status: 'Approved', reason: 'Doctor or hospital visits', note: '' },
-    { id: 2, sl: '02', applyDate: '10 May 2025', name: 'Jane Cooper', userType: 'Student', leaveType: 'Casual Leave', icon: '⚙', date: '10 May 2025 - 12 May 2025', duration: '2', status: 'Pending', reason: 'Personal family matter', note: '' },
-    { id: 3, sl: '03', applyDate: '12 May 2025', name: 'Devon Lane', userType: 'Teacher', leaveType: 'Half Day Leave', icon: '⏰', date: '12 May 2025', duration: '0.5', status: 'Rejected', reason: 'Personal work in afternoon', note: '' },
-    { id: 4, sl: '04', applyDate: '13 May 2025', name: 'Cody Fisher', userType: 'Admin', leaveType: 'Vacation Leave', icon: '✈', date: '13 May 2025 - 20 May 2025', duration: '7', status: 'Approved', reason: 'Annual summer vacation', note: '' },
-    { id: 5, sl: '05', applyDate: '14 May 2025', name: 'Theresa Webb', userType: 'Teacher', leaveType: 'Study Leave', icon: '📖', date: '14 May 2025 - 16 May 2025', duration: '2', status: 'Pending', reason: 'Higher education exam preparation', note: '' },
-    { id: 6, sl: '06', applyDate: '15 May 2025', name: 'Darrell Steward', userType: 'Student', leaveType: 'Paid Leave', icon: '💵', date: '15 May 2025 - 17 May 2025', duration: '2', status: 'Approved', reason: 'Family trip', note: '' },
-    { id: 7, sl: '07', applyDate: '17 May 2025', name: 'Leslie Alexander', userType: 'Teacher', leaveType: 'Emergency Leave', icon: '🚨', date: '17 May 2025 - 18 May 2025', duration: '1', status: 'Rejected', reason: 'Urgent home repair', note: '' },
-    { id: 8, sl: '08', applyDate: '18 May 2025', name: 'Guy Hawkins', userType: 'Admin', leaveType: 'Maternity Leave', icon: '👶', date: '18 May 2025 - 28 May 2025', duration: '10', status: 'Approved', reason: 'Maternity leave period', note: '' }
-  ]);
+  const fetchLeaves = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      if (currentSubTab === 'request') {
+        const result = await leaveService.requests.list();
+        const items = (Array.isArray(result) ? result : []).map((r, i) => ({
+          ...r,
+          sl: String(i + 1).padStart(2, '0'),
+          icon: r.icon || '📄',
+          note: r.note || ''
+        }));
+        setLeaveRequests(items);
+      } else {
+        const result = await leaveService.types.list();
+        const items = (Array.isArray(result) ? result : []).map((t, i) => ({
+          ...t,
+          sl: String(i + 1).padStart(2, '0')
+        }));
+        setLeaveTypes(items);
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to load leave data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [currentSubTab]);
+
+  useEffect(() => {
+    fetchLeaves();
+  }, [fetchLeaves]);
 
   const handleSubTabChange = (tabKey) => {
     setCurrentSubTab(tabKey);
@@ -94,31 +112,44 @@ export const LeavesModule = () => {
     setIsTypeModalOpen(true);
   };
 
-  const handleDeleteLeaveType = (id) => {
+  const handleDeleteLeaveType = async (id) => {
     setActiveDropdownId(null);
-    setLeaveTypes((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await leaveService.types.remove(id);
+      setLeaveTypes((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete leave type');
+    }
   };
 
-  const handleSaveTypeModal = (e) => {
+  const handleSaveTypeModal = async (e) => {
     e.preventDefault();
-    if (editingTypeItem) {
-      setLeaveTypes((prev) =>
-        prev.map((t) =>
-          t.id === editingTypeItem.id
-            ? { ...t, name: typeFormData.name, status: typeFormData.status === 'Select Status' ? t.status : typeFormData.status }
-            : t
-        )
-      );
-    } else {
-      const newType = {
-        id: Date.now(),
-        sl: `${leaveTypes.length + 1 < 10 ? '0' : ''}${leaveTypes.length + 1}`,
-        name: typeFormData.name || 'New Leave Type',
-        status: typeFormData.status === 'Select Status' ? 'Active' : typeFormData.status
-      };
-      setLeaveTypes([newType, ...leaveTypes]);
+    try {
+      if (editingTypeItem) {
+        const updated = await leaveService.types.update(editingTypeItem.id, {
+          ...editingTypeItem,
+          name: typeFormData.name || editingTypeItem.name,
+          status: typeFormData.status === 'Select Status' ? editingTypeItem.status : typeFormData.status
+        });
+        setLeaveTypes((prev) => prev.map((t) => (t.id === editingTypeItem.id ? { ...t, ...updated } : t)));
+        setEditingTypeItem(null);
+      } else {
+        const created = await leaveService.types.create({
+          name: typeFormData.name || 'New Leave Type',
+          status: typeFormData.status === 'Select Status' ? 'Active' : typeFormData.status
+        });
+        setLeaveTypes((prev) => [
+          {
+            ...created,
+            sl: String(prev.length + 1).padStart(2, '0')
+          },
+          ...prev
+        ]);
+      }
+      setIsTypeModalOpen(false);
+    } catch (e) {
+      setError(e.message || 'Failed to save leave type');
     }
-    setIsTypeModalOpen(false);
   };
 
   // Leave Request View Modal Handlers
@@ -132,21 +163,34 @@ export const LeavesModule = () => {
     setIsViewRequestModalOpen(true);
   };
 
-  const handleDeleteLeaveRequest = (id) => {
+  const handleDeleteLeaveRequest = async (id) => {
     setActiveDropdownId(null);
-    setLeaveRequests((prev) => prev.filter((r) => r.id !== id));
+    try {
+      await leaveService.requests.remove(id);
+      setLeaveRequests((prev) => prev.filter((r) => r.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete leave request');
+    }
   };
 
-  const handleSaveRequestUpdate = (e) => {
+  const handleSaveRequestUpdate = async (e) => {
     e.preventDefault();
     if (selectedRequest) {
-      setLeaveRequests((prev) =>
-        prev.map((r) =>
-          r.id === selectedRequest.id
-            ? { ...r, status: requestUpdateForm.status, note: requestUpdateForm.note }
-            : r
-        )
-      );
+      try {
+        const updated = await leaveService.requests.update(selectedRequest.id, {
+          ...selectedRequest,
+          ...requestUpdateForm
+        });
+        setLeaveRequests((prev) =>
+          prev.map((r) =>
+            r.id === selectedRequest.id
+              ? { ...r, ...updated, status: requestUpdateForm.status, note: requestUpdateForm.note }
+              : r
+          )
+        );
+      } catch (e) {
+        setError(e.message || 'Failed to update leave request');
+      }
     }
     setIsViewRequestModalOpen(false);
   };
@@ -253,6 +297,27 @@ export const LeavesModule = () => {
           )}
         </div>
       </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !leaveTypes.length && !leaveRequests.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading leave data...
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
@@ -377,7 +442,8 @@ export const LeavesModule = () => {
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditTypeModal(row)}
-                          onDelete={() => handleDeleteLeaveType(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteLeaveType(row.id))}
+                          deleteBusy={busyKey === `delete-${row.id}`}
                         />
                       </td>
                     </tr>
@@ -409,7 +475,8 @@ export const LeavesModule = () => {
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onViewRequest={() => handleOpenViewRequestModal(row)}
-                          onDelete={() => handleDeleteLeaveRequest(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteLeaveRequest(row.id))}
+                          deleteBusy={busyKey === `delete-${row.id}`}
                         />
                       </td>
                     </tr>
@@ -476,7 +543,7 @@ export const LeavesModule = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveTypeModal} id="leave-type-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+            <form onSubmit={(e) => runAction('save-type', () => handleSaveTypeModal(e))} id="leave-type-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                   Leave Types
@@ -535,6 +602,7 @@ export const LeavesModule = () => {
                 type="submit"
                 form="leave-type-form"
                 className="btn btn-primary"
+                disabled={busyKey === 'save-type'}
                 style={{
                   padding: '10px 36px',
                   backgroundColor: '#0d9488',
@@ -543,7 +611,7 @@ export const LeavesModule = () => {
                   fontSize: '0.9rem'
                 }}
               >
-                Save
+                {busyKey === 'save-type' ? <Spinner size={16} color="#ffffff" /> : null} {busyKey === 'save-type' ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>
@@ -607,7 +675,7 @@ export const LeavesModule = () => {
             </div>
 
             {/* Content Body (Screenshot 4) */}
-            <form onSubmit={handleSaveRequestUpdate} id="view-leave-request-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+            <form onSubmit={(e) => runAction('save-request', () => handleSaveRequestUpdate(e))} id="view-leave-request-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '130px 1fr', gap: '10px 16px', fontSize: '0.875rem' }}>
                 <div style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>Apply Date</div>
                 <div>: {selectedRequest.applyDate}</div>
@@ -699,6 +767,7 @@ export const LeavesModule = () => {
                 type="submit"
                 form="view-leave-request-form"
                 className="btn btn-primary"
+                disabled={busyKey === 'save-request'}
                 style={{
                   padding: '10px 36px',
                   backgroundColor: '#0d9488',
@@ -707,7 +776,7 @@ export const LeavesModule = () => {
                   fontSize: '0.9rem'
                 }}
               >
-                Save
+                {busyKey === 'save-request' ? <Spinner size={16} color="#ffffff" /> : null} {busyKey === 'save-request' ? 'Saving...' : 'Save'}
               </button>
             </div>
           </div>
@@ -718,7 +787,7 @@ export const LeavesModule = () => {
 };
 
 // Leave Type Action Dropdown (Edit, Delete)
-const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
+const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, deleteBusy }) => {
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -762,6 +831,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
           </button>
           <button
             onClick={onDelete}
+            disabled={deleteBusy}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -777,7 +847,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
               borderTop: '1px solid var(--border-light)'
             }}
           >
-            <Trash2 size={14} /> Delete
+            {deleteBusy ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={14} />} {deleteBusy ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       )}
@@ -786,7 +856,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
 };
 
 // Leave Request Action Dropdown (View Request, Delete)
-const LeaveRequestActionDropdownCell = ({ isOpen, onToggle, onViewRequest, onDelete }) => {
+const LeaveRequestActionDropdownCell = ({ isOpen, onToggle, onViewRequest, onDelete, deleteBusy }) => {
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -830,6 +900,7 @@ const LeaveRequestActionDropdownCell = ({ isOpen, onToggle, onViewRequest, onDel
           </button>
           <button
             onClick={onDelete}
+            disabled={deleteBusy}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -845,7 +916,7 @@ const LeaveRequestActionDropdownCell = ({ isOpen, onToggle, onViewRequest, onDel
               borderTop: '1px solid var(--border-light)'
             }}
           >
-            <Trash2 size={14} /> Delete
+            {deleteBusy ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={14} />} {deleteBusy ? 'Deleting...' : 'Delete'}
           </button>
         </div>
       )}

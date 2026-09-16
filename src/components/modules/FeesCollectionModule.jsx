@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Plus,
@@ -15,6 +15,9 @@ import {
   DollarSign,
   CheckCircle
 } from 'lucide-react';
+import { feeService } from '../../services/feeService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const FeesCollectionModule = () => {
   const { activeTab, setActiveTab } = useTheme();
@@ -35,6 +38,11 @@ export const FeesCollectionModule = () => {
   const [viewingReceiptItem, setViewingReceiptItem] = useState(null);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const [selectedRows, setSelectedRows] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { busyKey, runAction } = useApiAction();
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     setCurrentSubTab(getSubTabFromActiveTab());
@@ -42,49 +50,45 @@ export const FeesCollectionModule = () => {
   }, [activeTab]);
 
   // 1. Fees Collect State & Data (Screenshots 1, 2, 3)
-  const [collectList, setCollectList] = useState([
-    { id: 1, sl: '01', admissionNo: 'AD52365', name: 'Kathryn Murphy', rollNo: '12', className: 'Class 1 (A)', amount: '$700.50', paid: '$700.50', due: '$0', date: '12 May 2025', status: 'Paid', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80' },
-    { id: 2, sl: '02', admissionNo: 'AD52366', name: 'Jerome Bell', rollNo: '08', className: 'Class 2 (B)', amount: '$850.00', paid: '$450.00', due: '$400.00', date: '10 May 2025', status: 'Partial', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80' },
-    { id: 3, sl: '03', admissionNo: 'AD52367', name: 'Theresa Webb', rollNo: '19', className: 'Class 3 (A)', amount: '$920.75', paid: '$0', due: '$920.75', date: '08 May 2025', status: 'Unpaid', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80' },
-    { id: 4, sl: '04', admissionNo: 'AD52368', name: 'Cody Fisher', rollNo: '10', className: 'Class 4 (C)', amount: '$750.00', paid: '$750.00', due: '$0', date: '05 May 2025', status: 'Paid', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80' },
-    { id: 5, sl: '05', admissionNo: 'AD52369', name: 'Annette Black', rollNo: '16', className: 'Class 5 (B)', amount: '$630.20', paid: '$500.00', due: '$130.20', date: '03 May 2025', status: 'Partial', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80' }
-  ]);
+  const [collectList, setCollectList] = useState([]);
 
   // 2. Fees Type State & Data (Screenshots 4 & 5)
-  const [feesTypes, setFeesTypes] = useState([
-    { id: 1, sl: '01', name: 'May month fees', status: 'Active' },
-    { id: 2, sl: '02', name: 'Admission fees', status: 'Inactive' },
-    { id: 3, sl: '03', name: 'Exam fees', status: 'Active' },
-    { id: 4, sl: '04', name: 'April month fees', status: 'Inactive' },
-    { id: 5, sl: '05', name: 'March month fees', status: 'Active' },
-    { id: 6, sl: '06', name: 'February month fees', status: 'Inactive' },
-    { id: 7, sl: '07', name: 'January month fees', status: 'Active' },
-    { id: 8, sl: '08', name: 'Admission fees', status: 'Inactive' }
-  ]);
+  const [feesTypes, setFeesTypes] = useState([]);
 
   // 3. Fees Group State & Data (Screenshots 1 & 2)
-  const [feesGroups, setFeesGroups] = useState([
-    { id: 1, sl: '01', name: 'Class 1 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Active' },
-    { id: 2, sl: '02', name: 'Class 2 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Inactive' },
-    { id: 3, sl: '03', name: 'Class 3 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Active' },
-    { id: 4, sl: '04', name: 'Class 4 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Inactive' },
-    { id: 5, sl: '05', name: 'Class 5 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Active' },
-    { id: 6, sl: '06', name: 'Class 6 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Inactive' },
-    { id: 7, sl: '07', name: 'Class 7 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Active' },
-    { id: 8, sl: '08', name: 'Class 8 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Inactive' }
-  ]);
+  const [feesGroups, setFeesGroups] = useState([]);
 
   // 4. Fees Discount State & Data (Screenshots 3 & 4)
-  const [feesDiscounts, setFeesDiscounts] = useState([
-    { id: 1, sl: '01', name: 'Class 1 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', discountType: 'Percentage', discountValue: '10%', status: 'Active' },
-    { id: 2, sl: '02', name: 'Class 2 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', discountType: 'Percentage', discountValue: '15%', status: 'Inactive' },
-    { id: 3, sl: '03', name: 'Class 3 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', discountType: 'Fixed Amount', discountValue: '$50', status: 'Active' },
-    { id: 4, sl: '04', name: 'Class 4 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', discountType: 'Percentage', discountValue: '10%', status: 'Inactive' },
-    { id: 5, sl: '05', name: 'Class 5 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Active' },
-    { id: 6, sl: '06', name: 'Class 6 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Inactive' },
-    { id: 7, sl: '07', name: 'Class 7 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Active' },
-    { id: 8, sl: '08', name: 'Class 8 (A) Fees', feesType: 'May month fees, Admission fees, Exam fees', status: 'Inactive' }
-  ]);
+  const [feesDiscounts, setFeesDiscounts] = useState([]);
+
+  const fetchFeesData = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const [collRes, typeRes, groupRes, discRes] = await Promise.all([
+        feeService.collections.list(),
+        feeService.types.list(),
+        feeService.groups.list(),
+        feeService.discounts.list()
+      ]);
+      const collItems = Array.isArray(collRes) ? collRes : [];
+      const typeItems = Array.isArray(typeRes) ? typeRes : [];
+      const groupItems = Array.isArray(groupRes) ? groupRes : [];
+      const discItems = Array.isArray(discRes) ? discRes : [];
+      setCollectList((prev) => (collItems.length ? collItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setFeesTypes((prev) => (typeItems.length ? typeItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setFeesGroups((prev) => (groupItems.length ? groupItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setFeesDiscounts((prev) => (discItems.length ? discItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+    } catch (e) {
+      setError(e.message || 'Failed to load fees data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchFeesData();
+  }, [fetchFeesData]);
 
   // Modal Form State
   const [modalFormData, setModalFormData] = useState({
@@ -142,7 +146,7 @@ export const FeesCollectionModule = () => {
       section: 'Section A',
       rollNo: item.rollNo || '12',
       date: item.date || '15 May 2025',
-      amount: item.amount ? item.amount.replace('$', '') : '700',
+      amount: item.amount != null ? String(item.amount).replace('$', '') : '700',
       discount: 'Select a Discount',
       paymentType: 'Cash',
       note: '',
@@ -162,103 +166,122 @@ export const FeesCollectionModule = () => {
     setIsReceiptModalOpen(true);
   };
 
-  const handleDeleteItem = (id) => {
+  const handleDeleteItem = async (id) => {
     setActiveDropdownId(null);
-    if (currentSubTab === 'collect') {
-      setCollectList((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'type') {
-      setFeesTypes((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'group') {
-      setFeesGroups((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'discount') {
-      setFeesDiscounts((prev) => prev.filter((item) => item.id !== id));
+    try {
+      if (currentSubTab === 'collect') {
+        await feeService.collections.remove(id);
+        setCollectList((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'type') {
+        await feeService.types.remove(id);
+        setFeesTypes((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'group') {
+        await feeService.groups.remove(id);
+        setFeesGroups((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'discount') {
+        await feeService.discounts.remove(id);
+        setFeesDiscounts((prev) => prev.filter((item) => item.id !== id));
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to delete item');
     }
   };
 
-  const handleSaveModal = (e) => {
+  const handleSaveModal = async (e) => {
     e.preventDefault();
 
-    if (editingItem) {
-      if (currentSubTab === 'collect') {
-        setCollectList((prev) =>
-          prev.map((c) =>
-            c.id === editingItem.id
-              ? {
-                  ...c,
-                  className: modalFormData.className,
-                  rollNo: modalFormData.rollNo || c.rollNo,
-                  amount: `$${modalFormData.amount}`,
-                  paid: `$${modalFormData.amount}`,
-                  due: '$0',
-                  date: modalFormData.date,
-                  status: 'Paid'
-                }
-              : c
-          )
-        );
-      } else if (currentSubTab === 'type') {
-        setFeesTypes((prev) =>
-          prev.map((ft) => (ft.id === editingItem.id ? { ...ft, name: modalFormData.name, status: modalFormData.status === 'Select Status' ? ft.status : modalFormData.status } : ft))
-        );
-      } else if (currentSubTab === 'group') {
-        setFeesGroups((prev) =>
-          prev.map((fg) => (fg.id === editingItem.id ? { ...fg, name: modalFormData.name, feesType: modalFormData.feesType, status: modalFormData.status === 'Select Status' ? fg.status : modalFormData.status } : fg))
-        );
-      } else if (currentSubTab === 'discount') {
-        setFeesDiscounts((prev) =>
-          prev.map((fd) => (fd.id === editingItem.id ? { ...fd, name: modalFormData.name, feesType: modalFormData.feesType, discountType: modalFormData.discountType, discountValue: modalFormData.discountValue || fd.discountValue, status: modalFormData.status === 'Select Status' ? fd.status : modalFormData.status } : fd))
-        );
-      }
-    } else {
-      if (currentSubTab === 'collect') {
-        const newCollect = {
-          id: Date.now(),
-          sl: `${collectList.length + 1 < 10 ? '0' : ''}${collectList.length + 1}`,
-          admissionNo: `AD5237${collectList.length + 1}`,
-          name: 'Jon Deve',
-          rollNo: modalFormData.rollNo || '10',
-          className: modalFormData.className !== 'Select a class' ? modalFormData.className : 'Class 5 (A)',
-          amount: `$${modalFormData.amount || '1500'}`,
-          paid: `$${modalFormData.amount || '1500'}`,
-          due: '$0',
-          date: modalFormData.date || '15 Jan 2025',
-          status: 'Paid',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'
-        };
-        setCollectList([newCollect, ...collectList]);
-      } else if (currentSubTab === 'type') {
-        const newType = {
-          id: Date.now(),
-          sl: `${feesTypes.length + 1 < 10 ? '0' : ''}${feesTypes.length + 1}`,
-          name: modalFormData.name || 'New Fees Type',
-          status: modalFormData.status === 'Select Status' ? 'Active' : modalFormData.status
-        };
-        setFeesTypes([newType, ...feesTypes]);
-      } else if (currentSubTab === 'group') {
-        const newGrp = {
-          id: Date.now(),
-          sl: `${feesGroups.length + 1 < 10 ? '0' : ''}${feesGroups.length + 1}`,
-          name: modalFormData.name || 'Class 9 (A) Fees',
-          feesType: modalFormData.feesType || 'May month fees, Admission fees, Exam fees',
-          status: modalFormData.status === 'Select Status' ? 'Active' : modalFormData.status
-        };
-        setFeesGroups([newGrp, ...feesGroups]);
-      } else if (currentSubTab === 'discount') {
-        const newDisc = {
-          id: Date.now(),
-          sl: `${feesDiscounts.length + 1 < 10 ? '0' : ''}${feesDiscounts.length + 1}`,
-          name: modalFormData.name || 'Class 9 (A) Fees',
-          feesType: modalFormData.feesType || 'May month fees, Admission fees, Exam fees',
-          discountType: modalFormData.discountType || 'Percentage',
-          discountValue: modalFormData.discountValue || '10%',
-          status: modalFormData.status === 'Select Status' ? 'Active' : modalFormData.status
-        };
-        setFeesDiscounts([newDisc, ...feesDiscounts]);
-      }
+    if (savingRef.current) {
+      return;
     }
+    savingRef.current = true;
+    setIsSaving(true);
 
-    setIsModalOpen(false);
-    setEditingItem(null);
+    try {
+      if (editingItem) {
+        const id = editingItem.id;
+        if (currentSubTab === 'collect') {
+          const updated = await feeService.collections.update(id, {
+            className: modalFormData.className,
+            rollNo: modalFormData.rollNo || editingItem.rollNo,
+            amount: Number(modalFormData.amount) || 0,
+            paid: Number(modalFormData.amount) || 0,
+            due: 0,
+            date: modalFormData.date,
+            status: 'Paid'
+          });
+          setCollectList((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
+        } else if (currentSubTab === 'type') {
+          const updated = await feeService.types.update(id, {
+            name: modalFormData.name,
+            status: modalFormData.status === 'Select Status' ? editingItem.status : modalFormData.status
+          });
+          setFeesTypes((prev) => prev.map((ft) => (ft.id === id ? { ...ft, ...updated } : ft)));
+        } else if (currentSubTab === 'group') {
+          const updated = await feeService.groups.update(id, {
+            name: modalFormData.name,
+            feesType: modalFormData.feesType,
+            status: modalFormData.status === 'Select Status' ? editingItem.status : modalFormData.status
+          });
+          setFeesGroups((prev) => prev.map((fg) => (fg.id === id ? { ...fg, ...updated } : fg)));
+        } else if (currentSubTab === 'discount') {
+          const updated = await feeService.discounts.update(id, {
+            name: modalFormData.name,
+            feesType: modalFormData.feesType,
+            discountType: modalFormData.discountType,
+            discountValue: modalFormData.discountValue || editingItem.discountValue,
+            status: modalFormData.status === 'Select Status' ? editingItem.status : modalFormData.status
+          });
+          setFeesDiscounts((prev) => prev.map((fd) => (fd.id === id ? { ...fd, ...updated } : fd)));
+        }
+      } else {
+        if (currentSubTab === 'collect') {
+          const created = await feeService.collections.create({
+            admissionNo: `AD${Date.now()}`,
+            name: 'Jon Deve',
+            rollNo: modalFormData.rollNo || '10',
+            className: modalFormData.className !== 'Select a class' ? modalFormData.className : 'Class 5 (A)',
+            amount: Number(modalFormData.amount) || 1500,
+            paid: Number(modalFormData.amount) || 1500,
+            due: 0,
+            date: modalFormData.date || '15 Jan 2025',
+            status: 'Paid',
+            paymentType: modalFormData.paymentType,
+            note: modalFormData.note
+          });
+          setCollectList((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'type') {
+          const created = await feeService.types.create({
+            name: modalFormData.name || 'New Fees Type',
+            status: modalFormData.status === 'Select Status' ? 'Active' : modalFormData.status
+          });
+          setFeesTypes((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'group') {
+          const created = await feeService.groups.create({
+            name: modalFormData.name || 'Class 9 (A) Fees',
+            feesType: modalFormData.feesType || 'May month fees, Admission fees, Exam fees',
+            status: modalFormData.status === 'Select Status' ? 'Active' : modalFormData.status
+          });
+          setFeesGroups((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'discount') {
+          const created = await feeService.discounts.create({
+            name: modalFormData.name || 'Class 9 (A) Fees',
+            feesType: modalFormData.feesType || 'May month fees, Admission fees, Exam fees',
+            discountType: modalFormData.discountType || 'Percentage',
+            discountValue: modalFormData.discountValue || '10%',
+            status: modalFormData.status === 'Select Status' ? 'Active' : modalFormData.status
+          });
+          setFeesDiscounts((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        }
+      }
+
+      setIsModalOpen(false);
+      setEditingItem(null);
+    } catch (e) {
+      setError(e.message || 'Failed to save item');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const toggleSelectAll = (list) => {
@@ -414,6 +437,27 @@ export const FeesCollectionModule = () => {
           </button>
         </div>
       </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !collectList.length && !feesTypes.length && !feesGroups.length && !feesDiscounts.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading fees data...
+        </div>
+      )}
 
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
@@ -585,11 +629,13 @@ export const FeesCollectionModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
+                          row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onViewReceipt={() => handleOpenReceiptModal(row)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -616,10 +662,12 @@ export const FeesCollectionModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
+                          row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -647,10 +695,12 @@ export const FeesCollectionModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
+                          row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -678,10 +728,12 @@ export const FeesCollectionModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
+                          row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -1065,6 +1117,7 @@ export const FeesCollectionModule = () => {
                 type="submit"
                 form="fees-modal-form"
                 className="btn btn-primary"
+                disabled={isSaving}
                 style={{
                   padding: '10px 36px',
                   backgroundColor: '#0d9488',
@@ -1074,7 +1127,7 @@ export const FeesCollectionModule = () => {
                   boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)'
                 }}
               >
-                Save
+                {isSaving ? <><Spinner size={16} color="#ffffff" /> Saving...</> : 'Save'}
               </button>
             </div>
           </div>
@@ -1213,7 +1266,8 @@ export const FeesCollectionModule = () => {
 };
 
 // Action Dropdown Cell Component with View Receipt, Edit, and Delete options
-const ActionDropdownCell = ({ isOpen, onToggle, onViewReceipt, onEdit, onDelete }) => {
+const ActionDropdownCell = ({ isOpen, onToggle, onViewReceipt, onEdit, onDelete, row, busyKey }) => {
+  const isDeleting = busyKey === `delete-${row.id}`;
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -1278,6 +1332,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onViewReceipt, onEdit, onDelete 
           </button>
           <button
             onClick={onDelete}
+            disabled={isDeleting}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1293,7 +1348,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onViewReceipt, onEdit, onDelete 
               borderTop: '1px solid var(--border-light)'
             }}
           >
-            <Trash2 size={14} /> Delete
+            {isDeleting ? <Spinner size={14} color="#ef4444" /> : <Trash2 size={14} />} Delete
           </button>
         </div>
       )}

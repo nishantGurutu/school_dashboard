@@ -1,5 +1,7 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { authStorage } from '../../services/api';
+import { Spinner } from '../ui/Spinner';
 import {
   Search,
   Bell,
@@ -7,10 +9,12 @@ import {
   Sun,
   Moon,
   PanelLeft,
-  Globe
+  Globe,
+  LogOut,
+  ChevronDown
 } from 'lucide-react';
 
-export const Header = () => {
+export const Header = ({ onLogout }) => {
   const {
     theme,
     toggleTheme,
@@ -18,6 +22,23 @@ export const Header = () => {
     isSidebarCollapsed,
     setIsCustomizerOpen
   } = useTheme();
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const loggingOutRef = useRef(false);
+  const currentUser = authStorage.getUser();
+
+  const handleLogout = async () => {
+    if (loggingOutRef.current) return;
+    loggingOutRef.current = true;
+    setIsLoggingOut(true);
+    setIsUserMenuOpen(false);
+    try {
+      await onLogout();
+    } finally {
+      loggingOutRef.current = false;
+      setIsLoggingOut(false);
+    }
+  };
 
   return (
     <header
@@ -125,32 +146,89 @@ export const Header = () => {
         </div>
 
         {/* User Profile Avatar */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', marginLeft: '8px' }}>
-          <div style={{ position: 'relative' }}>
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
-              alt="Captain Profile"
-              style={{
-                width: '38px',
-                height: '38px',
-                borderRadius: '50%',
-                objectFit: 'cover',
-                border: '2px solid var(--accent-primary-light)'
-              }}
-            />
-            <span
+        <div style={{ position: 'relative', marginLeft: '8px' }}>
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }}
+            onClick={() => setIsUserMenuOpen((open) => !open)}
+          >
+            <div style={{ position: 'relative' }}>
+              <img
+                src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80"
+                alt="Profile"
+                style={{
+                  width: '38px',
+                  height: '38px',
+                  borderRadius: '50%',
+                  objectFit: 'cover',
+                  border: '2px solid var(--accent-primary-light)'
+                }}
+              />
+              <span
+                style={{
+                  position: 'absolute',
+                  bottom: '1px',
+                  right: '1px',
+                  width: '10px',
+                  height: '10px',
+                  borderRadius: '50%',
+                  backgroundColor: '#10b981',
+                  border: '2px solid var(--bg-card)'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                {(currentUser && currentUser.name) || 'Admin'}
+              </span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                {(currentUser && currentUser.role) || 'Administrator'}
+              </span>
+            </div>
+            <ChevronDown size={14} color="var(--text-muted)" />
+          </div>
+
+          {isUserMenuOpen && (
+            <div
               style={{
                 position: 'absolute',
-                bottom: '1px',
-                right: '1px',
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                backgroundColor: '#10b981',
-                border: '2px solid var(--bg-card)'
+                right: 0,
+                top: '48px',
+                width: '200px',
+                backgroundColor: 'var(--bg-card)',
+                borderRadius: 'var(--radius-md)',
+                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.15)',
+                border: '1px solid var(--border-color)',
+                zIndex: 200,
+                overflow: 'hidden'
               }}
-            />
-          </div>
+            >
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-light)' }}>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{(currentUser && currentUser.name) || 'Admin'}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(currentUser && currentUser.email) || 'admin@school.com'}</div>
+              </div>
+              {onLogout && (
+                <button
+                  onClick={handleLogout}
+                  disabled={isLoggingOut}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    width: '100%',
+                    padding: '12px 16px',
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#ef4444',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: isLoggingOut ? 'default' : 'pointer'
+                  }}
+                >
+                  {isLoggingOut ? <Spinner size={16} color="#ef4444" /> : <LogOut size={16} />} {isLoggingOut ? 'Logging out...' : 'Logout'}
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </header>

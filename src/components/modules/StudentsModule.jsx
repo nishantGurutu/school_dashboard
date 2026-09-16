@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap,
   Plus,
@@ -14,12 +14,18 @@ import {
   Edit
 } from 'lucide-react';
 import { AddStudentForm } from './AddStudentForm';
+import { studentService } from '../../services/studentService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const StudentsModule = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingStudent, setEditingStudent] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedClass, setSelectedClass] = useState('All');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { busyKey, runAction } = useApiAction();
 
   const [studentsData, setStudentsData] = useState([
     {
@@ -94,53 +100,68 @@ export const StudentsModule = () => {
     }
   ]);
 
+  const fetchStudents = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      let result;
+      if (searchTerm.trim()) {
+        result = await studentService.search(searchTerm.trim());
+      } else if (selectedClass !== 'All') {
+        result = await studentService.byClass(selectedClass);
+      } else {
+        result = await studentService.list('page=0&size=200');
+      }
+      const items = Array.isArray(result) ? result : result && result.content ? result.content : [];
+      setStudentsData((prev) => {
+        const base = items.length ? items : prev;
+        return base;
+      });
+    } catch (e) {
+      setError(e.message || 'Failed to load students');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm, selectedClass]);
+
+  useEffect(() => {
+    fetchStudents();
+  }, [fetchStudents]);
+
   const handleEditClick = (student) => {
     setEditingStudent(student);
   };
 
-  const handleSaveStudent = (formData) => {
+  const handleSaveStudent = async (formData) => {
     if (editingStudent) {
-      // Update existing student
-      setStudentsData((prev) =>
-        prev.map((s) =>
-          s.id === editingStudent.id
-            ? {
-                ...s,
-                name: formData.fullName || s.name,
-                rollNo: formData.rollNumber || s.rollNo,
-                class: `${formData.studentClass} - ${formData.section}`,
-                phone: formData.phone || s.phone,
-                email: formData.email || s.email,
-                guardian: formData.guardianName || formData.fatherName || s.guardian
-              }
-            : s
-        )
-      );
-      setEditingStudent(null);
+      try {
+        const updated = await studentService.update(editingStudent.id, formData);
+        setStudentsData((prev) => prev.map((s) => (s.id === editingStudent.id ? { ...s, ...updated } : s)));
+        setEditingStudent(null);
+      } catch (e) {
+        setError(e.message || 'Failed to update student');
+      }
     } else {
-      // Create new student
-      const newStudentObj = {
-        id: `STU-00${studentsData.length + 1}`,
-        name: formData.fullName || 'New Student',
-        rollNo: formData.rollNumber || `100${studentsData.length + 1}`,
-        class: `${formData.studentClass} - ${formData.section}`,
-        gender: formData.gender || 'Male',
-        dob: formData.dob || '01 Jan 2012',
-        guardian: formData.guardianName || formData.fatherName || 'Parent',
-        phone: formData.phone || '+1 555-0000',
-        email: formData.email || 'student@school.edu',
-        attendance: '100.0%',
-        status: 'Active',
-        avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80'
-      };
-
-      setStudentsData([newStudentObj, ...studentsData]);
-      setShowAddForm(false);
+      try {
+        const created = await studentService.create({
+          ...formData,
+          admissionNo: formData.admissionNo || `ADM-${Date.now()}`
+        });
+        setStudentsData((prev) => [created, ...prev]);
+        setShowAddForm(false);
+      } catch (e) {
+        setError(e.message || 'Failed to create student');
+      }
     }
   };
 
-  const handleDeleteStudent = (id) => {
-    setStudentsData((prev) => prev.filter((s) => s.id !== id));
+  const handleDeleteStudent = async (id) => {
+    try {
+      await studentService.remove(id);
+      setStudentsData((prev) => prev.filter((s) => s.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete student');
+    }
   };
 
   if (showAddForm || editingStudent) {
@@ -240,6 +261,27 @@ export const StudentsModule = () => {
         </select>
       </div>
 
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !studentsData.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading students...
+        </div>
+      )}
+
       {/* Students Table */}
       <div className="card animate-fade-in" style={{ padding: 0, overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
@@ -298,11 +340,14 @@ export const StudentsModule = () => {
                       </button>
                       <button
                         className="btn-icon"
-                        onClick={() => handleDeleteStudent(s.id)}
+                        onClick={() =>
+                          runAction(`delete-${s.id}`, () => handleDeleteStudent(s.id))
+                        }
+                        disabled={busyKey === `delete-${s.id}`}
                         style={{ width: '32px', height: '32px', color: '#ef4444' }}
                         title="Delete Student"
                       >
-                        <Trash2 size={16} />
+                        {busyKey === `delete-${s.id}` ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={16} />}
                       </button>
                     </div>
                   </td>

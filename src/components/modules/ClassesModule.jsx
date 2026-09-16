@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Plus,
@@ -10,6 +10,9 @@ import {
   Trash2,
   ChevronDown
 } from 'lucide-react';
+import { classService } from '../../services/classService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const ClassesModule = () => {
   const { activeTab, setActiveTab } = useTheme();
@@ -29,6 +32,11 @@ export const ClassesModule = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const [selectedRows, setSelectedRows] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { busyKey, runAction } = useApiAction();
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   useEffect(() => {
     setCurrentSubTab(getSubTabFromActiveTab());
@@ -36,52 +44,45 @@ export const ClassesModule = () => {
   }, [activeTab]);
 
   // Section State & Data (Screenshots 1 & 2)
-  const [sections, setSections] = useState([
-    { id: 1, sl: '01', name: 'A', status: 'Active' },
-    { id: 2, sl: '02', name: 'B', status: 'Inactive' },
-    { id: 3, sl: '03', name: 'C', status: 'Active' },
-    { id: 4, sl: '04', name: 'D', status: 'Inactive' },
-    { id: 5, sl: '05', name: 'E', status: 'Active' },
-    { id: 6, sl: '06', name: 'F', status: 'Inactive' },
-    { id: 7, sl: '07', name: 'G', status: 'Active' },
-    { id: 8, sl: '08', name: 'H', status: 'Inactive' }
-  ]);
+  const [sections, setSections] = useState([]);
 
   // Subjects State & Data (Screenshots 3 & 4)
-  const [subjects, setSubjects] = useState([
-    { id: 1, sl: '01', name: 'Computer', code: '101', status: 'Active' },
-    { id: 2, sl: '02', name: 'Biology', code: '102', status: 'Inactive' },
-    { id: 3, sl: '03', name: 'Chemistry', code: '103', status: 'Active' },
-    { id: 4, sl: '04', name: 'French', code: '104', status: 'Inactive' },
-    { id: 5, sl: '05', name: 'English', code: '105', status: 'Active' },
-    { id: 6, sl: '06', name: 'Mathematics', code: '106', status: 'Inactive' },
-    { id: 7, sl: '07', name: 'Science', code: '107', status: 'Active' },
-    { id: 8, sl: '08', name: 'Physics', code: '108', status: 'Inactive' }
-  ]);
+  const [subjects, setSubjects] = useState([]);
 
   // Class List State & Data (Screenshot 5)
-  const [classList, setClassList] = useState([
-    { id: 1, sl: '01', name: 'Class 1', section: 'A, B, C, D', status: 'Active' },
-    { id: 2, sl: '02', name: 'Class 2', section: 'A, B, C, D', status: 'Inactive' },
-    { id: 3, sl: '03', name: 'Class 3', section: 'A, B, C, D', status: 'Active' },
-    { id: 4, sl: '04', name: 'Class 4', section: 'A, B, C, D', status: 'Inactive' },
-    { id: 5, sl: '05', name: 'Class 4', section: 'A, B, C, D', status: 'Active' },
-    { id: 6, sl: '06', name: 'Class 5', section: 'A, B, C, D', status: 'Inactive' },
-    { id: 7, sl: '07', name: 'Class 6', section: 'A, B, C, D', status: 'Active' },
-    { id: 8, sl: '08', name: 'Class 8', section: 'A, B, C, D', status: 'Inactive' }
-  ]);
+  const [classList, setClassList] = useState([]);
 
   // Class Room State & Data (Matching User's Latest Screenshot)
-  const [classRooms, setClassRooms] = useState([
-    { id: 1, sl: '01', room: '11', capacity: '50', status: 'Active' },
-    { id: 2, sl: '02', room: '12', capacity: '50', status: 'Inactive' },
-    { id: 3, sl: '03', room: '13', capacity: '50', status: 'Active' },
-    { id: 4, sl: '04', room: '14', capacity: '50', status: 'Inactive' },
-    { id: 5, sl: '05', room: '15', capacity: '50', status: 'Active' },
-    { id: 6, sl: '06', room: '16', capacity: '50', status: 'Inactive' },
-    { id: 7, sl: '07', room: '17', capacity: '50', status: 'Active' },
-    { id: 8, sl: '08', room: '18', capacity: '50', status: 'Inactive' }
-  ]);
+  const [classRooms, setClassRooms] = useState([]);
+
+  const fetchClassesData = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const [secRes, subRes, clsRes, roomRes] = await Promise.all([
+        classService.sections.list(),
+        classService.subjects.list(),
+        classService.list.list(),
+        classService.rooms.list()
+      ]);
+      const secItems = Array.isArray(secRes) ? secRes : [];
+      const subItems = Array.isArray(subRes) ? subRes : [];
+      const clsItems = Array.isArray(clsRes) ? clsRes : [];
+      const roomItems = Array.isArray(roomRes) ? roomRes : [];
+      setSections((prev) => (secItems.length ? secItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setSubjects((prev) => (subItems.length ? subItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setClassList((prev) => (clsItems.length ? clsItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setClassRooms((prev) => (roomItems.length ? roomItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+    } catch (e) {
+      setError(e.message || 'Failed to load classes data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchClassesData();
+  }, [fetchClassesData]);
 
   // Modal Form State
   const [modalFormData, setModalFormData] = useState({
@@ -129,95 +130,106 @@ export const ClassesModule = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeleteItem = (id) => {
+  const handleDeleteItem = async (id) => {
     setActiveDropdownId(null);
-    if (currentSubTab === 'section') {
-      setSections((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'subjects') {
-      setSubjects((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'classList') {
-      setClassList((prev) => prev.filter((item) => item.id !== id));
-    } else if (currentSubTab === 'classRoom') {
-      setClassRooms((prev) => prev.filter((item) => item.id !== id));
+    try {
+      if (currentSubTab === 'section') {
+        await classService.sections.remove(id);
+        setSections((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'subjects') {
+        await classService.subjects.remove(id);
+        setSubjects((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'classList') {
+        await classService.list.remove(id);
+        setClassList((prev) => prev.filter((item) => item.id !== id));
+      } else if (currentSubTab === 'classRoom') {
+        await classService.rooms.remove(id);
+        setClassRooms((prev) => prev.filter((item) => item.id !== id));
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to delete item');
     }
   };
 
-  const handleSaveModal = (e) => {
+  const handleSaveModal = async (e) => {
     e.preventDefault();
 
-    if (editingItem) {
-      // Edit Mode Update
-      if (currentSubTab === 'section') {
-        setSections((prev) =>
-          prev.map((s) => (s.id === editingItem.id ? { ...s, name: modalFormData.name, status: modalFormData.status } : s))
-        );
-      } else if (currentSubTab === 'subjects') {
-        setSubjects((prev) =>
-          prev.map((sub) =>
-            sub.id === editingItem.id
-              ? { ...sub, name: modalFormData.name, code: modalFormData.code, status: modalFormData.status }
-              : sub
-          )
-        );
-      } else if (currentSubTab === 'classList') {
-        setClassList((prev) =>
-          prev.map((c) =>
-            c.id === editingItem.id
-              ? { ...c, name: modalFormData.name, section: modalFormData.section, status: modalFormData.status }
-              : c
-          )
-        );
-      } else if (currentSubTab === 'classRoom') {
-        setClassRooms((prev) =>
-          prev.map((r) =>
-            r.id === editingItem.id
-              ? { ...r, room: modalFormData.name, capacity: modalFormData.capacity, status: modalFormData.status }
-              : r
-          )
-        );
-      }
-    } else {
-      // Add Mode Create
-      if (currentSubTab === 'section') {
-        const newSec = {
-          id: Date.now(),
-          sl: `0${sections.length + 1}`,
-          name: modalFormData.name || `New Section`,
-          status: modalFormData.status
-        };
-        setSections([newSec, ...sections]);
-      } else if (currentSubTab === 'subjects') {
-        const newSub = {
-          id: Date.now(),
-          sl: `0${subjects.length + 1}`,
-          name: modalFormData.name || 'New Subject',
-          code: modalFormData.code || `${100 + subjects.length + 1}`,
-          status: modalFormData.status
-        };
-        setSubjects([newSub, ...subjects]);
-      } else if (currentSubTab === 'classList') {
-        const newCls = {
-          id: Date.now(),
-          sl: `0${classList.length + 1}`,
-          name: modalFormData.name || 'New Class',
-          section: modalFormData.section || 'A, B, C, D',
-          status: modalFormData.status
-        };
-        setClassList([newCls, ...classList]);
-      } else if (currentSubTab === 'classRoom') {
-        const newRm = {
-          id: Date.now(),
-          sl: `0${classRooms.length + 1}`,
-          room: modalFormData.name || '19',
-          capacity: modalFormData.capacity || '50',
-          status: modalFormData.status
-        };
-        setClassRooms([newRm, ...classRooms]);
-      }
+    if (savingRef.current) {
+      return;
     }
+    savingRef.current = true;
+    setIsSaving(true);
 
-    setIsModalOpen(false);
-    setEditingItem(null);
+    try {
+      if (editingItem) {
+        const id = editingItem.id;
+        if (currentSubTab === 'section') {
+          const updated = await classService.sections.update(id, {
+            name: modalFormData.name,
+            status: modalFormData.status
+          });
+          setSections((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+        } else if (currentSubTab === 'subjects') {
+          const updated = await classService.subjects.update(id, {
+            name: modalFormData.name,
+            code: modalFormData.code,
+            status: modalFormData.status
+          });
+          setSubjects((prev) => prev.map((sub) => (sub.id === id ? { ...sub, ...updated } : sub)));
+        } else if (currentSubTab === 'classList') {
+          const updated = await classService.list.update(id, {
+            name: modalFormData.name,
+            section: modalFormData.section,
+            status: modalFormData.status
+          });
+          setClassList((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
+        } else if (currentSubTab === 'classRoom') {
+          const updated = await classService.rooms.update(id, {
+            room: modalFormData.name,
+            capacity: modalFormData.capacity,
+            status: modalFormData.status
+          });
+          setClassRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...updated } : r)));
+        }
+      } else {
+        if (currentSubTab === 'section') {
+          const created = await classService.sections.create({
+            name: modalFormData.name || 'New Section',
+            status: modalFormData.status
+          });
+          setSections((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'subjects') {
+          const created = await classService.subjects.create({
+            name: modalFormData.name || 'New Subject',
+            code: modalFormData.code || '',
+            status: modalFormData.status
+          });
+          setSubjects((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'classList') {
+          const created = await classService.list.create({
+            name: modalFormData.name || 'New Class',
+            section: modalFormData.section || 'A, B, C, D',
+            status: modalFormData.status
+          });
+          setClassList((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        } else if (currentSubTab === 'classRoom') {
+          const created = await classService.rooms.create({
+            room: modalFormData.name || '19',
+            capacity: modalFormData.capacity || '50',
+            status: modalFormData.status
+          });
+          setClassRooms((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+        }
+      }
+
+      setIsModalOpen(false);
+      setEditingItem(null);
+    } catch (e) {
+      setError(e.message || 'Failed to save item');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
+    }
   };
 
   const toggleSelectAll = (list) => {
@@ -374,6 +386,27 @@ export const ClassesModule = () => {
         </div>
       </div>
 
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !sections.length && !subjects.length && !classList.length && !classRooms.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading classes data...
+        </div>
+      )}
+
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
         {/* Controls Toolbar Bar */}
@@ -514,10 +547,11 @@ export const ClassesModule = () => {
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
                           row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -546,10 +580,11 @@ export const ClassesModule = () => {
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
                           row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -578,10 +613,11 @@ export const ClassesModule = () => {
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
                           row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -610,10 +646,11 @@ export const ClassesModule = () => {
                       <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
                         <ActionDropdownCell
                           row={row}
+                          busyKey={busyKey}
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => handleDeleteItem(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                         />
                       </td>
                     </tr>
@@ -891,6 +928,7 @@ export const ClassesModule = () => {
                 type="submit"
                 form="modal-form"
                 className="btn btn-primary"
+                disabled={isSaving}
                 style={{
                   padding: '10px 36px',
                   backgroundColor: '#0d9488',
@@ -900,7 +938,7 @@ export const ClassesModule = () => {
                   boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)'
                 }}
               >
-                Save
+                {isSaving ? <><Spinner size={16} color="#ffffff" /> Saving...</> : 'Save'}
               </button>
             </div>
           </div>
@@ -911,7 +949,8 @@ export const ClassesModule = () => {
 };
 
 // Action Dropdown Cell Component for Edit and Delete Options
-const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
+const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }) => {
+  const isDeleting = busyKey === `delete-${row.id}`;
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -955,6 +994,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
           </button>
           <button
             onClick={onDelete}
+            disabled={isDeleting}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -970,7 +1010,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
               borderTop: '1px solid var(--border-light)'
             }}
           >
-            <Trash2 size={14} /> Delete
+            {isDeleting ? <Spinner size={14} color="#ef4444" /> : <Trash2 size={14} />} Delete
           </button>
         </div>
       )}

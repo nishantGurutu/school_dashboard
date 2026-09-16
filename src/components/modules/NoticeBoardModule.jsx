@@ -1,13 +1,28 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Bell, Plus, Calendar, Tag } from 'lucide-react';
+import { noticeService } from '../../services/noticeService';
 
 export const NoticeBoardModule = () => {
-  const notices = [
-    { title: 'Mid-Term Exam Timetable Announced for Grades 6 to 12', date: '05 Sep 2026', target: 'All Students & Parents', category: 'Exams' },
-    { title: 'Annual Sports Day Registrations & Selection Trials', date: '04 Sep 2026', target: 'Students', category: 'Sports' },
-    { title: 'Parent-Teacher Meeting (PTM) Scheduled for Term 1', date: '02 Sep 2026', target: 'Parents', category: 'PTM' },
-    { title: 'Faculty Staff Meeting on Curriculum Review', date: '28 Aug 2026', target: 'Teachers & Staff', category: 'Staff' }
-  ];
+  const [notices, setNotices] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const fetchNotices = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const result = await noticeService.list();
+      setNotices(Array.isArray(result) ? result : []);
+    } catch (e) {
+      setError(e.message || 'Failed to load notices');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchNotices();
+  }, [fetchNotices]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -20,6 +35,27 @@ export const NoticeBoardModule = () => {
           <Plus size={18} /> Publish New Notice
         </button>
       </div>
+
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !notices.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading notices...
+        </div>
+      )}
 
       <div className="grid-responsive">
         {notices.map((n, i) => (

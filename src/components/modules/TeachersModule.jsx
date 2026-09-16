@@ -1,11 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserCheck, Plus, Search, Mail, Phone, BookOpen, Edit, Trash2 } from 'lucide-react';
 import { TeacherForm } from './TeacherForm';
+import { teacherService } from '../../services/teacherService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 
 export const TeachersModule = () => {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingTeacher, setEditingTeacher] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { busyKey, runAction } = useApiAction();
+
+  const toTableRow = (t) => ({
+    ...t,
+    name: t.fullName || t.name,
+    id: t.id
+  });
 
   const [teachers, setTeachers] = useState([
     {
@@ -43,47 +55,65 @@ export const TeachersModule = () => {
     }
   ]);
 
+  const fetchTeachers = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      let result;
+      if (searchTerm.trim()) {
+        result = await teacherService.search(searchTerm.trim());
+      } else {
+        result = await teacherService.list('page=0&size=200');
+      }
+      const items = Array.isArray(result) ? result : result && result.content ? result.content : [];
+      if (items.length) {
+        setTeachers(items.map(toTableRow));
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to load teachers');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchTeachers();
+  }, [fetchTeachers]);
+
   const handleEditClick = (teacher) => {
     setEditingTeacher(teacher);
   };
 
-  const handleSaveTeacher = (formData) => {
+  const handleSaveTeacher = async (formData) => {
     if (editingTeacher) {
-      setTeachers((prev) =>
-        prev.map((t) =>
-          t.id === editingTeacher.id
-            ? {
-                ...t,
-                name: formData.fullName || t.name,
-                subject: formData.subject || t.subject,
-                qualification: formData.qualification || t.qualification,
-                phone: formData.phone || t.phone,
-                email: formData.email || t.email
-              }
-            : t
-        )
-      );
-      setEditingTeacher(null);
+      try {
+        const updated = await teacherService.update(editingTeacher.id, formData);
+        setTeachers((prev) => prev.map((t) => (t.id === editingTeacher.id ? toTableRow(updated) : t)));
+        setEditingTeacher(null);
+      } catch (e) {
+        setError(e.message || 'Failed to update teacher');
+      }
     } else {
-      const newTeacherObj = {
-        id: formData.teacherId || `TCH-10${teachers.length + 1}`,
-        name: formData.fullName || 'New Teacher',
-        department: 'Science & Humanities',
-        subject: formData.subject || 'English',
-        qualification: formData.qualification || 'Master Degree',
-        phone: formData.phone || '+1 555-0000',
-        email: formData.email || 'teacher@auroraschool.edu',
-        status: 'Active',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
-      };
-
-      setTeachers([newTeacherObj, ...teachers]);
-      setShowAddForm(false);
+      try {
+        const created = await teacherService.create({
+          ...formData,
+          employeeId: formData.teacherId || `TCH-${Date.now()}`
+        });
+        setTeachers((prev) => [toTableRow(created), ...prev]);
+        setShowAddForm(false);
+      } catch (e) {
+        setError(e.message || 'Failed to create teacher');
+      }
     }
   };
 
-  const handleDeleteTeacher = (id) => {
-    setTeachers((prev) => prev.filter((t) => t.id !== id));
+  const handleDeleteTeacher = async (id) => {
+    try {
+      await teacherService.remove(id);
+      setTeachers((prev) => prev.filter((t) => t.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete teacher');
+    }
   };
 
   if (showAddForm || editingTeacher) {
@@ -104,7 +134,7 @@ export const TeachersModule = () => {
     (t) =>
       t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       t.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.id.toLowerCase().includes(searchTerm.toLowerCase())
+      String(t.id).toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -149,6 +179,27 @@ export const TeachersModule = () => {
       </div>
 
       {/* Teachers Cards Grid */}
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !teachers.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading teachers...
+        </div>
+      )}
+
       <div className="grid-responsive">
         {filteredTeachers.map((t) => (
           <div key={t.id} className="col-span-4 card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -172,11 +223,12 @@ export const TeachersModule = () => {
                 </button>
                 <button
                   className="btn-icon"
-                  onClick={() => handleDeleteTeacher(t.id)}
+                  onClick={() => runAction(`delete-${t.id}`, () => handleDeleteTeacher(t.id))}
+                  disabled={busyKey === `delete-${t.id}`}
                   style={{ width: '32px', height: '32px', color: '#ef4444' }}
                   title="Delete Teacher"
                 >
-                  <Trash2 size={16} />
+                  {busyKey === `delete-${t.id}` ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={16} />}
                 </button>
               </div>
             </div>

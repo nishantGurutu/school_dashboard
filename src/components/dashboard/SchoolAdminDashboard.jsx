@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Chart from 'react-apexcharts';
 import {
   GraduationCap,
@@ -21,10 +21,157 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
+import { dashboardService } from '../../services/dashboardService';
+import { attendanceService } from '../../services/attendanceService';
+import { feeService } from '../../services/feeService';
+import { noticeService } from '../../services/noticeService';
+
+const MOCK_RECEIPTS = [
+
+    {
+      receiptNo: 'REC-2026-0891',
+      student: 'Alexander Wright',
+      rollNo: '2024-0412',
+      grade: 'Grade 10-A',
+      amount: '$1,250.00',
+      mode: 'Online (Stripe)',
+      date: 'Today, 14:32',
+      status: 'Paid'
+    },
+    {
+      receiptNo: 'REC-2026-0890',
+      student: 'Sophia Martinez',
+      rollNo: '2024-0318',
+      grade: 'Grade 8-B',
+      amount: '$980.00',
+      mode: 'Bank Transfer',
+      date: 'Today, 11:15',
+      status: 'Paid'
+    },
+    {
+      receiptNo: 'REC-2026-0889',
+      student: 'Liam Hemsworth',
+      rollNo: '2024-0511',
+      grade: 'Grade 12-C',
+      amount: '$1,400.00',
+      mode: 'Cash Receipt',
+      date: 'Yesterday',
+      status: 'Pending'
+    },
+    {
+      receiptNo: 'REC-2026-0888',
+      student: 'Emma Watson',
+      rollNo: '2024-0199',
+      grade: 'Grade 6-A',
+      amount: '$850.00',
+      mode: 'Cheque (#40192)',
+      date: 'Yesterday',
+      status: 'Paid'
+    },
+    {
+      receiptNo: 'REC-2026-0887',
+      student: 'Ethan Carter',
+      rollNo: '2024-0672',
+      grade: 'Grade 11-B',
+      amount: '$1,350.00',
+      mode: 'Online (UPI)',
+      date: '04 Sep 2026',
+      status: 'Overdue'
+    }
+  ];
 
 export const SchoolAdminDashboard = () => {
   const { theme } = useTheme();
   const isDark = theme === 'dark';
+
+  const [stats, setStats] = useState(null);
+  const [hrm, setHrm] = useState(null);
+  const [receipts, setReceipts] = useState(MOCK_RECEIPTS);
+  const [notices, setNotices] = useState([]);
+  const [attendancePct, setAttendancePct] = useState(null);
+  const [attendanceSeries, setAttendanceSeries] = useState(null);
+  const [errors, setErrors] = useState({});
+
+  const fetchDashboard = useCallback(async () => {
+    const nextErrors = {};
+    try {
+      setStats(await dashboardService.stats());
+    } catch (e) {
+      nextErrors.stats = e.message;
+    }
+    try {
+      setHrm(await dashboardService.hrm());
+    } catch (e) {
+      nextErrors.hrm = e.message;
+    }
+    try {
+      const list = await feeService.collections.list();
+      if (Array.isArray(list) && list.length) {
+        const totalCollected = list.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
+        setReceipts(
+          list.slice(0, 5).map((r, i) => ({
+            receiptNo: `REC-${r.id || 2026000 + i}`,
+            student: r.name,
+            rollNo: r.rollNo,
+            grade: r.className,
+            amount: `$${Number(parseFloat(r.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+            mode: r.paymentType || 'Cash',
+            date: r.date || '—',
+            status: r.status || 'Paid'
+          }))
+        );
+      }
+    } catch (e) {
+      nextErrors.fees = e.message;
+    }
+    try {
+      const list = await noticeService.list();
+      if (Array.isArray(list)) {
+        setNotices(list.slice(0, 3).map((n) => ({
+          title: n.title,
+          tag: n.category || n.target || 'Notice',
+          date: n.date || '—',
+          type: 'info'
+        })));
+      }
+    } catch (e) {
+      nextErrors.notices = e.message;
+    }
+    try {
+      const list = await attendanceService.list('type=STUDENT');
+      if (Array.isArray(list) && list.length) {
+        const present = list.filter((r) => r.status === 'Present').length;
+        setAttendancePct(Math.round((present / list.length) * 1000) / 10);
+        const byClass = {};
+        list.forEach((r) => {
+          const c = r.className || 'Other';
+          if (!byClass[c]) byClass[c] = { total: 0, present: 0 };
+          byClass[c].total += 1;
+          if (r.status === 'Present') byClass[c].present += 1;
+        });
+        setAttendanceSeries(
+          Object.entries(byClass).map(([c, v]) => Math.round((v.present / v.total) * 1000) / 10)
+        );
+      }
+    } catch (e) {
+      nextErrors.attendance = e.message;
+    }
+    setErrors(nextErrors);
+  }, []);
+
+  useEffect(() => {
+    fetchDashboard();
+  }, [fetchDashboard]);
+
+  // Timed settings derived from API
+  const totalStudents = stats ? stats.totalStudents : 2840;
+  const totalTeachersStaff = stats
+    ? stats.totalTeachers + (hrm ? (hrm.supportStaff || 0) : 0)
+    : 185;
+  const boys = stats ? stats.boys : 1480;
+  const girls = stats ? stats.girls : 1260;
+  const special = stats ? stats.otherStudents : 100;
+  const todayAttendanceValue = attendancePct ? `${attendancePct}%` : '96.4%';
 
   // Fee Collection vs Expenses Area Chart Options
   const feeChartOptions = {
@@ -129,13 +276,13 @@ export const SchoolAdminDashboard = () => {
           size: '76%',
           labels: {
             show: true,
-            total: {
-              show: true,
-              label: 'Total Students',
-              color: isDark ? '#9ca3af' : '#64748b',
-              fontSize: '12px',
-              formatter: () => '2,840'
-            },
+total: {
+                show: true,
+                label: 'Total Students',
+                color: isDark ? '#9ca3af' : '#64748b',
+                fontSize: '12px',
+                formatter: () => totalStudents.toLocaleString()
+              },
             value: {
               show: true,
               fontSize: '24px',
@@ -148,61 +295,10 @@ export const SchoolAdminDashboard = () => {
     }
   };
 
-  const demographicsSeries = [1480, 1260, 100];
+  const demographicsSeries = [boys, girls, special];
 
   // Sample Fee Receipts Data
-  const recentFeeReceipts = [
-    {
-      receiptNo: 'REC-2026-0891',
-      student: 'Alexander Wright',
-      rollNo: '2024-0412',
-      grade: 'Grade 10-A',
-      amount: '$1,250.00',
-      mode: 'Online (Stripe)',
-      date: 'Today, 14:32',
-      status: 'Paid'
-    },
-    {
-      receiptNo: 'REC-2026-0890',
-      student: 'Sophia Martinez',
-      rollNo: '2024-0318',
-      grade: 'Grade 8-B',
-      amount: '$980.00',
-      mode: 'Bank Transfer',
-      date: 'Today, 11:15',
-      status: 'Paid'
-    },
-    {
-      receiptNo: 'REC-2026-0889',
-      student: 'Liam Hemsworth',
-      rollNo: '2024-0511',
-      grade: 'Grade 12-C',
-      amount: '$1,400.00',
-      mode: 'Cash Receipt',
-      date: 'Yesterday',
-      status: 'Pending'
-    },
-    {
-      receiptNo: 'REC-2026-0888',
-      student: 'Emma Watson',
-      rollNo: '2024-0199',
-      grade: 'Grade 6-A',
-      amount: '$850.00',
-      mode: 'Cheque (#40192)',
-      date: 'Yesterday',
-      status: 'Paid'
-    },
-    {
-      receiptNo: 'REC-2026-0887',
-      student: 'Ethan Carter',
-      rollNo: '2024-0672',
-      grade: 'Grade 11-B',
-      amount: '$1,350.00',
-      mode: 'Online (UPI)',
-      date: '04 Sep 2026',
-      status: 'Overdue'
-    }
-  ];
+  const recentFeeReceipts = receipts;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -292,12 +388,12 @@ export const SchoolAdminDashboard = () => {
           </div>
 
           <div>
-            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>2,840</span>
+            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>{totalStudents.toLocaleString()}</span>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Total Enrolled Students</div>
           </div>
 
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-            1,480 Boys | 1,260 Girls | 100 Special Prog.
+            {boys.toLocaleString()} Boys | {girls.toLocaleString()} Girls | {special.toLocaleString()} Special Prog.
           </div>
         </div>
 
@@ -322,12 +418,12 @@ export const SchoolAdminDashboard = () => {
           </div>
 
           <div>
-            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>185</span>
+            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>{totalTeachersStaff.toLocaleString()}</span>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Teachers & Staff Members</div>
           </div>
 
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-            120 Faculty Teachers | 65 Support Staff
+            120 Faculty Teachers | {hrm ? (hrm.supportStaff || 0) : 65} Support Staff
           </div>
         </div>
 
@@ -352,7 +448,7 @@ export const SchoolAdminDashboard = () => {
           </div>
 
           <div>
-            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>96.4%</span>
+            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>{todayAttendanceValue}</span>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Today's Student Attendance</div>
           </div>
 
@@ -436,7 +532,12 @@ export const SchoolAdminDashboard = () => {
           </div>
 
           <div style={{ height: '300px', width: '100%' }}>
-            <Chart options={attendanceChartOptions} series={attendanceChartSeries} type="bar" height="100%" />
+            <Chart
+              options={attendanceChartOptions}
+              series={attendanceSeries ? [{ name: 'Attendance Rate', data: attendanceSeries }] : attendanceChartSeries}
+              type="bar"
+              height="100%"
+            />
           </div>
         </div>
       </div>
@@ -541,15 +642,15 @@ export const SchoolAdminDashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-around', fontSize: '0.8rem' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#3b82f6' }} />
-                Boys (52%)
+                Boys ({Math.round((boys / (totalStudents || 1)) * 100)}%)
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#ec4899' }} />
-                Girls (44%)
+                Girls ({Math.round((girls / (totalStudents || 1)) * 100)}%)
               </span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#f59e0b' }} />
-                Special (4%)
+                Special ({Math.round((special / (totalStudents || 1)) * 100)}%)
               </span>
             </div>
           </div>
@@ -573,11 +674,11 @@ export const SchoolAdminDashboard = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {[
+              {(notices.length ? notices : [
                 { title: 'Mid-Term Exam Timetable Announced', tag: 'Exams', date: '05 Sep', type: 'warning' },
                 { title: 'Annual Sports Day Registrations Open', tag: 'Events', date: '04 Sep', type: 'info' },
                 { title: 'Parent-Teacher Meeting (PTM) Scheduled', tag: 'PTM', date: '02 Sep', type: 'success' }
-              ].map((n, i) => (
+              ]).map((n, i) => (
                 <div
                   key={i}
                   style={{

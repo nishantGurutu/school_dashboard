@@ -1,5 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { libraryService } from '../../services/libraryService';
+import { useApiAction } from '../../hooks/useApiAction';
+import { Spinner } from '../ui/Spinner';
 import {
   Plus,
   Search,
@@ -37,6 +40,11 @@ export const LibraryModule = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [selectedRows, setSelectedRows] = useState([]);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+  const { busyKey, runAction } = useApiAction();
+  const [isSaving, setIsSaving] = useState(false);
+  const savingRef = useRef(false);
 
   // Selected Member for Member Details View Screen (Screenshot 5 from previous batch)
   const [selectedMember, setSelectedMember] = useState(null);
@@ -47,40 +55,36 @@ export const LibraryModule = () => {
   }, [activeTab]);
 
   // 1. Books List Data (Screenshot 1 from previous batch)
-  const [booksList, setBooksList] = useState([
-    { id: 1, sl: '01', subject: 'Art', name: 'The Little Prince', publisher: 'Devon Lane', author: 'Darrell Steward', number: '101', rackNo: '1234', qty: '60', available: '20', price: '$250', date: '05 Jun 2015' },
-    { id: 2, sl: '02', subject: 'Mathematics', name: 'Advanced Algebra', publisher: 'Penguin Books', author: 'Jane Cooper', number: '102', rackNo: '5678', qty: '40', available: '18', price: '$300', date: '10 Jul 2016' },
-    { id: 3, sl: '03', subject: 'Science', name: 'Physics for Beginners', publisher: 'HarperCollins', author: 'Guy Hawkins', number: '103', rackNo: '8790', qty: '55', available: '30', price: '$280', date: '15 Mar 2017' },
-    { id: 4, sl: '04', subject: 'History', name: 'World Wars', publisher: 'Oxford Press', author: 'Leslie Alexander', number: '104', rackNo: '3210', qty: '35', available: '12', price: '$200', date: '21 Sep 2018' },
-    { id: 5, sl: '05', subject: 'Geography', name: 'Earth & Beyond', publisher: 'Macmillan', author: 'Robert Fox', number: '105', rackNo: '4311', qty: '45', available: '10', price: '$310', date: '08 Jan 2019' },
-    { id: 6, sl: '06', subject: 'Biology', name: 'Human Anatomy', publisher: 'Cambridge House', author: 'Annette Black', number: '106', rackNo: '2915', qty: '70', available: '35', price: '$400', date: '11 Dec 2020' },
-    { id: 7, sl: '07', subject: 'Economics', name: 'Money & Markets', publisher: 'Random House', author: 'Esther Howard', number: '107', rackNo: '3425', qty: '50', available: '28', price: '$270', date: '19 Mar 2021' },
-    { id: 8, sl: '08', subject: 'Computer Science', name: 'JavaScript Essentials', publisher: 'TechWorld', author: 'Kathryn Murphy', number: '108', rackNo: '5320', qty: '80', available: '60', price: '$500', date: '05 Apr 2022' },
-    { id: 9, sl: '09', subject: 'English', name: "Shakespeare's Works", publisher: 'Vintage Books', author: 'Courtney Henry', number: '109', rackNo: '1567', qty: '65', available: '45', price: '$350', date: '12 May 2023' }
-  ]);
+  const [booksList, setBooksList] = useState([]);
 
   // 2. Members List Data
-  const [membersList, setMembersList] = useState([
-    { id: 1, sl: '01', joinDate: '05 Jun 2015', cardNo: '12563', studentName: 'Jon Dev', className: 'Class 1 (A)', phone: '(+33)6 55 56 56 33', bookIssue: '2', issueDate: '01 Jun 2015', returnDate: '01 Feb 2015', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80', email: 'jon.dev@example.com', section: 'A', gender: 'Male' },
-    { id: 2, sl: '02', joinDate: '15 Jan 2016', cardNo: '12890', studentName: 'Emily Johnson', className: 'Class 2 (B)', phone: '(+1) 205 555 7821', bookIssue: '3', issueDate: '12 Jan 2016', returnDate: '20 Jan 2016', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80', email: 'emily.j@example.com', section: 'B', gender: 'Female' },
-    { id: 3, sl: '03', joinDate: '10 Feb 2017', cardNo: '14250', studentName: 'Michael Brown', className: 'Class 3 (C)', phone: '(+44) 745 987 3210', bookIssue: '1', issueDate: '05 Feb 2017', returnDate: '15 Feb 2017', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80', email: 'michael.b@example.com', section: 'C', gender: 'Male' },
-    { id: 4, sl: '04', joinDate: '22 Mar 2018', cardNo: '15642', studentName: 'Sarah Lee', className: 'Class 4 (A)', phone: '(+49) 178 556 9876', bookIssue: '4', issueDate: '15 Mar 2018', returnDate: '25 Mar 2018', avatar: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=100&q=80', email: 'sarah.l@example.com', section: 'A', gender: 'Female' },
-    { id: 5, sl: '05', joinDate: '09 Apr 2019', cardNo: '16580', studentName: 'William Smith', className: 'Class 5 (B)', phone: '(+91) 98765 43210', bookIssue: '2', issueDate: '05 Apr 2019', returnDate: '10 Apr 2019', avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=100&q=80', email: 'william.s@example.com', section: 'B', gender: 'Male' },
-    { id: 6, sl: '06', joinDate: '20 May 2020', cardNo: '17690', studentName: 'Olivia White', className: 'Class 6 (C)', phone: '(+971) 55 432 7890', bookIssue: '3', issueDate: '18 May 2020', returnDate: '28 May 2020', avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80', email: 'olivia.w@example.com', section: 'C', gender: 'Female' }
-  ]);
+  const [membersList, setMembersList] = useState([]);
 
   // 3. Issue Return Data (Screenshot 2 from latest batch)
-  const [issueReturnList, setIssueReturnList] = useState([
-    { id: 1, sl: '01', cardNo: '12563', issueTo: 'Jon Dev', className: 'Class 1 (A)', bookName: 'The Little Prince', number: '101', issueDate: '01 Jun 2015', returnDate: '01 Feb 2015', status: 'Issued' },
-    { id: 2, sl: '02', cardNo: '12874', issueTo: 'Sarah Khan', className: 'Class 2 (B)', bookName: 'To Kill a Mockingbird', number: '102', issueDate: '10 Jul 2016', returnDate: '25 Jul 2016', status: 'Issued' },
-    { id: 3, sl: '03', cardNo: '13345', issueTo: 'Michael Lee', className: 'Class 3 (C)', bookName: '1984', number: '103', issueDate: '12 Mar 2017', returnDate: '02 Apr 2017', status: 'Issued' },
-    { id: 4, sl: '04', cardNo: '14122', issueTo: 'Emma Watson', className: 'Class 4 (A)', bookName: 'Pride and Prejudice', number: '104', issueDate: '05 Aug 2018', returnDate: '28 Aug 2018', status: 'Issued' },
-    { id: 5, sl: '05', cardNo: '14567', issueTo: 'David Miller', className: 'Class 5 (C)', bookName: 'The Great Gatsby', number: '105', issueDate: '11 Nov 2018', returnDate: '05 Dec 2018', status: 'Issued' },
-    { id: 6, sl: '06', cardNo: '15231', issueTo: 'Olivia Brown', className: 'Class 6 (B)', bookName: 'The Hobbit', number: '106', issueDate: '22 May 2019', returnDate: '10 Jun 2019', status: 'Issued' },
-    { id: 7, sl: '07', cardNo: '15890', issueTo: 'Lucas Smith', className: 'Class 7 (A)', bookName: 'Jane Eyre', number: '107', issueDate: '03 Apr 2020', returnDate: '20 Apr 2020', status: 'Issued' },
-    { id: 8, sl: '08', cardNo: '16324', issueTo: 'Ella Johnson', className: 'Class 8 (B)', bookName: 'The Alchemist', number: '108', issueDate: '09 Oct 2021', returnDate: '28 Oct 2021', status: 'Issued' },
-    { id: 9, sl: '09', cardNo: '17215', issueTo: 'Noah Wilson', className: 'Class 9 (C)', bookName: 'Brave New World', number: '109', issueDate: '05 Jan 2022', returnDate: '28 Jan 2022', status: 'Issued' }
-  ]);
+  const [issueReturnList, setIssueReturnList] = useState([]);
+
+  const fetchLibraryData = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const [booksResult, membersResult, issuesResult] = await Promise.all([
+        libraryService.books.list(),
+        libraryService.members.list(),
+        libraryService.issues.list()
+      ]);
+      setBooksList(Array.isArray(booksResult) ? booksResult : []);
+      setMembersList(Array.isArray(membersResult) ? membersResult : []);
+      setIssueReturnList(Array.isArray(issuesResult) ? issuesResult : []);
+    } catch (e) {
+      setError(e.message || 'Failed to load library data');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLibraryData();
+  }, [fetchLibraryData]);
 
   // Books Modal State (Add / Edit Book)
   const [isBookModalOpen, setIsBookModalOpen] = useState(false);
@@ -126,49 +130,58 @@ export const LibraryModule = () => {
     setIsBookModalOpen(true);
   };
 
-  const handleDeleteBook = (id) => {
+  const handleDeleteBook = async (id) => {
     setActiveDropdownId(null);
-    setBooksList((prev) => prev.filter((b) => b.id !== id));
+    try {
+      await libraryService.books.remove(id);
+      setBooksList((prev) => prev.filter((b) => b.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete book');
+    }
   };
 
-  const handleSaveBookForm = (e) => {
+  const handleSaveBookForm = async (e) => {
     e.preventDefault();
-    if (editingBook) {
-      setBooksList((prev) =>
-        prev.map((b) =>
-          b.id === editingBook.id
-            ? {
-                ...b,
-                name: bookFormData.name || b.name,
-                publisher: bookFormData.publisher || b.publisher,
-                author: bookFormData.author || b.author,
-                number: bookFormData.number || b.number,
-                subject: bookFormData.subject || b.subject,
-                rackNo: bookFormData.rackNo || b.rackNo,
-                qty: bookFormData.qty || b.qty,
-                available: bookFormData.available || b.available,
-                price: bookFormData.price ? `$${bookFormData.price}` : b.price,
-                date: bookFormData.date || b.date
-              }
-            : b
-        )
-      );
-    } else {
-      const newBook = {
-        id: Date.now(),
-        sl: `${booksList.length + 1 < 10 ? '0' : ''}${booksList.length + 1}`,
-        subject: bookFormData.subject || 'General',
-        name: bookFormData.name || 'New Library Book',
-        publisher: bookFormData.publisher || 'Tech Publisher',
-        author: bookFormData.author || 'Author Name',
-        number: bookFormData.number || '110',
-        rackNo: bookFormData.rackNo || '1234',
-        qty: bookFormData.qty || '50',
-        available: bookFormData.available || '30',
-        price: `$${bookFormData.price || '250'}`,
-        date: bookFormData.date || '05 Jun 2025'
-      };
-      setBooksList([newBook, ...booksList]);
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+    try {
+      if (editingBook) {
+        const payload = {
+          name: bookFormData.name || editingBook.name,
+          publisher: bookFormData.publisher || editingBook.publisher,
+          author: bookFormData.author || editingBook.author,
+          number: bookFormData.number || editingBook.number,
+          subject: bookFormData.subject || editingBook.subject,
+          rackNo: bookFormData.rackNo || editingBook.rackNo,
+          qty: bookFormData.qty || editingBook.qty,
+          available: bookFormData.available || editingBook.available,
+          price: bookFormData.price ? `$${bookFormData.price}` : editingBook.price,
+          date: bookFormData.date || editingBook.date
+        };
+        const updated = await libraryService.books.update(editingBook.id, payload);
+        setBooksList((prev) => prev.map((b) => (b.id === editingBook.id ? { ...b, ...updated } : b)));
+      } else {
+        const payload = {
+          subject: bookFormData.subject || 'General',
+          name: bookFormData.name || 'New Library Book',
+          publisher: bookFormData.publisher || 'Tech Publisher',
+          author: bookFormData.author || 'Author Name',
+          number: bookFormData.number || '110',
+          rackNo: bookFormData.rackNo || '1234',
+          qty: bookFormData.qty || '50',
+          available: bookFormData.available || '30',
+          price: `$${bookFormData.price || '250'}`,
+          date: bookFormData.date || '05 Jun 2025'
+        };
+        const created = await libraryService.books.create(payload);
+        setBooksList((prev) => [{ ...created, sl: `${prev.length + 1 < 10 ? '0' : ''}${prev.length + 1}` }, ...prev]);
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to save book');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
     setIsBookModalOpen(false);
   };
@@ -220,14 +233,24 @@ export const LibraryModule = () => {
     setActiveTab('library-details');
   };
 
-  const handleDeleteMember = (id) => {
+  const handleDeleteMember = async (id) => {
     setActiveDropdownId(null);
-    setMembersList((prev) => prev.filter((m) => m.id !== id));
+    try {
+      await libraryService.members.remove(id);
+      setMembersList((prev) => prev.filter((m) => m.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete member');
+    }
   };
 
-  const handleDeleteIssueReturn = (id) => {
+  const handleDeleteIssueReturn = async (id) => {
     setActiveDropdownId(null);
-    setIssueReturnList((prev) => prev.filter((i) => i.id !== id));
+    try {
+      await libraryService.issues.remove(id);
+      setIssueReturnList((prev) => prev.filter((i) => i.id !== id));
+    } catch (e) {
+      setError(e.message || 'Failed to delete issue record');
+    }
   };
 
   // Return Book Confirmation Modal Open
@@ -238,66 +261,73 @@ export const LibraryModule = () => {
   };
 
   // Confirm Return Book
-  const handleConfirmReturnBook = () => {
+  const handleConfirmReturnBook = async () => {
     if (selectedReturnItem) {
-      setIssueReturnList((prev) => prev.filter((i) => i.id !== selectedReturnItem.id));
+      try {
+        await libraryService.issues.remove(selectedReturnItem.id);
+        setIssueReturnList((prev) => prev.filter((i) => i.id !== selectedReturnItem.id));
+      } catch (e) {
+        setError(e.message || 'Failed to return book');
+      }
     }
     setIsReturnConfirmModalOpen(false);
     setSelectedReturnItem(null);
   };
 
-  const handleSaveMemberForm = (e) => {
+  const handleSaveMemberForm = async (e) => {
     e.preventDefault();
-    if (currentSubTab === 'issuereturn' || memberFormData.bookName !== 'Select a book') {
-      const newIssue = {
-        id: Date.now(),
-        sl: `${issueReturnList.length + 1 < 10 ? '0' : ''}${issueReturnList.length + 1}`,
-        cardNo: memberFormData.cardNo || '12563',
-        issueTo: memberFormData.studentName !== 'Select Student' ? memberFormData.studentName : 'Jon Dev',
-        className: memberFormData.className || 'Class 1 (A)',
-        bookName: memberFormData.bookName !== 'Select a book' ? memberFormData.bookName : 'The Little Prince',
-        number: '101',
-        issueDate: memberFormData.issueDate || '01 Jun 2025',
-        returnDate: memberFormData.returnDate || '15 Jun 2025',
-        status: 'Issued'
-      };
-      setIssueReturnList([newIssue, ...issueReturnList]);
-    } else if (editingMember) {
-      setMembersList((prev) =>
-        prev.map((m) =>
-          m.id === editingMember.id
-            ? {
-                ...m,
-                cardNo: memberFormData.cardNo || m.cardNo,
-                className: memberFormData.className || m.className,
-                studentName: memberFormData.studentName !== 'Select Student' ? memberFormData.studentName : m.studentName,
-                email: memberFormData.email || m.email,
-                phone: memberFormData.phone || m.phone,
-                joinDate: memberFormData.joinDate || m.joinDate,
-                issueDate: memberFormData.issueDate || m.issueDate,
-                returnDate: memberFormData.returnDate || m.returnDate
-              }
-            : m
-        )
-      );
-    } else {
-      const newMember = {
-        id: Date.now(),
-        sl: `${membersList.length + 1 < 10 ? '0' : ''}${membersList.length + 1}`,
-        joinDate: memberFormData.joinDate || '05 Jun 2025',
-        cardNo: memberFormData.cardNo || '12990',
-        studentName: memberFormData.studentName !== 'Select Student' ? memberFormData.studentName : 'New Student',
-        className: memberFormData.className || 'Class 1 (A)',
-        phone: memberFormData.phone || '(+1) 205 555 9999',
-        bookIssue: '1',
-        issueDate: memberFormData.issueDate || '01 Jun 2025',
-        returnDate: memberFormData.returnDate || '15 Jun 2025',
-        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
-        email: memberFormData.email || 'student@example.com',
-        section: 'A',
-        gender: 'Male'
-      };
-      setMembersList([newMember, ...membersList]);
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setIsSaving(true);
+    try {
+      if (currentSubTab === 'issuereturn' || memberFormData.bookName !== 'Select a book') {
+        const newIssue = {
+          cardNo: memberFormData.cardNo || '12563',
+          issueTo: memberFormData.studentName !== 'Select Student' ? memberFormData.studentName : 'Jon Dev',
+          className: memberFormData.className || 'Class 1 (A)',
+          bookName: memberFormData.bookName !== 'Select a book' ? memberFormData.bookName : 'The Little Prince',
+          number: '101',
+          issueDate: memberFormData.issueDate || '01 Jun 2025',
+          returnDate: memberFormData.returnDate || '15 Jun 2025',
+          status: 'Issued'
+        };
+        const created = await libraryService.issues.create(newIssue);
+        setIssueReturnList((prev) => [{ ...created, sl: `${prev.length + 1 < 10 ? '0' : ''}${prev.length + 1}` }, ...prev]);
+      } else if (editingMember) {
+        const updated = await libraryService.members.update(editingMember.id, {
+          cardNo: memberFormData.cardNo || editingMember.cardNo,
+          className: memberFormData.className || editingMember.className,
+          studentName: memberFormData.studentName !== 'Select Student' ? memberFormData.studentName : editingMember.studentName,
+          email: memberFormData.email || editingMember.email,
+          phone: memberFormData.phone || editingMember.phone,
+          joinDate: memberFormData.joinDate || editingMember.joinDate,
+          issueDate: memberFormData.issueDate || editingMember.issueDate,
+          returnDate: memberFormData.returnDate || editingMember.returnDate
+        });
+        setMembersList((prev) => prev.map((m) => (m.id === editingMember.id ? { ...m, ...updated } : m)));
+      } else {
+        const newMember = {
+          joinDate: memberFormData.joinDate || '05 Jun 2025',
+          cardNo: memberFormData.cardNo || '12990',
+          studentName: memberFormData.studentName !== 'Select Student' ? memberFormData.studentName : 'New Student',
+          className: memberFormData.className || 'Class 1 (A)',
+          phone: memberFormData.phone || '(+1) 205 555 9999',
+          bookIssue: '1',
+          issueDate: memberFormData.issueDate || '01 Jun 2025',
+          returnDate: memberFormData.returnDate || '15 Jun 2025',
+          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
+          email: memberFormData.email || 'student@example.com',
+          section: memberFormData.section || 'A',
+          gender: 'Male'
+        };
+        const created = await libraryService.members.create(newMember);
+        setMembersList((prev) => [{ ...created, sl: `${prev.length + 1 < 10 ? '0' : ''}${prev.length + 1}` }, ...prev]);
+      }
+    } catch (e) {
+      setError(e.message || 'Failed to save member');
+    } finally {
+      savingRef.current = false;
+      setIsSaving(false);
     }
     setIsMemberModalOpen(false);
   };
@@ -620,6 +650,27 @@ export const LibraryModule = () => {
         </div>
       </div>
 
+      {error && (
+        <div
+          style={{
+            padding: '12px 16px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg)',
+            color: '#ef4444',
+            fontSize: '0.85rem',
+            fontWeight: 600
+          }}
+        >
+          {error}
+        </div>
+      )}
+
+      {isLoading && !booksList.length && !membersList.length && !issueReturnList.length && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          Loading library data...
+        </div>
+      )}
+
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
         {/* Controls Toolbar Bar */}
@@ -776,7 +827,8 @@ export const LibraryModule = () => {
                           isOpen={activeDropdownId === row.id}
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onEdit={() => handleOpenEditBookModal(row)}
-                          onDelete={() => handleDeleteBook(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteBook(row.id))}
+                          deleteBusy={busyKey === `delete-${row.id}`}
                         />
                       </td>
                     </tr>
@@ -812,7 +864,8 @@ export const LibraryModule = () => {
                           onView={() => handleViewMemberDetails(row)}
                           onEdit={() => handleOpenEditMemberModal(row)}
                           onIssueBook={() => handleOpenIssueBookModal(row)}
-                          onDelete={() => handleDeleteMember(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteMember(row.id))}
+                          deleteBusy={busyKey === `delete-${row.id}`}
                         />
                       </td>
                     </tr>
@@ -846,7 +899,8 @@ export const LibraryModule = () => {
                           onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
                           onReturnBook={() => handleOpenReturnConfirmModal(row)}
                           onEdit={() => handleOpenEditMemberModal(row)}
-                          onDelete={() => handleDeleteIssueReturn(row.id)}
+                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteIssueReturn(row.id))}
+                          deleteBusy={busyKey === `delete-${row.id}`}
                         />
                       </td>
                     </tr>
@@ -947,7 +1001,7 @@ export const LibraryModule = () => {
 
             <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '16px' }}>
               <button type="button" onClick={() => setIsBookModalOpen(false)} className="btn btn-secondary" style={{ padding: '10px 32px', color: '#ef4444', borderColor: '#ef4444', fontWeight: 700, fontSize: '0.9rem' }}>Cancel</button>
-              <button type="submit" form="add-book-form" className="btn btn-primary" style={{ padding: '10px 36px', backgroundColor: '#0d9488', color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>Save</button>
+              <button type="submit" form="add-book-form" className="btn btn-primary" disabled={isSaving} style={{ padding: '10px 36px', backgroundColor: '#0d9488', color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>{isSaving ? <><Spinner size={16} color="#ffffff" /> Saving...</> : 'Save'}</button>
             </div>
           </div>
         </div>
@@ -1057,7 +1111,7 @@ export const LibraryModule = () => {
 
             <div style={{ padding: '20px 24px', borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'center', gap: '16px' }}>
               <button type="button" onClick={() => setIsMemberModalOpen(false)} className="btn btn-secondary" style={{ padding: '10px 32px', color: '#ef4444', borderColor: '#ef4444', fontWeight: 700, fontSize: '0.9rem' }}>Cancel</button>
-              <button type="submit" form="member-form" className="btn btn-primary" style={{ padding: '10px 36px', backgroundColor: '#0d9488', color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>Save</button>
+              <button type="submit" form="member-form" className="btn btn-primary" disabled={isSaving} style={{ padding: '10px 36px', backgroundColor: '#0d9488', color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}>{isSaving ? <><Spinner size={16} color="#ffffff" /> Saving...</> : 'Save'}</button>
             </div>
           </div>
         </div>
@@ -1107,11 +1161,12 @@ export const LibraryModule = () => {
 
               <button
                 type="button"
-                onClick={handleConfirmReturnBook}
+                onClick={() => runAction(`return-${selectedReturnItem.id}`, () => handleConfirmReturnBook())}
+                disabled={busyKey === `return-${selectedReturnItem.id}`}
                 className="btn btn-primary"
-                style={{ flex: 1, padding: '10px 24px', backgroundColor: '#0d9488', color: '#ffffff', fontWeight: 700, fontSize: '0.9rem' }}
+                style={{ flex: 1, padding: '10px 24px', backgroundColor: '#0d9488', color: '#ffffff', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
               >
-                Yes Return
+                {busyKey === `return-${selectedReturnItem.id}` ? <Spinner size={16} color="#ffffff" /> : null} Yes Return
               </button>
             </div>
           </div>
@@ -1122,7 +1177,7 @@ export const LibraryModule = () => {
 };
 
 // Book Action Dropdown (Edit, Delete)
-const BookActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
+const BookActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, deleteBusy }) => {
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -1138,8 +1193,8 @@ const BookActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
           <button onClick={onEdit} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left' }}>
             <Edit size={14} color="#2563eb" /> Edit
           </button>
-          <button onClick={onDelete} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
-            <Trash2 size={14} /> Delete
+          <button onClick={onDelete} disabled={deleteBusy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: deleteBusy ? 'default' : 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
+            {deleteBusy ? <Spinner size={14} color="#ef4444" /> : <Trash2 size={14} />} Delete
           </button>
         </div>
       )}
@@ -1148,7 +1203,7 @@ const BookActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete }) => {
 };
 
 // Member Action Dropdown Cell (View, Edit, Issue Book, Delete)
-const MemberActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onIssueBook, onDelete }) => {
+const MemberActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onIssueBook, onDelete, deleteBusy }) => {
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -1170,8 +1225,8 @@ const MemberActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onIssueBoo
           <button onClick={onIssueBook} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
             <BookOpen size={14} color="#d97706" /> Issue Book
           </button>
-          <button onClick={onDelete} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
-            <Trash2 size={14} /> Delete
+          <button onClick={onDelete} disabled={deleteBusy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: deleteBusy ? 'default' : 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
+            {deleteBusy ? <Spinner size={14} color="#ef4444" /> : <Trash2 size={14} />} Delete
           </button>
         </div>
       )}
@@ -1180,7 +1235,7 @@ const MemberActionDropdownCell = ({ isOpen, onToggle, onView, onEdit, onIssueBoo
 };
 
 // Issue Return Action Dropdown Cell (Return Book, Edit, Delete)
-const IssueReturnActionDropdownCell = ({ isOpen, onToggle, onReturnBook, onEdit, onDelete }) => {
+const IssueReturnActionDropdownCell = ({ isOpen, onToggle, onReturnBook, onEdit, onDelete, deleteBusy }) => {
   return (
     <div style={{ display: 'inline-flex', position: 'relative' }}>
       <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
@@ -1199,8 +1254,8 @@ const IssueReturnActionDropdownCell = ({ isOpen, onToggle, onReturnBook, onEdit,
           <button onClick={onEdit} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: 'var(--text-primary)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
             <Edit size={14} color="#2563eb" /> Edit
           </button>
-          <button onClick={onDelete} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
-            <Trash2 size={14} /> Delete
+          <button onClick={onDelete} disabled={deleteBusy} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', border: 'none', backgroundColor: 'transparent', color: '#ef4444', cursor: deleteBusy ? 'default' : 'pointer', fontSize: '0.85rem', fontWeight: 600, textAlign: 'left', borderTop: '1px solid var(--border-light)' }}>
+            {deleteBusy ? <Spinner size={14} color="#ef4444" /> : <Trash2 size={14} />} Delete
           </button>
         </div>
       )}
