@@ -100,7 +100,19 @@ export const Sidebar = () => {
         { key: 'library-issue-return', label: 'Issue Return' }
       ]
     },
-    { key: 'accounts', label: 'Accounts', icon: DollarSign, hasSub: true },
+    {
+      key: 'accounts',
+      label: 'Accounts',
+      icon: DollarSign,
+      hasSub: true,
+      subItems: [
+        { key: 'accounts-income-head', label: 'Income Head' },
+        { key: 'accounts-income-list', label: 'Income List' },
+        { key: 'accounts-expense-head', label: 'Expense Head' },
+        { key: 'accounts-expense-list', label: 'Expense List' },
+        { key: 'accounts-transaction', label: 'Transaction' }
+      ]
+    },
     { key: 'hrm', label: 'HRM', icon: UserCog, hasSub: true },
     { key: 'notice', label: 'Notice Board', icon: BookMarked, hasSub: false }
   ];
@@ -129,6 +141,9 @@ export const Sidebar = () => {
         if (item.key === 'library' && !activeTab.startsWith('library')) {
           setActiveTab('library-books');
         }
+        if (item.key === 'accounts' && !activeTab.startsWith('accounts')) {
+          setActiveTab('accounts-income-head');
+        }
       }
     } else {
       setActiveTab(item.key);
@@ -143,6 +158,7 @@ export const Sidebar = () => {
     if (item.key === 'attendance' && activeTab.startsWith('attendance')) return true;
     if (item.key === 'leaves' && activeTab.startsWith('leaves')) return true;
     if (item.key === 'library' && activeTab.startsWith('library')) return true;
+    if (item.key === 'accounts' && activeTab.startsWith('accounts')) return true;
     return false;
   };
 

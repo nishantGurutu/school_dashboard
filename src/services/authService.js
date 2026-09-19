@@ -1,11 +1,9 @@
-import apiRequest, { authStorage } from './api';
+import NetworkService, { authStorage } from './networkService';
+import { API_ENDPOINTS } from './apiConfig';
 
 export const authService = {
   async login(email, password) {
-    const data = await apiRequest('/auth/login', {
-      method: 'POST',
-      body: { email, password }
-    });
+    const data = await NetworkService.post(API_ENDPOINTS.AUTH.LOGIN, { email, password });
     const user = {
       userId: data.userId,
       email: data.email,
@@ -24,22 +22,27 @@ export const authService = {
     const refreshToken = authStorage.getRefreshToken();
     try {
       if (refreshToken) {
-        await apiRequest('/auth/logout', {
-          method: 'POST',
-          body: { refreshToken }
-        });
+        await NetworkService.post(API_ENDPOINTS.AUTH.LOGOUT, { refreshToken });
       }
+    } catch (e) {
+      console.warn('Logout API failed, clearing local session regardless.', e);
     } finally {
       authStorage.clear();
     }
   },
 
   async getProfile() {
-    const data = await apiRequest('/profile/me');
-    return data.data || data;
+    const data = await NetworkService.get(API_ENDPOINTS.PROFILE.ME);
+    return data?.data || data;
   },
 
   getCurrentUser() {
     return authStorage.getUser();
+  },
+
+  isLoggedIn() {
+    return Boolean(authStorage.getAccessToken());
   }
 };
+
+export default authService;

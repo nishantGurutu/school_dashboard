@@ -74,6 +74,11 @@ const MainLayout = ({ onLogout }) => {
       case 'library-issue-return':
         return <LibraryModule />;
       case 'accounts':
+      case 'accounts-income-head':
+      case 'accounts-income-list':
+      case 'accounts-expense-head':
+      case 'accounts-expense-list':
+      case 'accounts-transaction':
         return <AccountsModule />;
       case 'hrm':
         return <HrmModule />;

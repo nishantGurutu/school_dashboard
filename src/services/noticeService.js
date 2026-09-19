@@ -1,8 +1,12 @@
-import apiRequest from './api';
+import NetworkService from './networkService';
+import { API_ENDPOINTS } from './apiConfig';
 
 export const noticeService = {
-  list: () => apiRequest('/notices'),
-  create: (data) => apiRequest('/notices', { method: 'POST', body: data }),
-  update: (id, data) => apiRequest(`/notices/${id}`, { method: 'PUT', body: data }),
-  remove: (id) => apiRequest(`/notices/${id}`, { method: 'DELETE' })
+  list: () => NetworkService.get(API_ENDPOINTS.NOTICES.BASE),
+  get: (id) => NetworkService.get(API_ENDPOINTS.NOTICES.BY_ID(id)),
+  create: (data) => NetworkService.post(API_ENDPOINTS.NOTICES.BASE, data),
+  update: (id, data) => NetworkService.put(API_ENDPOINTS.NOTICES.BY_ID(id), data),
+  remove: (id) => NetworkService.delete(API_ENDPOINTS.NOTICES.BY_ID(id))
 };
+
+export default noticeService;

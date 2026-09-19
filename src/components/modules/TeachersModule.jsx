@@ -15,45 +15,18 @@ export const TeachersModule = () => {
 
   const toTableRow = (t) => ({
     ...t,
-    name: t.fullName || t.name,
-    id: t.id
+    name: t.fullName || t.name || 'Faculty Member',
+    id: t.id,
+    department: t.department || 'General Faculty',
+    subject: t.subject || 'All Subjects',
+    qualification: t.qualification || 'Master Degree',
+    phone: t.phone || 'N/A',
+    email: t.email || 'N/A',
+    status: t.status || 'Active',
+    avatar: t.avatar || t.teacherPhoto || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
   });
 
-  const [teachers, setTeachers] = useState([
-    {
-      id: 'TCH-101',
-      name: 'Dr. Robert Langdon',
-      department: 'Mathematics & Science',
-      subject: 'Advanced Calculus & Physics',
-      qualification: 'Ph.D. in Applied Mathematics',
-      phone: '+1 555-0211',
-      email: 'r.langdon@auroraschool.edu',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
-    },
-    {
-      id: 'TCH-102',
-      name: 'Prof. Clara Oswald',
-      department: 'English Literature',
-      subject: 'World Literature & Creative Writing',
-      qualification: 'M.A. English Literature',
-      phone: '+1 555-0288',
-      email: 'c.oswald@auroraschool.edu',
-      status: 'Active',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
-    },
-    {
-      id: 'TCH-103',
-      name: 'Dr. Henry Walton',
-      department: 'Computer Science',
-      subject: 'Data Structures & Web Dev',
-      qualification: 'Ph.D. Computer Engineering',
-      phone: '+1 555-0312',
-      email: 'h.walton@auroraschool.edu',
-      status: 'On Leave',
-      avatar: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
-    }
-  ]);
+  const [teachers, setTeachers] = useState([]);
 
   const fetchTeachers = useCallback(async () => {
     setIsLoading(true);
@@ -63,12 +36,15 @@ export const TeachersModule = () => {
       if (searchTerm.trim()) {
         result = await teacherService.search(searchTerm.trim());
       } else {
-        result = await teacherService.list('page=0&size=200');
+        result = await teacherService.list({ page: 0, size: 200 });
       }
-      const items = Array.isArray(result) ? result : result && result.content ? result.content : [];
-      if (items.length) {
-        setTeachers(items.map(toTableRow));
-      }
+      const items = Array.isArray(result)
+        ? result
+        : result && Array.isArray(result.content)
+        ? result.content
+        : [];
+
+      setTeachers(items.map(toTableRow));
     } catch (e) {
       setError(e.message || 'Failed to load teachers');
     } finally {
@@ -85,22 +61,43 @@ export const TeachersModule = () => {
   };
 
   const handleSaveTeacher = async (formData) => {
+    setError('');
+    const payload = {
+      fullName: formData.teacherName || formData.name,
+      employeeId: formData.teacherId || `TCH-${Date.now()}`,
+      department: formData.department || 'Science',
+      subject: formData.subject || 'Physics',
+      qualification: formData.qualification || 'M.Sc.',
+      phone: formData.phone,
+      email: formData.email,
+      address: formData.address,
+      gender: (formData.gender || 'MALE').toUpperCase(),
+      dob: formData.dob,
+      joiningDate: formData.joiningDate,
+      experience: formData.experience,
+      designation: formData.designation,
+      salary: formData.salary ? parseFloat(formData.salary) : 50000,
+      contractType: formData.contractType || 'Permanent',
+      workShift: formData.workShift || 'Morning',
+      workLocation: formData.workLocation || 'Main Campus',
+      status: formData.status || 'ACTIVE'
+    };
+
     if (editingTeacher) {
       try {
-        const updated = await teacherService.update(editingTeacher.id, formData);
+        const updated = await teacherService.update(editingTeacher.id, payload);
         setTeachers((prev) => prev.map((t) => (t.id === editingTeacher.id ? toTableRow(updated) : t)));
         setEditingTeacher(null);
+        await fetchTeachers();
       } catch (e) {
         setError(e.message || 'Failed to update teacher');
       }
     } else {
       try {
-        const created = await teacherService.create({
-          ...formData,
-          employeeId: formData.teacherId || `TCH-${Date.now()}`
-        });
+        const created = await teacherService.create(payload);
         setTeachers((prev) => [toTableRow(created), ...prev]);
         setShowAddForm(false);
+        await fetchTeachers();
       } catch (e) {
         setError(e.message || 'Failed to create teacher');
       }
@@ -108,9 +105,10 @@ export const TeachersModule = () => {
   };
 
   const handleDeleteTeacher = async (id) => {
+    setError('');
     try {
       await teacherService.remove(id);
-      setTeachers((prev) => prev.filter((t) => t.id !== id));
+      setTeachers((prev) => prev.filter((t) => t.id !== id && String(t.id) !== String(id)));
     } catch (e) {
       setError(e.message || 'Failed to delete teacher');
     }
@@ -132,9 +130,10 @@ export const TeachersModule = () => {
 
   const filteredTeachers = teachers.filter(
     (t) =>
-      t.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      String(t.id).toLowerCase().includes(searchTerm.toLowerCase())
+      (t.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.subject || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (t.department || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      String(t.id || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -178,7 +177,6 @@ export const TeachersModule = () => {
         </div>
       </div>
 
-      {/* Teachers Cards Grid */}
       {error && (
         <div
           style={{
@@ -196,63 +194,72 @@ export const TeachersModule = () => {
 
       {isLoading && !teachers.length && (
         <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-          Loading teachers...
+          <Spinner size={24} color="var(--accent-primary)" />
+          <div style={{ marginTop: '12px' }}>Loading faculty members from backend...</div>
         </div>
       )}
 
-      <div className="grid-responsive">
-        {filteredTeachers.map((t) => (
-          <div key={t.id} className="col-span-4 card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                <img src={t.avatar} alt={t.name} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover' }} />
-                <div>
-                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{t.name}</h3>
-                  <span className="badge badge-info">{t.department}</span>
+      {!isLoading && teachers.length === 0 && (
+        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+          No teacher records found. Click "Add New Teacher" to create your first faculty profile!
+        </div>
+      )}
+
+      {teachers.length > 0 && (
+        <div className="grid-responsive">
+          {filteredTeachers.map((t) => (
+            <div key={t.id} className="col-span-4 card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                  <img src={t.avatar} alt={t.name} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover' }} />
+                  <div>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: 700 }}>{t.name}</h3>
+                    <span className="badge badge-info">{t.department}</span>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  <button
+                    className="btn-icon"
+                    onClick={() => handleEditClick(t)}
+                    style={{ width: '32px', height: '32px' }}
+                    title="Edit Teacher"
+                  >
+                    <Edit size={16} color="var(--accent-primary)" />
+                  </button>
+                  <button
+                    className="btn-icon"
+                    onClick={() => runAction(`delete-${t.id}`, () => handleDeleteTeacher(t.id))}
+                    disabled={busyKey === `delete-${t.id}`}
+                    style={{ width: '32px', height: '32px', color: '#ef4444' }}
+                    title="Delete Teacher"
+                  >
+                    {busyKey === `delete-${t.id}` ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={16} />}
+                  </button>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', gap: '4px' }}>
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                <div><strong>Subject:</strong> {t.subject}</div>
+                <div><strong>Qualification:</strong> {t.qualification}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={14} /> {t.email}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {t.phone}</div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: '12px' }}>
+                <span className={`badge ${t.status === 'Active' || t.status === 'ACTIVE' ? 'badge-success' : 'badge-warning'}`}>{t.status}</span>
                 <button
-                  className="btn-icon"
+                  className="btn btn-secondary"
                   onClick={() => handleEditClick(t)}
-                  style={{ width: '32px', height: '32px' }}
-                  title="Edit Teacher"
+                  style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                 >
-                  <Edit size={16} color="var(--accent-primary)" />
-                </button>
-                <button
-                  className="btn-icon"
-                  onClick={() => runAction(`delete-${t.id}`, () => handleDeleteTeacher(t.id))}
-                  disabled={busyKey === `delete-${t.id}`}
-                  style={{ width: '32px', height: '32px', color: '#ef4444' }}
-                  title="Delete Teacher"
-                >
-                  {busyKey === `delete-${t.id}` ? <Spinner size={16} color="#ef4444" /> : <Trash2 size={16} />}
+                  Edit Teacher
                 </button>
               </div>
             </div>
-
-            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <div><strong>Subject:</strong> {t.subject}</div>
-              <div><strong>Qualification:</strong> {t.qualification}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={14} /> {t.email}</div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {t.phone}</div>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-light)', paddingTop: '12px' }}>
-              <span className={`badge ${t.status === 'Active' ? 'badge-success' : 'badge-warning'}`}>{t.status}</span>
-              <button
-                className="btn btn-secondary"
-                onClick={() => handleEditClick(t)}
-                style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-              >
-                Edit Teacher
-              </button>
-            </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
