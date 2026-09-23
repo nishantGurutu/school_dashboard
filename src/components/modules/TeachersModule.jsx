@@ -15,7 +15,7 @@ export const TeachersModule = () => {
 
   const toTableRow = (t) => ({
     ...t,
-    name: t.fullName || t.name || 'Faculty Member',
+    name: t.fullName || t.name || (t.firstName ? `${t.firstName} ${t.lastName || ''}`.trim() : 'Faculty Member'),
     id: t.id,
     department: t.department || 'General Faculty',
     subject: t.subject || 'All Subjects',
@@ -62,25 +62,27 @@ export const TeachersModule = () => {
 
   const handleSaveTeacher = async (formData) => {
     setError('');
+    const rawName = formData.fullName || formData.name || formData.teacherName || 'Faculty Member';
+    const nameParts = rawName.trim().split(' ');
+    const firstName = nameParts[0] || 'Teacher';
+    const lastName = nameParts.slice(1).join(' ') || 'Faculty';
+
     const payload = {
-      fullName: formData.teacherName || formData.name,
-      employeeId: formData.teacherId || `TCH-${Date.now()}`,
-      department: formData.department || 'Science',
-      subject: formData.subject || 'Physics',
-      qualification: formData.qualification || 'M.Sc.',
-      phone: formData.phone,
-      email: formData.email,
-      address: formData.address,
-      gender: (formData.gender || 'MALE').toUpperCase(),
-      dob: formData.dob,
-      joiningDate: formData.joiningDate,
-      experience: formData.experience,
-      designation: formData.designation,
-      salary: formData.salary ? parseFloat(formData.salary) : 50000,
-      contractType: formData.contractType || 'Permanent',
-      workShift: formData.workShift || 'Morning',
-      workLocation: formData.workLocation || 'Main Campus',
-      status: formData.status || 'ACTIVE'
+      employeeId: formData.employeeId || formData.teacherId || `EMP-${Date.now().toString().slice(-4)}`,
+      firstName: firstName,
+      lastName: lastName,
+      department: formData.department || formData.subject || 'Mathematics',
+      subject: formData.subject || 'Mathematics',
+      qualification: formData.qualification || 'M.Sc. Mathematics',
+      designation: formData.designation || 'Teacher',
+      phone: formData.phone || '+91 9876543210',
+      email: formData.email || `teacher_${Date.now()}@schooldesk.com`,
+      address: formData.address || 'School Campus',
+      joiningDate: formData.joiningDate || new Date().toISOString().split('T')[0],
+      experienceYears: formData.experienceYears ? parseInt(formData.experienceYears, 10) : 5,
+      bloodGroup: formData.bloodGroup || 'O+',
+      avatar: formData.avatar || formData.teacherPhoto || 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
+      status: 'ACTIVE'
     };
 
     if (editingTeacher) {
