@@ -8,7 +8,13 @@ import {
   X,
   Edit,
   Trash2,
-  ChevronDown
+  ChevronDown,
+  CheckCircle,
+  AlertCircle,
+  Layers,
+  BookOpen,
+  GraduationCap,
+  DoorOpen
 } from 'lucide-react';
 import { classService } from '../../services/classService';
 import { useApiAction } from '../../hooks/useApiAction';
@@ -17,7 +23,7 @@ import { Spinner } from '../ui/Spinner';
 export const ClassesModule = () => {
   const { activeTab, setActiveTab } = useTheme();
 
-  // Determine current active sub-tab (section, subjects, class-list, class-room)
+  // Determine current active sub-tab (section, subjects, classList, classRoom)
   const getSubTabFromActiveTab = () => {
     if (activeTab === 'classes-subjects') return 'subjects';
     if (activeTab === 'classes-list') return 'classList';
@@ -28,32 +34,40 @@ export const ClassesModule = () => {
   const [currentSubTab, setCurrentSubTab] = useState(getSubTabFromActiveTab());
   const [searchTerm, setSearchTerm] = useState('');
   const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const [selectedRows, setSelectedRows] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
   const { busyKey, runAction } = useApiAction();
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
 
+  // Data states for 4 sections
+  const [sections, setSections] = useState([]);
+  const [subjects, setSubjects] = useState([]);
+  const [classList, setClassList] = useState([]);
+  const [classRooms, setClassRooms] = useState([]);
+
+  // Sync sub-tab from parent activeTab
   useEffect(() => {
     setCurrentSubTab(getSubTabFromActiveTab());
     setActiveDropdownId(null);
+    setSelectedRows([]);
+    setCurrentPage(1);
+    setSearchTerm('');
   }, [activeTab]);
 
-  // Section State & Data (Screenshots 1 & 2)
-  const [sections, setSections] = useState([]);
-
-  // Subjects State & Data (Screenshots 3 & 4)
-  const [subjects, setSubjects] = useState([]);
-
-  // Class List State & Data (Screenshot 5)
-  const [classList, setClassList] = useState([]);
-
-  // Class Room State & Data (Matching User's Latest Screenshot)
-  const [classRooms, setClassRooms] = useState([]);
+  // Flash message timer
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => setSuccessMessage(''), 3500);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const fetchClassesData = useCallback(async () => {
     setIsLoading(true);
@@ -62,32 +76,35 @@ export const ClassesModule = () => {
       const [secRes, subRes, clsRes, roomRes] = await Promise.all([
         classService.sections.list(),
         classService.subjects.list(),
-        classService.list.list(),
+        classService.classes.list(),
         classService.rooms.list()
       ]);
+
       const secItems = Array.isArray(secRes) ? secRes : [];
       const subItems = Array.isArray(subRes) ? subRes : [];
       const clsItems = Array.isArray(clsRes) ? clsRes : [];
       const roomItems = Array.isArray(roomRes) ? roomRes : [];
-      setSections((prev) => (secItems.length ? secItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setSubjects((prev) => (subItems.length ? subItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setClassList((prev) => (clsItems.length ? clsItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setClassRooms((prev) => (roomItems.length ? roomItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+
+      setSections(secItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setSubjects(subItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setClassList(clsItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setClassRooms(roomItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
     } catch (e) {
-      setError(e.message || 'Failed to load classes data');
+      setError(e.message || 'Failed to load classes data from server');
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm]);
+  }, []);
 
   useEffect(() => {
     fetchClassesData();
   }, [fetchClassesData]);
 
-  // Modal Form State
+  // Form State
   const [modalFormData, setModalFormData] = useState({
     name: '',
     code: '',
+    sectionId: '',
     section: '',
     room: '',
     capacity: '',
@@ -97,6 +114,9 @@ export const ClassesModule = () => {
   const handleSubTabChange = (tabKey) => {
     setCurrentSubTab(tabKey);
     setActiveDropdownId(null);
+    setSelectedRows([]);
+    setCurrentPage(1);
+    setSearchTerm('');
     if (tabKey === 'section') setActiveTab('classes-section');
     if (tabKey === 'subjects') setActiveTab('classes-subjects');
     if (tabKey === 'classList') setActiveTab('classes-list');
@@ -105,12 +125,23 @@ export const ClassesModule = () => {
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    setError('');
+
+    // Preselect first section for class if available
+    let defaultSectionId = '';
+    let defaultSectionName = '';
+    if (sections.length > 0) {
+      defaultSectionId = String(sections[0].id);
+      defaultSectionName = sections[0].name;
+    }
+
     setModalFormData({
       name: '',
       code: '',
-      section: 'A, B, C, D',
+      sectionId: defaultSectionId,
+      section: defaultSectionName,
       room: '',
-      capacity: '',
+      capacity: '40',
       status: 'Active'
     });
     setIsModalOpen(true);
@@ -119,11 +150,25 @@ export const ClassesModule = () => {
   const handleOpenEditModal = (item) => {
     setEditingItem(item);
     setActiveDropdownId(null);
+    setError('');
+
+    // For class, resolve sectionId
+    let secId = item.sectionId ? String(item.sectionId) : '';
+    let secName = item.section || '';
+    if (!secId && secName && sections.length > 0) {
+      const match = sections.find(s => s.name.toLowerCase() === secName.toLowerCase());
+      if (match) {
+        secId = String(match.id);
+        secName = match.name;
+      }
+    }
+
     setModalFormData({
       name: item.name || item.room || '',
       code: item.code || '',
-      section: item.section || '',
-      room: item.room || '',
+      sectionId: secId,
+      section: secName,
+      room: item.room || item.name || '',
       capacity: item.capacity || '',
       status: item.status || 'Active'
     });
@@ -135,108 +180,248 @@ export const ClassesModule = () => {
     try {
       if (currentSubTab === 'section') {
         await classService.sections.remove(id);
-        setSections((prev) => prev.filter((item) => item.id !== id));
+        setSections((prev) => prev.filter((item) => item.id !== id).map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+        setSuccessMessage('Section deleted successfully!');
       } else if (currentSubTab === 'subjects') {
         await classService.subjects.remove(id);
-        setSubjects((prev) => prev.filter((item) => item.id !== id));
+        setSubjects((prev) => prev.filter((item) => item.id !== id).map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+        setSuccessMessage('Subject deleted successfully!');
       } else if (currentSubTab === 'classList') {
-        await classService.list.remove(id);
-        setClassList((prev) => prev.filter((item) => item.id !== id));
+        await classService.classes.remove(id);
+        setClassList((prev) => prev.filter((item) => item.id !== id).map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+        setSuccessMessage('Class deleted successfully!');
       } else if (currentSubTab === 'classRoom') {
         await classService.rooms.remove(id);
-        setClassRooms((prev) => prev.filter((item) => item.id !== id));
+        setClassRooms((prev) => prev.filter((item) => item.id !== id).map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+        setSuccessMessage('Class Room deleted successfully!');
       }
     } catch (e) {
       setError(e.message || 'Failed to delete item');
     }
   };
 
+  const handleBulkDelete = async () => {
+    if (!selectedRows.length) return;
+    if (!window.confirm(`Are you sure you want to delete ${selectedRows.length} selected item(s)?`)) return;
+
+    try {
+      setIsLoading(true);
+      for (const id of selectedRows) {
+        if (currentSubTab === 'section') await classService.sections.remove(id);
+        else if (currentSubTab === 'subjects') await classService.subjects.remove(id);
+        else if (currentSubTab === 'classList') await classService.classes.remove(id);
+        else if (currentSubTab === 'classRoom') await classService.rooms.remove(id);
+      }
+      setSelectedRows([]);
+      setSuccessMessage(`${selectedRows.length} item(s) deleted successfully!`);
+      await fetchClassesData();
+    } catch (e) {
+      setError(e.message || 'Failed to delete selected items');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSaveModal = async (e) => {
     e.preventDefault();
 
-    if (savingRef.current) {
-      return;
-    }
+    if (savingRef.current) return;
     savingRef.current = true;
     setIsSaving(true);
+    setError('');
 
     try {
       if (editingItem) {
         const id = editingItem.id;
         if (currentSubTab === 'section') {
           const updated = await classService.sections.update(id, {
-            name: modalFormData.name,
+            name: modalFormData.name.trim(),
             status: modalFormData.status
           });
           setSections((prev) => prev.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+          setSuccessMessage('Section updated successfully!');
         } else if (currentSubTab === 'subjects') {
           const updated = await classService.subjects.update(id, {
-            name: modalFormData.name,
-            code: modalFormData.code,
+            name: modalFormData.name.trim(),
+            code: modalFormData.code.trim(),
             status: modalFormData.status
           });
           setSubjects((prev) => prev.map((sub) => (sub.id === id ? { ...sub, ...updated } : sub)));
+          setSuccessMessage('Subject updated successfully!');
         } else if (currentSubTab === 'classList') {
-          const updated = await classService.list.update(id, {
-            name: modalFormData.name,
-            section: modalFormData.section,
+          const sec = sections.find(s => String(s.id) === String(modalFormData.sectionId));
+          const updated = await classService.classes.update(id, {
+            name: modalFormData.name.trim(),
+            sectionId: modalFormData.sectionId ? Number(modalFormData.sectionId) : null,
+            section: sec ? sec.name : (modalFormData.section || null),
             status: modalFormData.status
           });
           setClassList((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
+          setSuccessMessage('Class updated successfully!');
         } else if (currentSubTab === 'classRoom') {
           const updated = await classService.rooms.update(id, {
-            room: modalFormData.name,
-            capacity: modalFormData.capacity,
+            room: (modalFormData.room || modalFormData.name).trim(),
+            capacity: modalFormData.capacity ? modalFormData.capacity.trim() : '',
             status: modalFormData.status
           });
           setClassRooms((prev) => prev.map((r) => (r.id === id ? { ...r, ...updated } : r)));
+          setSuccessMessage('Class Room updated successfully!');
         }
       } else {
+        // Create new item
         if (currentSubTab === 'section') {
           const created = await classService.sections.create({
-            name: modalFormData.name || 'New Section',
+            name: modalFormData.name.trim(),
             status: modalFormData.status
           });
-          setSections((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+          setSections((prev) => [{ ...created, sl: '01' }, ...prev.map((s, i) => ({ ...s, sl: String(i + 2).padStart(2, '0') }))]);
+          setSuccessMessage('Section created successfully!');
         } else if (currentSubTab === 'subjects') {
           const created = await classService.subjects.create({
-            name: modalFormData.name || 'New Subject',
-            code: modalFormData.code || '',
+            name: modalFormData.name.trim(),
+            code: modalFormData.code.trim(),
             status: modalFormData.status
           });
-          setSubjects((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+          setSubjects((prev) => [{ ...created, sl: '01' }, ...prev.map((s, i) => ({ ...s, sl: String(i + 2).padStart(2, '0') }))]);
+          setSuccessMessage('Subject created successfully!');
         } else if (currentSubTab === 'classList') {
-          const created = await classService.list.create({
-            name: modalFormData.name || 'New Class',
-            section: modalFormData.section || 'A, B, C, D',
+          const sec = sections.find(s => String(s.id) === String(modalFormData.sectionId));
+          const created = await classService.classes.create({
+            name: modalFormData.name.trim(),
+            sectionId: modalFormData.sectionId ? Number(modalFormData.sectionId) : null,
+            section: sec ? sec.name : (modalFormData.section || null),
             status: modalFormData.status
           });
-          setClassList((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+          setClassList((prev) => [{ ...created, sl: '01' }, ...prev.map((c, i) => ({ ...c, sl: String(i + 2).padStart(2, '0') }))]);
+          setSuccessMessage('Class created successfully!');
         } else if (currentSubTab === 'classRoom') {
           const created = await classService.rooms.create({
-            room: modalFormData.name || '19',
-            capacity: modalFormData.capacity || '50',
+            room: (modalFormData.room || modalFormData.name).trim(),
+            capacity: modalFormData.capacity ? modalFormData.capacity.trim() : '',
             status: modalFormData.status
           });
-          setClassRooms((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
+          setClassRooms((prev) => [{ ...created, sl: '01' }, ...prev.map((r, i) => ({ ...r, sl: String(i + 2).padStart(2, '0') }))]);
+          setSuccessMessage('Class Room created successfully!');
         }
       }
 
       setIsModalOpen(false);
       setEditingItem(null);
     } catch (e) {
-      setError(e.message || 'Failed to save item');
+      setError(e.message || 'Failed to save item. Please check your inputs.');
     } finally {
       savingRef.current = false;
       setIsSaving(false);
     }
   };
 
-  const toggleSelectAll = (list) => {
-    if (selectedRows.length === list.length) {
+  const handleExportCSV = () => {
+    let headers = [];
+    let rows = [];
+    let filename = '';
+
+    if (currentSubTab === 'section') {
+      headers = ['S.L', 'Section Name', 'Status'];
+      rows = sections.map((s, idx) => [idx + 1, s.name, s.status]);
+      filename = 'school_sections.csv';
+    } else if (currentSubTab === 'subjects') {
+      headers = ['S.L', 'Subject Name', 'Code', 'Status'];
+      rows = subjects.map((s, idx) => [idx + 1, s.name, s.code, s.status]);
+      filename = 'school_subjects.csv';
+    } else if (currentSubTab === 'classList') {
+      headers = ['S.L', 'Class Name', 'Section', 'Status'];
+      rows = classList.map((c, idx) => [idx + 1, c.name, c.section || 'N/A', c.status]);
+      filename = 'school_classes.csv';
+    } else {
+      headers = ['S.L', 'Room No', 'Capacity', 'Status'];
+      rows = classRooms.map((r, idx) => [idx + 1, r.room, r.capacity || 'N/A', r.status]);
+      filename = 'school_classrooms.csv';
+    }
+
+    const csvContent = [headers.join(','), ...rows.map(r => r.map(cell => `"${String(cell || '').replace(/"/g, '""')}"`).join(','))].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Header Details Config
+  const getHeaderInfo = () => {
+    switch (currentSubTab) {
+      case 'subjects':
+        return {
+          title: 'Subjects List',
+          breadcrumb: 'Dashboard / Classes / Subjects List',
+          addBtnLabel: '+ Add Subject',
+          searchPlaceholder: 'Search subjects by name or code...'
+        };
+      case 'classList':
+        return {
+          title: 'Class List',
+          breadcrumb: 'Dashboard / Classes / Class List',
+          addBtnLabel: '+ Add Class',
+          searchPlaceholder: 'Search classes by name or section...'
+        };
+      case 'classRoom':
+        return {
+          title: 'Class Room List',
+          breadcrumb: 'Dashboard / Classes / Class Room List',
+          addBtnLabel: '+ Add Class Room',
+          searchPlaceholder: 'Search rooms by name or capacity...'
+        };
+      case 'section':
+      default:
+        return {
+          title: 'Section Details',
+          breadcrumb: 'Dashboard / Classes / Section Details',
+          addBtnLabel: '+ Add Section',
+          searchPlaceholder: 'Search sections by name...'
+        };
+    }
+  };
+
+  const headerInfo = getHeaderInfo();
+
+  // Current active list & filtered items
+  const getCurrentList = () => {
+    if (currentSubTab === 'section') return sections;
+    if (currentSubTab === 'subjects') return subjects;
+    if (currentSubTab === 'classList') return classList;
+    return classRooms;
+  };
+
+  const fullList = getCurrentList();
+
+  const filteredItems = fullList.filter((item) => {
+    const q = searchTerm.toLowerCase();
+    if (currentSubTab === 'section') {
+      return (item.name || '').toLowerCase().includes(q) || (item.status || '').toLowerCase().includes(q);
+    }
+    if (currentSubTab === 'subjects') {
+      return (item.name || '').toLowerCase().includes(q) || (item.code || '').toLowerCase().includes(q) || (item.status || '').toLowerCase().includes(q);
+    }
+    if (currentSubTab === 'classList') {
+      return (item.name || '').toLowerCase().includes(q) || (item.section || '').toLowerCase().includes(q) || (item.status || '').toLowerCase().includes(q);
+    }
+    if (currentSubTab === 'classRoom') {
+      return (item.room || '').toLowerCase().includes(q) || (item.capacity || '').toLowerCase().includes(q) || (item.status || '').toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  // Pagination calculation
+  const totalPages = Math.max(1, Math.ceil(filteredItems.length / rowsPerPage));
+  const paginatedItems = filteredItems.slice((currentPage - 1) * rowsPerPage, currentPage * rowsPerPage);
+
+  const toggleSelectAll = () => {
+    if (selectedRows.length === paginatedItems.length && paginatedItems.length > 0) {
       setSelectedRows([]);
     } else {
-      setSelectedRows(list.map((item) => item.id));
+      setSelectedRows(paginatedItems.map((item) => item.id));
     }
   };
 
@@ -246,126 +431,113 @@ export const ClassesModule = () => {
     );
   };
 
-  // Header Details Config
-  const getHeaderInfo = () => {
-    switch (currentSubTab) {
-      case 'subjects':
-        return {
-          title: 'Subjects List',
-          breadcrumb: 'Dashboard / Subjects List',
-          addBtnLabel: '+ Add Subject',
-          searchPlaceholder: 'Search...'
-        };
-      case 'classList':
-        return {
-          title: 'Class List',
-          breadcrumb: 'Dashboard / Class List',
-          addBtnLabel: '+ Add Class',
-          searchPlaceholder: 'Search...'
-        };
-      case 'classRoom':
-        return {
-          title: 'Class Room List',
-          breadcrumb: 'Dashboard / Class Room List',
-          addBtnLabel: '+ Add Class Room',
-          searchPlaceholder: 'Search...'
-        };
-      case 'section':
-      default:
-        return {
-          title: 'Section Details',
-          breadcrumb: 'Dashboard / Section Details',
-          addBtnLabel: '+ Add Section',
-          searchPlaceholder: 'Search...'
-        };
-    }
-  };
-
-  const headerInfo = getHeaderInfo();
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative' }}>
       {/* Top Header Card */}
       <div
         className="card animate-fade-in"
         style={{
           display: 'flex',
-          justify: 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
-          gap: '16px'
+          gap: '16px',
+          padding: '18px 24px'
         }}
       >
         <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>{headerInfo.title}</h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{headerInfo.breadcrumb}</p>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{headerInfo.title}</h2>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px', marginBottom: 0 }}>{headerInfo.breadcrumb}</p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* Sub-Nav Tabs */}
-          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-app)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+          <div style={{
+            display: 'flex',
+            gap: '4px',
+            backgroundColor: 'var(--bg-app)',
+            padding: '4px',
+            borderRadius: 'var(--radius-md)',
+            border: '1px solid var(--border-light)'
+          }}>
             <button
               onClick={() => handleSubTabChange('section')}
               style={{
-                padding: '6px 12px',
+                padding: '8px 16px',
                 borderRadius: 'var(--radius-sm)',
                 border: 'none',
                 backgroundColor: currentSubTab === 'section' ? '#0d9488' : 'transparent',
                 color: currentSubTab === 'section' ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: currentSubTab === 'section' ? 700 : 500,
-                fontSize: '0.8rem',
-                cursor: 'pointer'
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
               }}
             >
-              Section
+              <Layers size={15} /> Section ({sections.length})
             </button>
 
             <button
               onClick={() => handleSubTabChange('subjects')}
               style={{
-                padding: '6px 12px',
+                padding: '8px 16px',
                 borderRadius: 'var(--radius-sm)',
                 border: 'none',
                 backgroundColor: currentSubTab === 'subjects' ? '#0d9488' : 'transparent',
                 color: currentSubTab === 'subjects' ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: currentSubTab === 'subjects' ? 700 : 500,
-                fontSize: '0.8rem',
-                cursor: 'pointer'
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
               }}
             >
-              Subjects
+              <BookOpen size={15} /> Subjects ({subjects.length})
             </button>
 
             <button
               onClick={() => handleSubTabChange('classList')}
               style={{
-                padding: '6px 12px',
+                padding: '8px 16px',
                 borderRadius: 'var(--radius-sm)',
                 border: 'none',
                 backgroundColor: currentSubTab === 'classList' ? '#0d9488' : 'transparent',
                 color: currentSubTab === 'classList' ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: currentSubTab === 'classList' ? 700 : 500,
-                fontSize: '0.8rem',
-                cursor: 'pointer'
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
               }}
             >
-              Class List
+              <GraduationCap size={15} /> Class List ({classList.length})
             </button>
 
             <button
               onClick={() => handleSubTabChange('classRoom')}
               style={{
-                padding: '6px 12px',
+                padding: '8px 16px',
                 borderRadius: 'var(--radius-sm)',
                 border: 'none',
                 backgroundColor: currentSubTab === 'classRoom' ? '#0d9488' : 'transparent',
                 color: currentSubTab === 'classRoom' ? '#ffffff' : 'var(--text-secondary)',
                 fontWeight: currentSubTab === 'classRoom' ? 700 : 500,
-                fontSize: '0.8rem',
-                cursor: 'pointer'
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
               }}
             >
-              Class Room
+              <DoorOpen size={15} /> Class Room ({classRooms.length})
             </button>
           </div>
 
@@ -373,12 +545,17 @@ export const ClassesModule = () => {
             className="btn btn-primary"
             onClick={handleOpenAddModal}
             style={{
-              padding: '10px 20px',
+              padding: '9px 18px',
               backgroundColor: '#0d9488',
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
-              gap: '8px'
+              gap: '8px',
+              borderRadius: 'var(--radius-md)',
+              border: 'none',
+              color: '#ffffff',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(13, 148, 136, 0.25)'
             }}
           >
             <Plus size={18} /> {headerInfo.addBtnLabel}
@@ -386,46 +563,96 @@ export const ClassesModule = () => {
         </div>
       </div>
 
-      {error && (
+      {/* Notifications */}
+      {successMessage && (
         <div
           style={{
-            padding: '12px 16px',
+            padding: '12px 18px',
             borderRadius: 'var(--radius-md)',
-            backgroundColor: 'var(--color-danger-bg)',
-            color: '#ef4444',
-            fontSize: '0.85rem',
-            fontWeight: 600
+            backgroundColor: '#dcfce7',
+            border: '1px solid #86efac',
+            color: '#15803d',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
           }}
         >
-          {error}
+          <CheckCircle size={18} /> {successMessage}
         </div>
       )}
 
-      {isLoading && !sections.length && !subjects.length && !classList.length && !classRooms.length && (
-        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-          Loading classes data...
+      {error && (
+        <div
+          style={{
+            padding: '12px 18px',
+            borderRadius: 'var(--radius-md)',
+            backgroundColor: 'var(--color-danger-bg, #fee2e2)',
+            border: '1px solid #fca5a5',
+            color: '#dc2626',
+            fontSize: '0.875rem',
+            fontWeight: 600,
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}
+        >
+          <AlertCircle size={18} /> {error}
         </div>
       )}
 
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
-        {/* Controls Toolbar Bar */}
+        {/* Controls Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <button
               className="btn btn-secondary"
-              style={{ padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+              onClick={handleExportCSV}
+              style={{
+                padding: '8px 14px',
+                fontSize: '0.85rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                cursor: 'pointer'
+              }}
             >
-              <Download size={14} /> Export <ChevronDown size={14} />
+              <Download size={14} /> Export CSV
             </button>
 
-            <div style={{ position: 'relative', width: '280px' }}>
+            {selectedRows.length > 0 && (
+              <button
+                onClick={handleBulkDelete}
+                style={{
+                  padding: '8px 14px',
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#fee2e2',
+                  color: '#dc2626',
+                  border: '1px solid #fca5a5',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                <Trash2 size={14} /> Delete Selected ({selectedRows.length})
+              </button>
+            )}
+
+            <div style={{ position: 'relative', width: '320px' }}>
               <Search size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: 'var(--text-muted)' }} />
               <input
                 type="text"
                 placeholder={headerInfo.searchPlaceholder}
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
                 style={{
                   width: '100%',
                   padding: '8px 14px 8px 36px',
@@ -440,18 +667,23 @@ export const ClassesModule = () => {
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            <span>Showing {filteredItems.length} records</span>
             <span>Rows per page:</span>
             <select
               value={rowsPerPage}
-              onChange={(e) => setRowsPerPage(Number(e.target.value))}
+              onChange={(e) => {
+                setRowsPerPage(Number(e.target.value));
+                setCurrentPage(1);
+              }}
               style={{
                 padding: '6px 12px',
                 borderRadius: 'var(--radius-md)',
                 border: '1px solid var(--border-color)',
                 backgroundColor: 'var(--bg-app)',
                 color: 'var(--text-primary)',
-                outline: 'none'
+                outline: 'none',
+                cursor: 'pointer'
               }}
             >
               <option value={10}>10</option>
@@ -461,206 +693,223 @@ export const ClassesModule = () => {
           </div>
         </div>
 
-        {/* Data Table View */}
-        <div style={{ overflowX: 'visible', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+        {/* Data Table */}
+        <div style={{ overflowX: 'auto', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.875rem' }}>
             <thead>
               <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: '1px solid var(--border-color)', color: 'var(--text-secondary)' }}>
                 <th style={{ padding: '12px 16px', width: '40px' }}>
                   <input
                     type="checkbox"
-                    checked={
-                      currentSubTab === 'section'
-                        ? selectedRows.length === sections.length
-                        : currentSubTab === 'subjects'
-                        ? selectedRows.length === subjects.length
-                        : currentSubTab === 'classList'
-                        ? selectedRows.length === classList.length
-                        : selectedRows.length === classRooms.length
-                    }
-                    onChange={() =>
-                      toggleSelectAll(
-                        currentSubTab === 'section'
-                          ? sections
-                          : currentSubTab === 'subjects'
-                          ? subjects
-                          : currentSubTab === 'classList'
-                          ? classList
-                          : classRooms
-                      )
-                    }
+                    checked={paginatedItems.length > 0 && selectedRows.length === paginatedItems.length}
+                    onChange={toggleSelectAll}
                     style={{ cursor: 'pointer' }}
                   />
                 </th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                    S.L <span>▲</span>
-                  </div>
-                </th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, width: '70px' }}>S.L</th>
 
                 {currentSubTab === 'section' && (
                   <th style={{ padding: '12px 16px', fontWeight: 600 }}>Section Name</th>
                 )}
                 {currentSubTab === 'subjects' && (
                   <>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Subject</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Code</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Subject Name</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Subject Code</th>
                   </>
                 )}
                 {currentSubTab === 'classList' && (
                   <>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Name</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Section</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Class Name</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Assigned Section</th>
                   </>
                 )}
                 {currentSubTab === 'classRoom' && (
                   <>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Room No</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Room Number</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Capacity</th>
                   </>
                 )}
 
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Status</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center' }}>Action</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, width: '120px' }}>Status</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center', width: '90px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {/* Render Section View (Screenshots 1 & 2) */}
-              {currentSubTab === 'section' &&
-                sections
-                  .filter((sec) => sec.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((row) => (
-                    <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '14px 16px' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.includes(row.id)}
-                          onChange={() => toggleSelectRow(row.id)}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700 }}>{row.name}</td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <StatusBadge status={row.status} />
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
-                        <ActionDropdownCell
-                          row={row}
-                          busyKey={busyKey}
-                          isOpen={activeDropdownId === row.id}
-                          onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
-                          onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+              {isLoading && paginatedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                    <Spinner size={24} color="#0d9488" />
+                    <div style={{ marginTop: '8px' }}>Loading data from server...</div>
+                  </td>
+                </tr>
+              ) : paginatedItems.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                    No records found. Click <strong>{headerInfo.addBtnLabel}</strong> to add one!
+                  </td>
+                </tr>
+              ) : (
+                paginatedItems.map((row, idx) => (
+                  <tr
+                    key={row.id}
+                    style={{
+                      borderBottom: '1px solid var(--border-light)',
+                      backgroundColor: selectedRows.includes(row.id) ? 'var(--bg-app)' : 'transparent',
+                      transition: 'background-color 0.15s ease'
+                    }}
+                  >
+                    <td style={{ padding: '14px 16px' }}>
+                      <input
+                        type="checkbox"
+                        checked={selectedRows.includes(row.id)}
+                        onChange={() => toggleSelectRow(row.id)}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </td>
+                    <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>
+                      {String((currentPage - 1) * rowsPerPage + idx + 1).padStart(2, '0')}
+                    </td>
 
-              {/* Render Subjects View (Screenshots 3 & 4) */}
-              {currentSubTab === 'subjects' &&
-                subjects
-                  .filter((sub) => sub.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((row) => (
-                    <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '14px 16px' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.includes(row.id)}
-                          onChange={() => toggleSelectRow(row.id)}
-                          style={{ cursor: 'pointer' }}
-                        />
+                    {/* Section tab */}
+                    {currentSubTab === 'section' && (
+                      <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {row.name}
                       </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700 }}>{row.name}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.code}</td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <StatusBadge status={row.status} />
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
-                        <ActionDropdownCell
-                          row={row}
-                          busyKey={busyKey}
-                          isOpen={activeDropdownId === row.id}
-                          onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
-                          onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                    )}
 
-              {/* Render Class List View (Screenshot 5) */}
-              {currentSubTab === 'classList' &&
-                classList
-                  .filter((cls) => cls.name.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((row) => (
-                    <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '14px 16px' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.includes(row.id)}
-                          onChange={() => toggleSelectRow(row.id)}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700 }}>{row.name}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.section}</td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <StatusBadge status={row.status} />
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
-                        <ActionDropdownCell
-                          row={row}
-                          busyKey={busyKey}
-                          isOpen={activeDropdownId === row.id}
-                          onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
-                          onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                    {/* Subjects tab */}
+                    {currentSubTab === 'subjects' && (
+                      <>
+                        <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--text-primary)' }}>{row.name}</td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: 'var(--bg-app)',
+                            border: '1px solid var(--border-color)',
+                            fontSize: '0.8rem',
+                            fontWeight: 600
+                          }}>
+                            {row.code}
+                          </span>
+                        </td>
+                      </>
+                    )}
 
-              {/* Render Class Room View (Latest Screenshot) */}
-              {currentSubTab === 'classRoom' &&
-                classRooms
-                  .filter((rm) => rm.room.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((row) => (
-                    <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '14px 16px' }}>
-                        <input
-                          type="checkbox"
-                          checked={selectedRows.includes(row.id)}
-                          onChange={() => toggleSelectRow(row.id)}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700 }}>{row.room}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.capacity}</td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <StatusBadge status={row.status} />
-                      </td>
-                      <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
-                        <ActionDropdownCell
-                          row={row}
-                          busyKey={busyKey}
-                          isOpen={activeDropdownId === row.id}
-                          onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
-                          onEdit={() => handleOpenEditModal(row)}
-                          onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
-                        />
-                      </td>
-                    </tr>
-                  ))}
+                    {/* Class List tab */}
+                    {currentSubTab === 'classList' && (
+                      <>
+                        <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--text-primary)' }}>{row.name}</td>
+                        <td style={{ padding: '14px 16px' }}>
+                          {row.section ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '6px',
+                              padding: '3px 10px',
+                              borderRadius: '12px',
+                              backgroundColor: '#e0f2fe',
+                              color: '#0369a1',
+                              fontWeight: 600,
+                              fontSize: '0.8rem'
+                            }}>
+                              Section: {row.section}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem', fontStyle: 'italic' }}>None</span>
+                          )}
+                        </td>
+                      </>
+                    )}
+
+                    {/* Class Room tab */}
+                    {currentSubTab === 'classRoom' && (
+                      <>
+                        <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--text-primary)' }}>{row.room}</td>
+                        <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
+                          {row.capacity ? `${row.capacity} students` : '—'}
+                        </td>
+                      </>
+                    )}
+
+                    <td style={{ padding: '14px 16px' }}>
+                      <StatusBadge status={row.status} />
+                    </td>
+
+                    <td style={{ padding: '14px 16px', textAlign: 'center', position: 'relative' }}>
+                      <ActionDropdownCell
+                        row={row}
+                        busyKey={busyKey}
+                        isOpen={activeDropdownId === row.id}
+                        onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
+                        onEdit={() => handleOpenEditModal(row)}
+                        onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
+                      />
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
+
+        {/* Pagination controls */}
+        {totalPages > 1 && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '8px', marginTop: '12px' }}>
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-app)',
+                color: currentPage === 1 ? 'var(--text-muted)' : 'var(--text-primary)',
+                cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              Previous
+            </button>
+            {Array.from({ length: totalPages }).map((_, i) => (
+              <button
+                key={i}
+                onClick={() => setCurrentPage(i + 1)}
+                style={{
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: 'var(--radius-md)',
+                  border: currentPage === i + 1 ? 'none' : '1px solid var(--border-color)',
+                  backgroundColor: currentPage === i + 1 ? '#0d9488' : 'var(--bg-app)',
+                  color: currentPage === i + 1 ? '#ffffff' : 'var(--text-primary)',
+                  fontWeight: currentPage === i + 1 ? 700 : 500,
+                  cursor: 'pointer',
+                  fontSize: '0.85rem'
+                }}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                backgroundColor: 'var(--bg-app)',
+                color: currentPage === totalPages ? 'var(--text-muted)' : 'var(--text-primary)',
+                cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                fontSize: '0.85rem'
+              }}
+            >
+              Next
+            </button>
+          </div>
+        )}
       </div>
 
-      {/* Right Slide-over Modal / Drawer for Add/Edit Section, Subject, Class, Class Room */}
+      {/* Modal / Slide-over Drawer for Add/Edit Section, Subject, Class, Class Room */}
       {isModalOpen && (
         <div
           style={{
@@ -669,7 +918,7 @@ export const ClassesModule = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.4)',
+            backgroundColor: 'rgba(0, 0, 0, 0.45)',
             backdropFilter: 'blur(3px)',
             zIndex: 1000,
             display: 'flex',
@@ -685,11 +934,11 @@ export const ClassesModule = () => {
               top: 0,
               right: 0,
               bottom: 0,
-              width: '480px',
-              maxWidth: '90vw',
+              width: '460px',
+              maxWidth: '92vw',
               height: '100vh',
               backgroundColor: 'var(--bg-card)',
-              boxShadow: '-8px 0 24px rgba(0, 0, 0, 0.2)',
+              boxShadow: '-8px 0 28px rgba(0, 0, 0, 0.25)',
               display: 'flex',
               flexDirection: 'column',
               justifyContent: 'space-between',
@@ -707,21 +956,30 @@ export const ClassesModule = () => {
                 justifyContent: 'space-between'
               }}
             >
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-                {editingItem ? 'Edit ' : 'Add New '}
-                {currentSubTab === 'section' && 'Section'}
-                {currentSubTab === 'subjects' && 'Subject'}
-                {currentSubTab === 'classList' && 'Class'}
-                {currentSubTab === 'classRoom' && 'Class Room'}
-              </h3>
+              <div>
+                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
+                  {editingItem ? 'Edit ' : 'Add New '}
+                  {currentSubTab === 'section' && 'Section'}
+                  {currentSubTab === 'subjects' && 'Subject'}
+                  {currentSubTab === 'classList' && 'Class'}
+                  {currentSubTab === 'classRoom' && 'Class Room'}
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
+                  {currentSubTab === 'classList'
+                    ? 'Enter class name, choose section from dropdown, and set status'
+                    : 'Fill out the details below and click Save'}
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 style={{
                   background: 'none',
                   border: 'none',
-                  color: '#ef4444',
+                  color: 'var(--text-muted)',
                   cursor: 'pointer',
-                  padding: '4px'
+                  padding: '4px',
+                  borderRadius: '50%'
                 }}
               >
                 <X size={20} />
@@ -729,16 +987,23 @@ export const ClassesModule = () => {
             </div>
 
             {/* Modal Form Body */}
-            <form onSubmit={handleSaveModal} id="modal-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1 }}>
+            <form onSubmit={handleSaveModal} id="modal-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+              {error && (
+                <div style={{ padding: '10px 14px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: '0.825rem', fontWeight: 600 }}>
+                  {error}
+                </div>
+              )}
+
+              {/* 1. Section Form */}
               {currentSubTab === 'section' && (
                 <>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Section Name
+                      Section Name <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter section name"
+                      placeholder="e.g. Section A, A, Rose"
                       value={modalFormData.name}
                       onChange={(e) => setModalFormData({ ...modalFormData, name: e.target.value })}
                       style={inputStyle}
@@ -762,15 +1027,16 @@ export const ClassesModule = () => {
                 </>
               )}
 
+              {/* 2. Subjects Form */}
               {currentSubTab === 'subjects' && (
                 <>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Subjects Name
+                      Subject Name <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter subjects name"
+                      placeholder="e.g. Mathematics, Science, English"
                       value={modalFormData.name}
                       onChange={(e) => setModalFormData({ ...modalFormData, name: e.target.value })}
                       style={inputStyle}
@@ -780,11 +1046,11 @@ export const ClassesModule = () => {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Subjects Code
+                      Subject Code <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter subjects code"
+                      placeholder="e.g. MATH-101, SCI-201"
                       value={modalFormData.code}
                       onChange={(e) => setModalFormData({ ...modalFormData, code: e.target.value })}
                       style={inputStyle}
@@ -808,15 +1074,16 @@ export const ClassesModule = () => {
                 </>
               )}
 
+              {/* 3. Class List Form: 3 Fields (1. Class Name, 2. Section Dropdown, 3. Status) */}
               {currentSubTab === 'classList' && (
                 <>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Class Name
+                      1. Class Name <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter class name"
+                      placeholder="e.g. Class 10, Grade 9, Nursery"
                       value={modalFormData.name}
                       onChange={(e) => setModalFormData({ ...modalFormData, name: e.target.value })}
                       style={inputStyle}
@@ -825,21 +1092,66 @@ export const ClassesModule = () => {
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Section
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Enter section (e.g. A, B, C, D)"
-                      value={modalFormData.section}
-                      onChange={(e) => setModalFormData({ ...modalFormData, section: e.target.value })}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <label style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                        2. Section (Dropdown) <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {sections.length} available
+                      </span>
+                    </div>
+
+                    <select
+                      value={modalFormData.sectionId}
+                      onChange={(e) => {
+                        const secId = e.target.value;
+                        const match = sections.find(s => String(s.id) === secId);
+                        setModalFormData({
+                          ...modalFormData,
+                          sectionId: secId,
+                          section: match ? match.name : ''
+                        });
+                      }}
                       style={inputStyle}
-                    />
+                      required
+                    >
+                      <option value="" disabled>-- Select School Section --</option>
+                      {sections.map((sec) => (
+                        <option key={sec.id} value={sec.id}>
+                          {sec.name} ({sec.status})
+                        </option>
+                      ))}
+                    </select>
+
+                    {sections.length === 0 && (
+                      <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '6px', backgroundColor: '#fef3c7', color: '#92400e', fontSize: '0.78rem' }}>
+                        ⚠️ No sections found! Please{' '}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsModalOpen(false);
+                            handleSubTabChange('section');
+                          }}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#0d9488',
+                            fontWeight: 700,
+                            textDecoration: 'underline',
+                            cursor: 'pointer',
+                            padding: 0
+                          }}
+                        >
+                          add a Section here first
+                        </button>
+                        . Once added, it will appear in this dropdown.
+                      </div>
+                    )}
                   </div>
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Status
+                      3. Status
                     </label>
                     <select
                       value={modalFormData.status}
@@ -853,17 +1165,18 @@ export const ClassesModule = () => {
                 </>
               )}
 
+              {/* 4. Class Room Form */}
               {currentSubTab === 'classRoom' && (
                 <>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Room Name
+                      Room Name / Number <span style={{ color: '#ef4444' }}>*</span>
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter Class Room name"
-                      value={modalFormData.name}
-                      onChange={(e) => setModalFormData({ ...modalFormData, name: e.target.value })}
+                      placeholder="e.g. Room 101, Science Lab 2"
+                      value={modalFormData.room}
+                      onChange={(e) => setModalFormData({ ...modalFormData, room: e.target.value, name: e.target.value })}
                       style={inputStyle}
                       required
                     />
@@ -871,11 +1184,11 @@ export const ClassesModule = () => {
 
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Capacity
+                      Capacity (Number of Students)
                     </label>
                     <input
-                      type="text"
-                      placeholder="Enter room capacity"
+                      type="number"
+                      placeholder="e.g. 40"
                       value={modalFormData.capacity}
                       onChange={(e) => setModalFormData({ ...modalFormData, capacity: e.target.value })}
                       style={inputStyle}
@@ -899,14 +1212,14 @@ export const ClassesModule = () => {
               )}
             </form>
 
-            {/* Modal Footer Buttons matching Screenshots */}
+            {/* Modal Footer Buttons */}
             <div
               style={{
                 padding: '20px 24px',
                 borderTop: '1px solid var(--border-light)',
                 display: 'flex',
-                justify: 'center',
-                gap: '16px'
+                justifyContent: 'flex-end',
+                gap: '12px'
               }}
             >
               <button
@@ -914,11 +1227,9 @@ export const ClassesModule = () => {
                 onClick={() => setIsModalOpen(false)}
                 className="btn btn-secondary"
                 style={{
-                  padding: '10px 32px',
-                  color: '#ef4444',
-                  borderColor: '#ef4444',
-                  fontWeight: 700,
-                  fontSize: '0.9rem'
+                  padding: '10px 24px',
+                  fontWeight: 600,
+                  fontSize: '0.875rem'
                 }}
               >
                 Cancel
@@ -930,15 +1241,18 @@ export const ClassesModule = () => {
                 className="btn btn-primary"
                 disabled={isSaving}
                 style={{
-                  padding: '10px 36px',
+                  padding: '10px 28px',
                   backgroundColor: '#0d9488',
                   color: '#ffffff',
                   fontWeight: 700,
-                  fontSize: '0.9rem',
-                  boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)'
+                  fontSize: '0.875rem',
+                  boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px'
                 }}
               >
-                {isSaving ? <><Spinner size={16} color="#ffffff" /> Saving...</> : 'Save'}
+                {isSaving ? <><Spinner size={16} color="#ffffff" /> Saving...</> : (editingItem ? 'Update' : 'Save')}
               </button>
             </div>
           </div>
@@ -951,9 +1265,38 @@ export const ClassesModule = () => {
 // Action Dropdown Cell Component for Edit and Delete Options
 const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }) => {
   const isDeleting = busyKey === `delete-${row.id}`;
+  const cellRef = useRef(null);
+
+  // Close when clicking outside
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e) => {
+      if (cellRef.current && !cellRef.current.contains(e.target)) {
+        onToggle();
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen, onToggle]);
+
   return (
-    <div style={{ display: 'inline-flex', position: 'relative' }}>
-      <button className="btn-icon" onClick={onToggle} style={{ width: '32px', height: '32px' }}>
+    <div ref={cellRef} style={{ display: 'inline-flex', position: 'relative' }}>
+      <button
+        type="button"
+        className="btn-icon"
+        onClick={onToggle}
+        style={{
+          width: '32px',
+          height: '32px',
+          border: 'none',
+          backgroundColor: isOpen ? 'var(--bg-app)' : 'transparent',
+          cursor: 'pointer',
+          borderRadius: 'var(--radius-sm)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
         <MoreVertical size={16} />
       </button>
 
@@ -965,16 +1308,17 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }
             top: '36px',
             backgroundColor: 'var(--bg-card)',
             borderRadius: 'var(--radius-md)',
-            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.15)',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
             border: '1px solid var(--border-color)',
             zIndex: 100,
-            minWidth: '120px',
+            minWidth: '130px',
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden'
           }}
         >
           <button
+            type="button"
             onClick={onEdit}
             style={{
               display: 'flex',
@@ -987,12 +1331,16 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }
               cursor: 'pointer',
               fontSize: '0.85rem',
               fontWeight: 600,
-              textAlign: 'left'
+              textAlign: 'left',
+              transition: 'background-color 0.15s ease'
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-app)')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             <Edit size={14} color="#0d9488" /> Edit
           </button>
           <button
+            type="button"
             onClick={onDelete}
             disabled={isDeleting}
             style={{
@@ -1003,12 +1351,15 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }
               border: 'none',
               backgroundColor: 'transparent',
               color: '#ef4444',
-              cursor: 'pointer',
+              cursor: isDeleting ? 'not-allowed' : 'pointer',
               fontSize: '0.85rem',
               fontWeight: 600,
               textAlign: 'left',
-              borderTop: '1px solid var(--border-light)'
+              borderTop: '1px solid var(--border-light)',
+              transition: 'background-color 0.15s ease'
             }}
+            onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = '#fee2e2')}
+            onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
           >
             {isDeleting ? <Spinner size={14} color="#ef4444" /> : <Trash2 size={14} />} Delete
           </button>
@@ -1018,22 +1369,22 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }
   );
 };
 
-// Status Badge Component matching screenshot pills
+// Status Badge Component
 const StatusBadge = ({ status }) => {
-  const isActive = status === 'Active';
+  const isActive = (status || '').toLowerCase() === 'active';
   return (
     <span
       style={{
         display: 'inline-block',
-        padding: '4px 12px',
+        padding: '3px 12px',
         borderRadius: '12px',
         fontSize: '0.75rem',
         fontWeight: 700,
         backgroundColor: isActive ? '#dcfce7' : '#fee2e2',
-        color: isActive ? '#15803d' : '#991b1b'
+        color: isActive ? '#15803d' : '#b91c1c'
       }}
     >
-      {status}
+      {status || 'Active'}
     </span>
   );
 };
@@ -1048,6 +1399,8 @@ const inputStyle = {
   color: 'var(--text-primary)',
   fontSize: '0.875rem',
   outline: 'none',
-  fontFamily: 'var(--font-sans)',
-  transition: 'border-color 0.2s ease'
+  fontFamily: 'inherit',
+  boxSizing: 'border-box'
 };
+
+export default ClassesModule;
