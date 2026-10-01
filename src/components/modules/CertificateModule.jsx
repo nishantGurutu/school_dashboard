@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
   Plus,
@@ -16,6 +16,8 @@ import {
   Star
 } from 'lucide-react';
 import { certificateService } from '../../services/certificateService';
+import { classService } from '../../services/classService';
+import { studentService } from '../../services/studentService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
 
@@ -53,18 +55,161 @@ export const CertificateModule = () => {
     fetchCertificates();
   }, [fetchCertificates]);
 
+  // Classes, Sections, Students loaded from backend APIs
+  const [classesList, setClassesList] = useState([]);
+  const [sectionsList, setSectionsList] = useState([]);
+  const [studentsList, setStudentsList] = useState([]);
+  const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(false);
+
+  // Fetch Classes, Sections, and Students from APIs
+  const fetchDropdownData = useCallback(async () => {
+    setIsLoadingDropdowns(true);
+    try {
+      const [classRes, secRes, studRes] = await Promise.all([
+        classService.classes.list().catch(() => []),
+        classService.sections.list().catch(() => []),
+        studentService.list({ page: 0, size: 500 }).catch(() => [])
+      ]);
+
+      const cls = Array.isArray(classRes) ? classRes : (classRes?.data || []);
+      const secs = Array.isArray(secRes) ? secRes : (secRes?.data || []);
+      const studs = Array.isArray(studRes) ? studRes : (studRes?.content || studRes?.data || []);
+
+      setClassesList(cls);
+      setSectionsList(secs);
+      setStudentsList(studs);
+    } catch (err) {
+      console.warn('Failed to fetch class/section/student API data:', err);
+    } finally {
+      setIsLoadingDropdowns(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDropdownData();
+  }, [fetchDropdownData]);
+
   // Drawer Modal State (Add / Edit)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [formData, setFormData] = useState({
     certificateName: '',
-    className: 'Select Class',
-    section: 'Select Section',
-    studentName: 'Select Student',
+    className: '',
+    section: '',
+    studentName: '',
+    studentId: '',
+    rollNo: '',
+    avatar: '',
     date: '15/05/2025',
     footerLeftText: '',
     footerRightText: ''
   });
+
+  // Dynamic Unique Classes from Class API (exact same data as Classes list)
+  const availableClasses = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    classesList.forEach((c) => {
+      const name = c.name?.trim();
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        list.push({ id: c.id, name });
+      }
+    });
+    return list;
+  }, [classesList]);
+
+  // Dynamic Unique Sections from Section API (exact same data as Section list)
+  const availableSections = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    sectionsList.forEach((s) => {
+      const name = s.name?.trim();
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        list.push({ id: s.id, name });
+      }
+    });
+    return list;
+  }, [sectionsList]);
+
+  // Dynamic Students filtered by selected Class and Section
+  const filteredStudents = useMemo(() => {
+    return studentsList.filter((s) => {
+      if (formData.className && formData.className !== 'Select Class') {
+        const studentClass = (s.className || '').trim().toLowerCase();
+        const selectedClass = formData.className.trim().toLowerCase();
+        if (studentClass !== selectedClass && !studentClass.includes(selectedClass) && !selectedClass.includes(studentClass)) {
+          return false;
+        }
+      }
+      if (formData.section && formData.section !== 'Select Section') {
+        const studentSec = (s.section || '').trim().toLowerCase();
+        const selectedSec = formData.section.trim().toLowerCase();
+        if (studentSec && studentSec !== selectedSec && !selectedSec.includes(studentSec) && !studentSec.includes(selectedSec)) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [studentsList, formData.className, formData.section]);
+
+  const handleClassChange = (selectedClass) => {
+    setFormData((prev) => {
+      const isSelectDefault = !selectedClass || selectedClass === 'Select Class';
+      const studentStillValid = !prev.studentName || isSelectDefault || studentsList.some(
+        (s) => (s.name === prev.studentName || String(s.id) === String(prev.studentId)) &&
+               (s.className || '').toLowerCase().includes(selectedClass.toLowerCase())
+      );
+      return {
+        ...prev,
+        className: selectedClass,
+        studentName: studentStillValid ? prev.studentName : '',
+        studentId: studentStillValid ? prev.studentId : ''
+      };
+    });
+  };
+
+  const handleSectionChange = (selectedSection) => {
+    setFormData((prev) => ({
+      ...prev,
+      section: selectedSection
+    }));
+  };
+
+  const handleStudentChange = (studentIdentifier) => {
+    if (!studentIdentifier || studentIdentifier === 'Select Student') {
+      setFormData((prev) => ({
+        ...prev,
+        studentName: '',
+        studentId: '',
+        rollNo: '',
+        avatar: ''
+      }));
+      return;
+    }
+
+    const selected = studentsList.find(
+      (s) => String(s.id) === String(studentIdentifier) || s.name === studentIdentifier
+    );
+
+    if (selected) {
+      setFormData((prev) => ({
+        ...prev,
+        studentId: selected.id,
+        studentName: selected.name,
+        rollNo: selected.rollNo || prev.rollNo || '',
+        avatar: selected.avatar || selected.studentPhoto || prev.avatar || '',
+        className: (!prev.className || prev.className === 'Select Class') ? (selected.className || prev.className) : prev.className,
+        section: (!prev.section || prev.section === 'Select Section') ? (selected.section || prev.section) : prev.section
+      }));
+    } else {
+      setFormData((prev) => ({
+        ...prev,
+        studentName: studentIdentifier
+      }));
+    }
+  };
 
   // Preview Modal State (View Certificate - Screenshot 3)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
@@ -73,15 +218,24 @@ export const CertificateModule = () => {
   // Open Add Drawer Modal
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    const todayFormatted = new Date().toLocaleDateString('en-GB', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric'
+    });
     setFormData({
       certificateName: '',
-      className: 'Select Class',
-      section: 'Select Section',
-      studentName: 'Select Student',
-      date: '15/05/2025',
-      footerLeftText: '',
-      footerRightText: ''
+      className: '',
+      section: '',
+      studentName: '',
+      studentId: '',
+      rollNo: '',
+      avatar: '',
+      date: todayFormatted,
+      footerLeftText: 'Arthur Vance (Principal)',
+      footerRightText: 'Sarah Jenkins (Class Teacher)'
     });
+    setError('');
     setIsDrawerOpen(true);
   };
 
@@ -90,14 +244,18 @@ export const CertificateModule = () => {
     setEditingItem(item);
     setActiveDropdownId(null);
     setFormData({
-      certificateName: item.certificateName,
-      className: item.className || 'Class 1 (A)',
-      section: 'Section A',
-      studentName: item.name,
+      certificateName: item.certificateName || '',
+      className: item.className || '',
+      section: item.section || '',
+      studentName: item.name || '',
+      studentId: item.studentId || '',
+      rollNo: item.rollNo || '',
+      avatar: item.avatar || '',
       date: item.date || '15/05/2025',
       footerLeftText: item.footerLeft || '',
       footerRightText: item.footerRight || ''
     });
+    setError('');
     setIsDrawerOpen(true);
   };
 
@@ -131,14 +289,38 @@ export const CertificateModule = () => {
   // Save Drawer Form
   const handleSaveForm = async (e) => {
     e.preventDefault();
+    if (!formData.certificateName || !formData.certificateName.trim()) {
+      setError('Certificate name is required');
+      return;
+    }
+    if (!formData.studentName || formData.studentName === 'Select Student') {
+      setError('Please select a student');
+      return;
+    }
+
     setIsSaving(true);
+    setError('');
+
     try {
+      const matchedStudent = studentsList.find(
+        (s) => String(s.id) === String(formData.studentId) || s.name === formData.studentName
+      );
+
+      const studentName = formData.studentName || matchedStudent?.name || 'Student';
+      const studentRollNo = formData.rollNo || matchedStudent?.rollNo || '1';
+      const studentClass = formData.className && formData.className !== 'Select Class'
+        ? (formData.section && formData.section !== 'Select Section' ? `${formData.className} (${formData.section})` : formData.className)
+        : (matchedStudent?.className || 'Class 1');
+      const studentAvatar = formData.avatar || matchedStudent?.avatar || matchedStudent?.studentPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80';
+
       if (editingItem) {
         const updated = await certificateService.update(editingItem.id, {
           ...editingItem,
-          certificateName: formData.certificateName || editingItem.certificateName,
-          className: formData.className !== 'Select Class' ? formData.className : editingItem.className,
-          name: formData.studentName !== 'Select Student' ? formData.studentName : editingItem.name,
+          certificateName: formData.certificateName.trim(),
+          className: studentClass,
+          name: studentName,
+          rollNo: studentRollNo,
+          avatar: studentAvatar,
           date: formData.date || editingItem.date,
           footerLeft: formData.footerLeftText || editingItem.footerLeft,
           footerRight: formData.footerRightText || editingItem.footerRight
@@ -147,15 +329,15 @@ export const CertificateModule = () => {
         setEditingItem(null);
       } else {
         const created = await certificateService.create({
-          name: formData.studentName !== 'Select Student' ? formData.studentName : 'New Student',
-          rollNo: '10',
-          className: formData.className !== 'Select Class' ? formData.className : 'Class 1 (A)',
-          certificateName: formData.certificateName || 'Excellence Certificate',
+          name: studentName,
+          rollNo: studentRollNo,
+          className: studentClass,
+          certificateName: formData.certificateName.trim(),
           bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
-          avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80',
-          date: formData.date || '15 May 2025',
+          avatar: studentAvatar,
+          date: formData.date || new Date().toLocaleDateString('en-GB'),
           footerLeft: formData.footerLeftText || 'Principal Signature',
-          footerRight: formData.footerRightText || 'Class Teacher'
+          footerRight: formData.footerRightText || 'Class Teacher Signature'
         });
         setCertificates((prev) => [
           {
@@ -462,15 +644,15 @@ export const CertificateModule = () => {
                   </label>
                   <select
                     value={formData.className}
-                    onChange={(e) => setFormData({ ...formData, className: e.target.value })}
+                    onChange={(e) => handleClassChange(e.target.value)}
                     style={inputStyle}
                   >
-                    <option value="Select Class">Select Class</option>
-                    <option value="Class 1 (A)">Class 1 (A)</option>
-                    <option value="Class 2 (B)">Class 2 (B)</option>
-                    <option value="Class 3 (A)">Class 3 (A)</option>
-                    <option value="Class 4 (C)">Class 4 (C)</option>
-                    <option value="Class 5 (B)">Class 5 (B)</option>
+                    <option value="">Select Class {isLoadingDropdowns ? '(Loading...)' : ''}</option>
+                    {availableClasses.map((cls) => (
+                      <option key={cls.id || cls.name} value={cls.name}>
+                        {cls.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -482,31 +664,42 @@ export const CertificateModule = () => {
                   </label>
                   <select
                     value={formData.section}
-                    onChange={(e) => setFormData({ ...formData, section: e.target.value })}
+                    onChange={(e) => handleSectionChange(e.target.value)}
                     style={inputStyle}
                   >
-                    <option value="Select Section">Select Section</option>
-                    <option value="Section A">Section A</option>
-                    <option value="Section B">Section B</option>
-                    <option value="Section C">Section C</option>
+                    <option value="">Select Section {isLoadingDropdowns ? '(Loading...)' : ''}</option>
+                    {availableSections.map((sec) => (
+                      <option key={sec.id || sec.name} value={sec.name}>
+                        {sec.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                    Student
+                    Student <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <select
-                    value={formData.studentName}
-                    onChange={(e) => setFormData({ ...formData, studentName: e.target.value })}
+                    value={formData.studentId || formData.studentName}
+                    onChange={(e) => handleStudentChange(e.target.value)}
                     style={inputStyle}
+                    required
                   >
-                    <option value="Select Student">Select Student</option>
-                    <option value="Marvin McKinney">Marvin McKinney</option>
-                    <option value="Kathryn Murphy">Kathryn Murphy</option>
-                    <option value="Devon Lane">Devon Lane</option>
-                    <option value="Cody Fisher">Cody Fisher</option>
-                    <option value="Theresa Webb">Theresa Webb</option>
+                    <option value="">
+                      {isLoadingDropdowns
+                        ? 'Loading students from API...'
+                        : filteredStudents.length > 0
+                        ? `Select Student (${filteredStudents.length} available)`
+                        : studentsList.length > 0
+                        ? `Select from ${studentsList.length} total students`
+                        : 'Select Student (0 available)'}
+                    </option>
+                    {(filteredStudents.length > 0 ? filteredStudents : studentsList).map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} {s.rollNo ? `(Roll: ${s.rollNo})` : ''} {s.className ? `[${s.className}${s.section ? ` - ${s.section}` : ''}]` : ''}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -555,22 +748,50 @@ export const CertificateModule = () => {
 
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                    Student Photo *
+                    Student Photo
                   </label>
-                  <div
+                  <label
                     style={{
                       border: '1.5px dashed var(--border-color)',
                       borderRadius: 'var(--radius-md)',
-                      padding: '12px',
-                      textAlign: 'center',
+                      padding: '8px 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '10px',
                       backgroundColor: 'var(--bg-app)',
                       color: 'var(--text-muted)',
                       fontSize: '0.8rem',
-                      cursor: 'pointer'
+                      cursor: 'pointer',
+                      minHeight: '42px'
                     }}
                   >
-                    Darg & drop a file here or click
-                  </div>
+                    {formData.avatar ? (
+                      <img
+                        src={formData.avatar}
+                        alt="Student"
+                        style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
+                      />
+                    ) : (
+                      <UploadCloud size={18} />
+                    )}
+                    <span>{formData.avatar ? 'Change photo' : 'Upload student photo'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: 'none' }}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onload = (uploadEvent) => {
+                            setFormData((prev) => ({ ...prev, avatar: uploadEvent.target.result }));
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      }}
+                    />
+                  </label>
                 </div>
               </div>
             </form>
