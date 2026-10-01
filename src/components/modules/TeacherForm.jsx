@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   Upload,
   Calendar,
@@ -9,44 +9,111 @@ import {
   UserCheck
 } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
+import { classService } from '../../services/classService';
 
 export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditMode = false }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // Form State containing all fields from teacher screenshots
+  // Dynamic Subjects and Classes loaded from backend APIs
+  const [subjectsList, setSubjectsList] = useState([]);
+  const [classesList, setClassesList] = useState([]);
+  const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingDropdowns(true);
+
+    Promise.all([
+      classService.subjects.list().catch((err) => {
+        console.warn('Failed to load subjects from API:', err);
+        return [];
+      }),
+      classService.classes.list().catch((err) => {
+        console.warn('Failed to load classes from API:', err);
+        return [];
+      })
+    ])
+      .then(([subRes, clsRes]) => {
+        if (!isMounted) return;
+        const subs = Array.isArray(subRes) ? subRes : (subRes?.data || []);
+        const cls = Array.isArray(clsRes) ? clsRes : (clsRes?.data || []);
+        setSubjectsList(subs);
+        setClassesList(cls);
+      })
+      .catch((err) => {
+        console.warn('Failed to load dropdown data from API:', err);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingDropdowns(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const availableSubjects = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    subjectsList.forEach((sub) => {
+      const name = sub?.name?.trim();
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({ id: sub.id, name, code: sub.code });
+      }
+    });
+    return list;
+  }, [subjectsList]);
+
+  const availableClasses = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    classesList.forEach((c) => {
+      const className = c?.name?.trim() || '';
+      const section = c?.section?.trim() || '';
+      const label = section ? `${className} (${section})` : className;
+      if (label && !seen.has(label.toLowerCase())) {
+        seen.add(label.toLowerCase());
+        list.push({ id: c.id, name: className, section, label });
+      }
+    });
+    return list;
+  }, [classesList]);
+
+  // Form State containing all fields (teacherId preserved in state for backend payload, removed from form inputs)
   const [formData, setFormData] = useState({
     // Personal Info
-    teacherId: initialData?.id || '',
-    fullName: initialData?.name || '',
-    subject: initialData?.subject || 'English',
-    assignedClass: '10 (A)',
-    gender: 'Male',
-    dob: '',
-    fatherName: '',
-    motherName: '',
-    maritalStatus: 'Married',
-    contractType: 'Contractual',
-    shift: 'Day Shift',
-    workLocation: '',
-    joinDate: '',
-    phone: initialData?.phone || '',
-    email: initialData?.email || '',
-    experience: '5 Years',
-    qualification: initialData?.qualification || 'Ph.D. in Applied Science',
+    teacherId: initialData?.employeeId || initialData?.id || '',
+    fullName: initialData?.name || initialData?.fullName || '',
+    subject: initialData?.subject && initialData?.subject !== 'All Subjects' ? initialData.subject : '',
+    assignedClass: initialData?.assignedClass || initialData?.className || '',
+    gender: initialData?.gender || 'Male',
+    dob: initialData?.dob || '',
+    fatherName: initialData?.fatherName || '',
+    motherName: initialData?.motherName || '',
+    maritalStatus: initialData?.maritalStatus || 'Married',
+    contractType: initialData?.contractType || 'Contractual',
+    shift: initialData?.shift || 'Day Shift',
+    workLocation: initialData?.workLocation || '',
+    joinDate: initialData?.joiningDate || initialData?.joinDate || '',
+    phone: initialData?.phone && initialData.phone !== 'N/A' ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : '',
+    email: initialData?.email && initialData.email !== 'N/A' ? initialData.email : '',
+    experience: initialData?.experience || (initialData?.experienceYears ? `${initialData.experienceYears} Years` : ''),
+    qualification: initialData?.qualification || '',
     teacherPhoto: null,
 
     // Medical Details
-    bloodGroup: 'A+',
-    height: '',
-    weight: '',
+    bloodGroup: initialData?.bloodGroup || 'A+',
+    height: initialData?.height || '',
+    weight: initialData?.weight || '',
 
     // Bank Details
-    bankAccountNumber: '',
-    bankName: '',
-    ifscCode: '',
-    nationalIdNumber: '',
+    bankAccountNumber: initialData?.bankAccountNumber ? String(initialData.bankAccountNumber).replace(/\D/g, '').slice(0, 25) : '',
+    bankName: initialData?.bankName || '',
+    ifscCode: initialData?.ifscCode || '',
+    nationalIdNumber: initialData?.nationalIdNumber || '',
 
     // Upload Documents
     docName: '',
@@ -57,7 +124,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     prevSchoolAddress: '',
 
     // Address
-    currentAddress: '',
+    currentAddress: initialData?.address || '',
     permanentAddress: '',
 
     // Teacher Details
@@ -70,7 +137,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     youTubeLink: '',
 
     // Login Details
-    loginEmail: initialData?.email || '',
+    loginEmail: initialData?.email && initialData.email !== 'N/A' ? initialData.email : '',
     loginPassword: ''
   });
 
@@ -78,19 +145,42 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     if (initialData) {
       setFormData((prev) => ({
         ...prev,
-        teacherId: initialData.id || prev.teacherId,
-        fullName: initialData.name || prev.fullName,
-        subject: initialData.subject || prev.subject,
-        phone: initialData.phone || prev.phone,
-        email: initialData.email || prev.email,
+        teacherId: initialData.employeeId || initialData.id || prev.teacherId,
+        fullName: initialData.name || initialData.fullName || prev.fullName,
+        subject: initialData.subject && initialData.subject !== 'All Subjects' ? initialData.subject : prev.subject,
+        assignedClass: initialData.assignedClass || initialData.className || prev.assignedClass,
+        phone: initialData.phone && initialData.phone !== 'N/A' ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : prev.phone,
+        email: initialData.email && initialData.email !== 'N/A' ? initialData.email : prev.email,
         qualification: initialData.qualification || prev.qualification,
-        loginEmail: initialData.email || prev.loginEmail
+        bankAccountNumber: initialData.bankAccountNumber ? String(initialData.bankAccountNumber).replace(/\D/g, '').slice(0, 25) : prev.bankAccountNumber,
+        loginEmail: initialData.email && initialData.email !== 'N/A' ? initialData.email : prev.loginEmail
       }));
     }
   }, [initialData]);
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleNumericKeyDown = (e) => {
+    if (
+      !/[0-9]/.test(e.key) &&
+      !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) &&
+      !e.ctrlKey &&
+      !e.metaKey
+    ) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePhoneChange = (e) => {
+    const numericValue = e.target.value.replace(/\D/g, '').slice(0, 15);
+    handleChange('phone', numericValue);
+  };
+
+  const handleBankAccountChange = (e) => {
+    const numericValue = e.target.value.replace(/\D/g, '').slice(0, 25);
+    handleChange('bankAccountNumber', numericValue);
   };
 
   const handleSubmit = async (e) => {
@@ -111,51 +201,51 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
   const handleReset = () => {
     if (initialData) {
       setFormData({
-        teacherId: initialData.id || '',
-        fullName: initialData.name || '',
-        subject: initialData.subject || 'English',
-        assignedClass: '10 (A)',
-        gender: 'Male',
-        dob: '',
-        fatherName: '',
-        motherName: '',
-        maritalStatus: 'Married',
-        contractType: 'Contractual',
-        shift: 'Day Shift',
-        workLocation: '',
-        joinDate: '',
-        phone: initialData.phone || '',
-        email: initialData.email || '',
-        experience: '5 Years',
+        teacherId: initialData.employeeId || initialData.id || '',
+        fullName: initialData.name || initialData.fullName || '',
+        subject: initialData.subject && initialData.subject !== 'All Subjects' ? initialData.subject : '',
+        assignedClass: initialData.assignedClass || initialData.className || '',
+        gender: initialData.gender || 'Male',
+        dob: initialData.dob || '',
+        fatherName: initialData.fatherName || '',
+        motherName: initialData.motherName || '',
+        maritalStatus: initialData.maritalStatus || 'Married',
+        contractType: initialData.contractType || 'Contractual',
+        shift: initialData.shift || 'Day Shift',
+        workLocation: initialData.workLocation || '',
+        joinDate: initialData.joiningDate || initialData.joinDate || '',
+        phone: initialData.phone && initialData.phone !== 'N/A' ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : '',
+        email: initialData.email && initialData.email !== 'N/A' ? initialData.email : '',
+        experience: initialData.experience || (initialData.experienceYears ? `${initialData.experienceYears} Years` : ''),
         qualification: initialData.qualification || '',
         teacherPhoto: null,
-        bloodGroup: 'A+',
-        height: '',
-        weight: '',
-        bankAccountNumber: '',
-        bankName: '',
-        ifscCode: '',
-        nationalIdNumber: '',
+        bloodGroup: initialData.bloodGroup || 'A+',
+        height: initialData.height || '',
+        weight: initialData.weight || '',
+        bankAccountNumber: initialData.bankAccountNumber ? String(initialData.bankAccountNumber).replace(/\D/g, '').slice(0, 25) : '',
+        bankName: initialData.bankName || '',
+        ifscCode: initialData.ifscCode || '',
+        nationalIdNumber: initialData.nationalIdNumber || '',
         docName: '',
         uploadFile: null,
         prevSchoolName: '',
         prevSchoolAddress: '',
-        currentAddress: '',
+        currentAddress: initialData.address || '',
         permanentAddress: '',
         teacherBio: '',
         facebookLink: '',
         linkedInLink: '',
         instagramLink: '',
         youTubeLink: '',
-        loginEmail: initialData.email || '',
+        loginEmail: initialData.email && initialData.email !== 'N/A' ? initialData.email : '',
         loginPassword: ''
       });
     } else {
       setFormData({
         teacherId: '',
         fullName: '',
-        subject: 'English',
-        assignedClass: '1 (A)',
+        subject: '',
+        assignedClass: '',
         gender: 'Male',
         dob: '',
         fatherName: '',
@@ -223,22 +313,8 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
           </h3>
 
           <div className="grid-responsive">
-            {/* Row 1 */}
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Teacher ID <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <input
-                type="text"
-                placeholder="Enter Teacher ID"
-                value={formData.teacherId}
-                onChange={(e) => handleChange('teacherId', e.target.value)}
-                style={inputStyle}
-                required
-              />
-            </div>
-
-            <div className="col-span-3">
+            {/* Row 1: Full Name, Dynamic Subject, Dynamic Class (Teacher ID removed) */}
+            <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Full Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
@@ -252,7 +328,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               />
             </div>
 
-            <div className="col-span-3">
+            <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Subject
               </label>
@@ -261,17 +337,19 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                 onChange={(e) => handleChange('subject', e.target.value)}
                 style={inputStyle}
               >
-                <option>English</option>
-                <option>Mathematics</option>
-                <option>Physics</option>
-                <option>Computer Science</option>
-                <option>Chemistry</option>
-                <option>Biology</option>
-                <option>History</option>
+                <option value="">{isLoadingDropdowns ? 'Loading subjects...' : 'Select Subject'}</option>
+                {availableSubjects.map((sub) => (
+                  <option key={sub.id || sub.name} value={sub.name}>
+                    {sub.name} {sub.code ? `(${sub.code})` : ''}
+                  </option>
+                ))}
+                {formData.subject && !availableSubjects.some((s) => s.name === formData.subject) && (
+                  <option value={formData.subject}>{formData.subject}</option>
+                )}
               </select>
             </div>
 
-            <div className="col-span-3">
+            <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Class
               </label>
@@ -280,12 +358,15 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                 onChange={(e) => handleChange('assignedClass', e.target.value)}
                 style={inputStyle}
               >
-                <option>1 (A)</option>
-                <option>2 (B)</option>
-                <option>6 (A)</option>
-                <option>8 (B)</option>
-                <option>10 (A)</option>
-                <option>12 (C)</option>
+                <option value="">{isLoadingDropdowns ? 'Loading classes...' : 'Select Class'}</option>
+                {availableClasses.map((cls) => (
+                  <option key={cls.id || cls.label} value={cls.label}>
+                    {cls.label}
+                  </option>
+                ))}
+                {formData.assignedClass && !availableClasses.some((c) => c.label === formData.assignedClass) && (
+                  <option value={formData.assignedClass}>{formData.assignedClass}</option>
+                )}
               </select>
             </div>
 
@@ -421,9 +502,12 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="Enter your Phone Number"
                 value={formData.phone}
-                onChange={(e) => handleChange('phone', e.target.value)}
+                onChange={handlePhoneChange}
+                onKeyDown={handleNumericKeyDown}
                 style={inputStyle}
                 required
               />
@@ -547,9 +631,12 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 placeholder="Enter bank account number"
                 value={formData.bankAccountNumber}
-                onChange={(e) => handleChange('bankAccountNumber', e.target.value)}
+                onChange={handleBankAccountChange}
+                onKeyDown={handleNumericKeyDown}
                 style={inputStyle}
               />
             </div>
