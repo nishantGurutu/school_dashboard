@@ -22,6 +22,7 @@ import { LibraryModule } from './components/modules/LibraryModule';
 import { AccountsModule } from './components/modules/AccountsModule';
 import { HrmModule } from './components/modules/HrmModule';
 import { NoticeBoardModule } from './components/modules/NoticeBoardModule';
+import { HolidaysModule } from './components/modules/HolidaysModule';
 
 import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerModal';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -61,6 +62,8 @@ const MainLayout = ({ onLogout }) => {
       case 'attendance-teacher':
       case 'attendance-employee':
         return <AttendanceModule />;
+      case 'holidays':
+        return <HolidaysModule />;
       case 'leaves':
       case 'leaves-type':
       case 'leaves-request':

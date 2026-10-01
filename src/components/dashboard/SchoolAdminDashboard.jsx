@@ -28,57 +28,57 @@ import { noticeService } from '../../services/noticeService';
 
 const MOCK_RECEIPTS = [
 
-    {
-      receiptNo: 'REC-2026-0891',
-      student: 'Alexander Wright',
-      rollNo: '2024-0412',
-      grade: 'Grade 10-A',
-      amount: '$1,250.00',
-      mode: 'Online (Stripe)',
-      date: 'Today, 14:32',
-      status: 'Paid'
-    },
-    {
-      receiptNo: 'REC-2026-0890',
-      student: 'Sophia Martinez',
-      rollNo: '2024-0318',
-      grade: 'Grade 8-B',
-      amount: '$980.00',
-      mode: 'Bank Transfer',
-      date: 'Today, 11:15',
-      status: 'Paid'
-    },
-    {
-      receiptNo: 'REC-2026-0889',
-      student: 'Liam Hemsworth',
-      rollNo: '2024-0511',
-      grade: 'Grade 12-C',
-      amount: '$1,400.00',
-      mode: 'Cash Receipt',
-      date: 'Yesterday',
-      status: 'Pending'
-    },
-    {
-      receiptNo: 'REC-2026-0888',
-      student: 'Emma Watson',
-      rollNo: '2024-0199',
-      grade: 'Grade 6-A',
-      amount: '$850.00',
-      mode: 'Cheque (#40192)',
-      date: 'Yesterday',
-      status: 'Paid'
-    },
-    {
-      receiptNo: 'REC-2026-0887',
-      student: 'Ethan Carter',
-      rollNo: '2024-0672',
-      grade: 'Grade 11-B',
-      amount: '$1,350.00',
-      mode: 'Online (UPI)',
-      date: '04 Sep 2026',
-      status: 'Overdue'
-    }
-  ];
+  {
+    receiptNo: 'REC-2026-0891',
+    student: 'Alexander Wright',
+    rollNo: '2024-0412',
+    grade: 'Grade 10-A',
+    amount: '$1,250.00',
+    mode: 'Online (Stripe)',
+    date: 'Today, 14:32',
+    status: 'Paid'
+  },
+  {
+    receiptNo: 'REC-2026-0890',
+    student: 'Sophia Martinez',
+    rollNo: '2024-0318',
+    grade: 'Grade 8-B',
+    amount: '$980.00',
+    mode: 'Bank Transfer',
+    date: 'Today, 11:15',
+    status: 'Paid'
+  },
+  {
+    receiptNo: 'REC-2026-0889',
+    student: 'Liam Hemsworth',
+    rollNo: '2024-0511',
+    grade: 'Grade 12-C',
+    amount: '$1,400.00',
+    mode: 'Cash Receipt',
+    date: 'Yesterday',
+    status: 'Pending'
+  },
+  {
+    receiptNo: 'REC-2026-0888',
+    student: 'Emma Watson',
+    rollNo: '2024-0199',
+    grade: 'Grade 6-A',
+    amount: '$850.00',
+    mode: 'Cheque (#40192)',
+    date: 'Yesterday',
+    status: 'Paid'
+  },
+  {
+    receiptNo: 'REC-2026-0887',
+    student: 'Ethan Carter',
+    rollNo: '2024-0672',
+    grade: 'Grade 11-B',
+    amount: '$1,350.00',
+    mode: 'Online (UPI)',
+    date: '04 Sep 2026',
+    status: 'Overdue'
+  }
+];
 
 export const SchoolAdminDashboard = () => {
   const { theme } = useTheme();
@@ -276,13 +276,13 @@ export const SchoolAdminDashboard = () => {
           size: '76%',
           labels: {
             show: true,
-total: {
-                show: true,
-                label: 'Total Students',
-                color: isDark ? '#9ca3af' : '#64748b',
-                fontSize: '12px',
-                formatter: () => totalStudents.toLocaleString()
-              },
+            total: {
+              show: true,
+              label: 'Total Students',
+              color: isDark ? '#9ca3af' : '#64748b',
+              fontSize: '12px',
+              formatter: () => totalStudents.toLocaleString()
+            },
             value: {
               show: true,
               fontSize: '24px',
@@ -603,13 +603,12 @@ total: {
                     <td style={{ padding: '14px 16px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{rec.mode}</td>
                     <td style={{ padding: '14px 16px' }}>
                       <span
-                        className={`badge ${
-                          rec.status === 'Paid'
+                        className={`badge ${rec.status === 'Paid'
                             ? 'badge-success'
                             : rec.status === 'Pending'
-                            ? 'badge-warning'
-                            : 'badge-danger'
-                        }`}
+                              ? 'badge-warning'
+                              : 'badge-danger'
+                          }`}
                       >
                         {rec.status}
                       </span>

@@ -10,6 +10,7 @@ import {
   FileEdit,
   CircleDollarSign,
   CalendarCheck,
+  CalendarDays,
   Clock,
   Award,
   BookOpen,
@@ -78,6 +79,7 @@ export const Sidebar = () => {
         { key: 'attendance-employee', label: 'Employee Attendance' }
       ]
     },
+    { key: 'holidays', label: 'Holidays', icon: CalendarDays, hasSub: false },
     {
       key: 'leaves',
       label: 'Leaves',

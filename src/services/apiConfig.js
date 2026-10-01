@@ -140,6 +140,13 @@ export const API_ENDPOINTS = {
   CERTIFICATES: {
     BASE: '/certificates',
     BY_ID: (id) => `/certificates/${id}`
+  },
+
+  // Holiday Management
+  HOLIDAYS: {
+    BASE: '/holidays',
+    BY_ID: (id) => `/holidays/${id}`,
+    CHECK: (date) => `/holidays/check?date=${encodeURIComponent(date)}`
   }
 };
 
