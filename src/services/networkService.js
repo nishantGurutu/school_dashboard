@@ -94,6 +94,7 @@ class NetworkServiceClass {
       }
     }
 
+    const isAuthEndpoint = endpoint.includes('/auth/login') || endpoint.includes('/auth/refresh') || endpoint.includes('/auth/logout');
     const token = authStorage.getAccessToken();
     const finalHeaders = { ...headers };
 
@@ -101,7 +102,7 @@ class NetworkServiceClass {
       finalHeaders['Content-Type'] = 'application/json';
     }
 
-    if (token) {
+    if (token && !isAuthEndpoint) {
       finalHeaders['Authorization'] = `Bearer ${token}`;
     }
 
@@ -115,10 +116,19 @@ class NetworkServiceClass {
       fetchConfig.body = body instanceof FormData ? body : JSON.stringify(body);
     }
 
-    let response = await fetch(url, fetchConfig);
+    let response;
+    try {
+      response = await fetch(url, fetchConfig);
+    } catch (fetchErr) {
+      const netError = new Error('Server connection failed. Please ensure the backend server is running.');
+      netError.status = 0;
+      netError.apiMessage = 'Server connection failed. Please ensure the backend server is running.';
+      netError.originalError = fetchErr;
+      throw netError;
+    }
 
-    // Handle 401 Unauthorized (Token Expiration)
-    if (response.status === 401 && token) {
+    // Handle 401 Unauthorized (Token Expiration for authenticated requests only)
+    if (response.status === 401 && token && !isAuthEndpoint) {
       if (this.isRefreshing) {
         const newToken = await new Promise((resolve) => {
           this.addRefreshSubscriber(resolve);
@@ -164,15 +174,36 @@ class NetworkServiceClass {
       data = null;
     }
 
+    // Check if HTTP status is an error (!response.ok)
     if (!response.ok) {
-      let errorMessage = `Request failed with status ${response.status}`;
-      if (typeof data === 'string' && data) {
-        errorMessage = data;
-      } else if (data && typeof data === 'object') {
-        errorMessage = data.message || data.error || data.detail || errorMessage;
+      let apiMessage = '';
+      if (data && typeof data === 'object') {
+        apiMessage = data.message || data.error || data.detail || (data.errors && Object.values(data.errors).join(', '));
+      } else if (typeof data === 'string' && data.trim()) {
+        apiMessage = data.trim();
       }
-      const error = new Error(errorMessage);
+
+      if (!apiMessage) {
+        if (response.status === 401 || response.status === 403) {
+          apiMessage = 'Invalid credentials';
+        } else {
+          apiMessage = `Request failed with status ${response.status}`;
+        }
+      }
+
+      const error = new Error(apiMessage);
       error.status = response.status;
+      error.apiMessage = apiMessage;
+      error.data = data;
+      throw error;
+    }
+
+    // Handle case where status 200 returned but body carries an error code
+    if (data && typeof data === 'object' && typeof data.status === 'number' && data.status >= 400) {
+      const apiMessage = data.message || data.error || data.detail || `Request failed with status ${data.status}`;
+      const error = new Error(apiMessage);
+      error.status = data.status;
+      error.apiMessage = apiMessage;
       error.data = data;
       throw error;
     }

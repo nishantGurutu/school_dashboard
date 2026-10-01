@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Eye, EyeOff, GraduationCap, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, GraduationCap, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { Spinner } from '../ui/Spinner';
 
@@ -14,8 +14,11 @@ export const LoginScreen = ({ onLogin }) => {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
-    if (!email.trim() || !password.trim()) {
-      setError('Please enter your email and password to continue.');
+    const trimmedInput = email.trim();
+    const trimmedPassword = password.trim();
+
+    if (!trimmedInput || !trimmedPassword) {
+      setError('Please enter your email or user ID and password to continue.');
       return;
     }
 
@@ -26,11 +29,21 @@ export const LoginScreen = ({ onLogin }) => {
     submittingRef.current = true;
     setError('');
     setIsLoading(true);
+
     try {
-      const user = await authService.login(email.trim(), password);
-      onLogin(user);
+      const result = await authService.login(trimmedInput, trimmedPassword);
+
+      // STRICT VALIDATION: Navigate to dashboard ONLY if 200 success response returned
+      if (result && result.success && result.user && result.user.userId) {
+        onLogin(result.user);
+      } else {
+        // Under no circumstances navigate if response is not completely successful
+        setError(result?.message || 'Invalid credentials');
+      }
     } catch (err) {
-      setError(err.message || 'Login failed. Please check your credentials.');
+      // Do NOT navigate. Show the API's exact message to the user
+      const apiMessage = err.apiMessage || err.message || 'Invalid credentials';
+      setError(apiMessage);
     } finally {
       submittingRef.current = false;
       setIsLoading(false);
@@ -70,10 +83,20 @@ export const LoginScreen = ({ onLogin }) => {
           </div>
 
           <form onSubmit={handleSubmit} noValidate>
-            <label className="login-field-label" htmlFor="login-email">Email address <span>*</span></label>
+            <label className="login-field-label" htmlFor="login-email">Email or User ID <span>*</span></label>
             <div className="login-input-wrap">
               <Mail size={18} aria-hidden="true" />
-              <input id="login-email" type="email" placeholder="Enter your email" value={email} onChange={(event) => setEmail(event.target.value)} autoComplete="email" />
+              <input
+                id="login-email"
+                type="text"
+                placeholder="Enter your email or user ID"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  if (error) setError('');
+                }}
+                autoComplete="username"
+              />
             </div>
 
             <div className="login-password-label-row">
@@ -82,7 +105,17 @@ export const LoginScreen = ({ onLogin }) => {
             </div>
             <div className="login-input-wrap">
               <LockKeyhole size={18} aria-hidden="true" />
-              <input id="login-password" type={showPassword ? 'text' : 'password'} placeholder="Enter your password" value={password} onChange={(event) => setPassword(event.target.value)} autoComplete="current-password" />
+              <input
+                id="login-password"
+                type={showPassword ? 'text' : 'password'}
+                placeholder="Enter your password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  if (error) setError('');
+                }}
+                autoComplete="current-password"
+              />
               <button type="button" className="login-password-toggle" aria-label={showPassword ? 'Hide password' : 'Show password'} onClick={() => setShowPassword((visible) => !visible)}>
                 {showPassword ? <EyeOff size={19} /> : <Eye size={19} />}
               </button>
@@ -92,7 +125,30 @@ export const LoginScreen = ({ onLogin }) => {
               <label className="login-remember"><input type="checkbox" /><span>Remember me</span></label>
             </div>
 
-            {error && <p className="login-error" role="alert">{error}</p>}
+            {error && (
+              <div
+                className="login-error-banner"
+                role="alert"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '12px 14px',
+                  backgroundColor: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  borderRadius: '8px',
+                  color: '#b91c1c',
+                  fontSize: '0.875rem',
+                  fontWeight: 500,
+                  marginBottom: '18px',
+                  lineHeight: 1.4
+                }}
+              >
+                <AlertCircle size={18} style={{ flexShrink: 0, color: '#dc2626' }} />
+                <span>{error}</span>
+              </div>
+            )}
+
             <button type="submit" className="login-submit" disabled={isLoading}>
               {isLoading ? (<><Spinner size={16} color="#ffffff" /> Signing in...</>) : 'Log in'}{!isLoading && <span aria-hidden="true">→</span>}
             </button>
