@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   Upload,
   Calendar,
@@ -9,92 +9,191 @@ import {
   Save
 } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
+import { classService } from '../../services/classService';
 
 export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEditMode = false }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // Form State initialized with default or pre-filled student data
+  // Dynamic Classes and Sections loaded from backend APIs
+  const [classesList, setClassesList] = useState([]);
+  const [sectionsList, setSectionsList] = useState([]);
+  const [isLoadingClasses, setIsLoadingClasses] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    setIsLoadingClasses(true);
+    Promise.all([
+      classService.classes.list().catch(() => []),
+      classService.sections.list().catch(() => [])
+    ])
+      .then(([clsRes, secRes]) => {
+        if (!isMounted) return;
+        const cls = Array.isArray(clsRes) ? clsRes : (clsRes?.data || []);
+        const secs = Array.isArray(secRes) ? secRes : (secRes?.data || []);
+        setClassesList(cls);
+        setSectionsList(secs);
+      })
+      .catch((err) => console.warn('Failed to load classes and sections from API:', err))
+      .finally(() => {
+        if (isMounted) setIsLoadingClasses(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const availableClasses = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    classesList.forEach((c) => {
+      const name = c.name?.trim();
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        list.push({ id: c.id, name });
+      }
+    });
+    return list;
+  }, [classesList]);
+
+  const availableSections = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    sectionsList.forEach((s) => {
+      const name = s.name?.trim();
+      if (name && !seen.has(name)) {
+        seen.add(name);
+        list.push({ id: s.id, name });
+      }
+    });
+    return list;
+  }, [sectionsList]);
+
+  const initialClassName = initialData?.studentClass || initialData?.className || (initialData?.class ? initialData.class.split(' - ')[0] : '');
+  const initialSection = initialData?.section || (initialData?.class && initialData.class.includes(' - ') ? initialData.class.split(' - ')[1] : '');
+
+  // Form State initialized with clean, empty fields (no static mock text pre-filled)
   const [formData, setFormData] = useState({
     // Personal Info
-    academicYear: initialData?.academicYear || 'Jun 2025/2026',
-    studentClass: initialData?.class ? initialData.class.split(' - ')[0] : 'Primary',
-    section: initialData?.class ? (initialData.class.split(' - ')[1] || 'Science') : 'Science',
-    rollNumber: initialData?.rollNo || '',
-    admissionNo: initialData?.id || '',
-    fullName: initialData?.name || '',
-    category: initialData?.category || 'General',
+    academicYear: initialData?.academicYear || '2025/2026',
+    studentClass: initialClassName || '',
+    section: initialSection || '',
+    rollNumber: initialData?.rollNo || initialData?.rollNumber || '',
+    admissionNo: initialData?.admissionNo || initialData?.id || '',
+    fullName: initialData?.name || initialData?.fullName || '',
+    category: initialData?.category || '',
     gender: initialData?.gender || 'Male',
-    dob: initialData?.dob || '',
+    dob: initialData?.dob || initialData?.dateOfBirth || '',
     phone: initialData?.phone || '',
     email: initialData?.email || '',
-    studentPhoto: null,
+    studentPhoto: initialData?.avatar || initialData?.studentPhoto || null,
 
     // Parent & Guardian Info
-    fatherName: initialData?.guardian || '',
-    fatherPhone: initialData?.phone || '',
-    fatherOccupation: 'Business',
-    fatherPhoto: null,
-    motherName: '',
-    motherPhone: '',
-    motherOccupation: '',
-    motherPhoto: null,
+    fatherName: initialData?.fatherName || '',
+    fatherPhone: initialData?.fatherPhone || '',
+    fatherOccupation: initialData?.fatherOccupation || '',
+    fatherPhoto: initialData?.fatherPhoto || null,
+    motherName: initialData?.motherName || '',
+    motherPhone: initialData?.motherPhone || '',
+    motherOccupation: initialData?.motherOccupation || '',
+    motherPhoto: initialData?.motherPhoto || null,
 
     // Select a Guardian
-    guardianRelation: 'Father',
-    guardianName: initialData?.guardian || '',
-    guardianEmail: initialData?.email || '',
-    guardianPhone: initialData?.phone || '',
-    guardianOccupation: 'Business',
-    guardianAddress: '742 Evergreen Terrace, Springfield',
-    guardianPhoto: null,
+    guardianRelation: initialData?.guardianRelation || 'Father',
+    guardianName: initialData?.guardianName || initialData?.guardian || '',
+    guardianEmail: initialData?.guardianEmail || '',
+    guardianPhone: initialData?.guardianPhone || '',
+    guardianOccupation: initialData?.guardianOccupation || '',
+    guardianAddress: initialData?.guardianAddress || '',
+    guardianPhoto: initialData?.guardianPhoto || null,
 
     // Medical Details
-    bloodGroup: 'A+',
-    height: '165 cm',
-    weight: '55 kg',
+    bloodGroup: initialData?.bloodGroup || 'A+',
+    height: initialData?.height || '',
+    weight: initialData?.weight || '',
 
     // Bank Details
-    bankAccountNumber: '987654321012',
-    bankName: 'National Bank',
-    ifscCode: 'NBIN000412',
-    nationalIdNumber: 'NAT-891024',
+    bankAccountNumber: initialData?.bankAccountNumber || '',
+    bankName: initialData?.bankName || '',
+    ifscCode: initialData?.ifscCode || '',
+    nationalIdNumber: initialData?.nationalIdNumber || '',
 
     // Previous School Details
-    prevSchoolName: 'St. Mary High School',
-    prevSchoolAddress: 'Springfield Main Road',
+    prevSchoolName: initialData?.prevSchoolName || '',
+    prevSchoolAddress: initialData?.prevSchoolAddress || '',
 
     // Address
-    currentAddress: '742 Evergreen Terrace, Springfield',
-    permanentAddress: '742 Evergreen Terrace, Springfield',
+    currentAddress: initialData?.currentAddress || '',
+    permanentAddress: initialData?.permanentAddress || '',
 
     // Hostel Details
-    hostelName: 'Block A - Senior Boys',
-    roomNo: '204',
+    hostelName: initialData?.hostelName || '',
+    roomNo: initialData?.roomNo || '',
 
     // Upload Documents
-    docName: 'Birth Certificate',
-    docFile: null,
+    docName: initialData?.docName || '',
+    docFile: initialData?.docFile || null,
 
     // Student Details
-    studentNotes: 'Honors student with excellent academic performance.',
+    studentNotes: initialData?.studentNotes || '',
 
     // Login Details
     loginEmail: initialData?.email || '',
-    loginPassword: '••••••••'
+    loginPassword: ''
   });
 
   useEffect(() => {
     if (initialData) {
+      const cls = initialData.studentClass || initialData.className || (initialData.class ? initialData.class.split(' - ')[0] : '');
+      const sec = initialData.section || (initialData.class && initialData.class.includes(' - ') ? initialData.class.split(' - ')[1] : '');
       setFormData((prev) => ({
         ...prev,
-        fullName: initialData.name || prev.fullName,
-        rollNumber: initialData.rollNo || prev.rollNumber,
-        admissionNo: initialData.id || prev.admissionNo,
+        fullName: initialData.name || initialData.fullName || prev.fullName,
+        studentClass: cls || prev.studentClass,
+        section: sec || prev.section,
+        rollNumber: initialData.rollNo || initialData.rollNumber || prev.rollNumber,
+        admissionNo: initialData.admissionNo || initialData.id || prev.admissionNo,
         phone: initialData.phone || prev.phone,
-        guardianName: initialData.guardian || prev.guardianName,
-        fatherName: initialData.guardian || prev.fatherName
+        email: initialData.email || prev.email,
+        category: initialData.category || prev.category,
+        gender: initialData.gender || prev.gender,
+        dob: initialData.dob || initialData.dateOfBirth || prev.dob,
+        studentPhoto: initialData.avatar || initialData.studentPhoto || prev.studentPhoto,
+        fatherName: initialData.fatherName || prev.fatherName,
+        fatherPhone: initialData.fatherPhone || prev.fatherPhone,
+        fatherOccupation: initialData.fatherOccupation || prev.fatherOccupation,
+        fatherPhoto: initialData.fatherPhoto || prev.fatherPhoto,
+        motherName: initialData.motherName || prev.motherName,
+        motherPhone: initialData.motherPhone || prev.motherPhone,
+        motherOccupation: initialData.motherOccupation || prev.motherOccupation,
+        motherPhoto: initialData.motherPhoto || prev.motherPhoto,
+        guardianRelation: initialData.guardianRelation || prev.guardianRelation,
+        guardianName: initialData.guardianName || initialData.guardian || prev.guardianName,
+        guardianEmail: initialData.guardianEmail || prev.guardianEmail,
+        guardianPhone: initialData.guardianPhone || prev.guardianPhone,
+        guardianOccupation: initialData.guardianOccupation || prev.guardianOccupation,
+        guardianAddress: initialData.guardianAddress || prev.guardianAddress,
+        guardianPhoto: initialData.guardianPhoto || prev.guardianPhoto,
+        bloodGroup: initialData.bloodGroup || prev.bloodGroup,
+        height: initialData.height || prev.height,
+        weight: initialData.weight || prev.weight,
+        bankAccountNumber: initialData.bankAccountNumber || prev.bankAccountNumber,
+        bankName: initialData.bankName || prev.bankName,
+        ifscCode: initialData.ifscCode || prev.ifscCode,
+        nationalIdNumber: initialData.nationalIdNumber || prev.nationalIdNumber,
+        prevSchoolName: initialData.prevSchoolName || prev.prevSchoolName,
+        prevSchoolAddress: initialData.prevSchoolAddress || prev.prevSchoolAddress,
+        currentAddress: initialData.currentAddress || prev.currentAddress,
+        permanentAddress: initialData.permanentAddress || prev.permanentAddress,
+        hostelName: initialData.hostelName || prev.hostelName,
+        roomNo: initialData.roomNo || prev.roomNo,
+        docName: initialData.docName || prev.docName,
+        docFile: initialData.docFile || prev.docFile,
+        studentNotes: initialData.studentNotes || prev.studentNotes,
+        loginEmail: initialData.email || prev.loginEmail,
+        loginPassword: ''
       }));
     }
   }, [initialData]);
@@ -157,8 +256,9 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
                 onChange={(e) => handleChange('academicYear', e.target.value)}
                 style={inputStyle}
               >
-                <option>Jun 2025/2026</option>
-                <option>Jun 2026/2027</option>
+                <option value="2025/2026">2025/2026</option>
+                <option value="2026/2027">2026/2027</option>
+                <option value="2027/2028">2027/2028</option>
               </select>
             </div>
 
@@ -170,14 +270,14 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
                 value={formData.studentClass}
                 onChange={(e) => handleChange('studentClass', e.target.value)}
                 style={inputStyle}
+                required
               >
-                <option>Primary</option>
-                <option>Secondary</option>
-                <option>Higher Secondary</option>
-                <option>Grade 6</option>
-                <option>Grade 8</option>
-                <option>Grade 10</option>
-                <option>Grade 12</option>
+                <option value="">Select Class {isLoadingClasses ? '(Loading...)' : ''}</option>
+                {availableClasses.map((cls) => (
+                  <option key={cls.id || cls.name} value={cls.name}>
+                    {cls.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -190,11 +290,12 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
                 onChange={(e) => handleChange('section', e.target.value)}
                 style={inputStyle}
               >
-                <option>Science</option>
-                <option>Arts</option>
-                <option>Commerce</option>
-                <option>Section A</option>
-                <option>Section B</option>
+                <option value="">Select Section {isLoadingClasses ? '(Loading...)' : ''}</option>
+                {availableSections.map((sec) => (
+                  <option key={sec.id || sec.name} value={sec.name}>
+                    {sec.name}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -311,9 +412,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Student Photo <span style={{ color: '#ef4444' }}>*</span>
+                Student Photo
               </label>
-              <DropzoneArea placeholder="Drag & drop a file here or click" />
+              <DropzoneArea
+                placeholder="Drag & drop student photo or click"
+                onFileSelect={(dataUrl) => handleChange('studentPhoto', dataUrl)}
+                preview={formData.studentPhoto}
+              />
             </div>
           </div>
         </div>
@@ -366,9 +471,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Fathers Photo <span style={{ color: '#ef4444' }}>*</span>
+                Fathers Photo
               </label>
-              <DropzoneArea placeholder="Drag & drop a file here or click" />
+              <DropzoneArea
+                placeholder="Drag & drop fathers photo or click"
+                onFileSelect={(dataUrl) => handleChange('fatherPhoto', dataUrl)}
+                preview={formData.fatherPhoto}
+              />
             </div>
 
             <div className="col-span-3">
@@ -399,11 +508,11 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Father Occupation
+                Mother Occupation
               </label>
               <input
                 type="text"
-                placeholder="Enter Father Occupation"
+                placeholder="Enter Mother Occupation"
                 value={formData.motherOccupation}
                 onChange={(e) => handleChange('motherOccupation', e.target.value)}
                 style={inputStyle}
@@ -412,9 +521,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Mothers Photo <span style={{ color: '#ef4444' }}>*</span>
+                Mothers Photo
               </label>
-              <DropzoneArea placeholder="Drag & drop a file here or click" />
+              <DropzoneArea
+                placeholder="Drag & drop mothers photo or click"
+                onFileSelect={(dataUrl) => handleChange('motherPhoto', dataUrl)}
+                preview={formData.motherPhoto}
+              />
             </div>
           </div>
         </div>
@@ -481,11 +594,11 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Father Occupation
+                Guardian Occupation
               </label>
               <input
                 type="text"
-                placeholder="Enter Father Occupation"
+                placeholder="Enter Guardian Occupation"
                 value={formData.guardianOccupation}
                 onChange={(e) => handleChange('guardianOccupation', e.target.value)}
                 style={inputStyle}
@@ -507,9 +620,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Guardian Photo <span style={{ color: '#ef4444' }}>*</span>
+                Guardian Photo
               </label>
-              <DropzoneArea placeholder="Drag & drop a file here or click" />
+              <DropzoneArea
+                placeholder="Drag & drop guardian photo or click"
+                onFileSelect={(dataUrl) => handleChange('guardianPhoto', dataUrl)}
+                preview={formData.guardianPhoto}
+              />
             </div>
           </div>
         </div>
@@ -750,9 +867,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
               </div>
               <div style={{ flex: 1 }}>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Guardian Photo <span style={{ color: '#ef4444' }}>*</span>
+                  Document File
                 </label>
-                <DropzoneArea placeholder="Drag & drop a file here or click" />
+                <DropzoneArea
+                  placeholder="Drag & drop document file or click"
+                  onFileSelect={(dataUrl) => handleChange('docFile', dataUrl)}
+                  preview={formData.docFile}
+                />
               </div>
             </div>
           </div>
@@ -888,13 +1009,27 @@ const inputStyle = {
 };
 
 // Drag & Drop File Zone Component matching reference image
-const DropzoneArea = ({ placeholder }) => {
+const DropzoneArea = ({ placeholder, onFileSelect, preview }) => {
+  const fileInputRef = useRef(null);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files?.[0];
+    if (file && onFileSelect) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        onFileSelect(uploadEvent.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   return (
     <div
+      onClick={() => fileInputRef.current?.click()}
       style={{
         border: '2px dashed var(--border-color)',
         borderRadius: 'var(--radius-md)',
-        padding: '12px',
+        padding: '10px 12px',
         textAlign: 'center',
         backgroundColor: 'var(--bg-app)',
         color: 'var(--text-muted)',
@@ -905,11 +1040,33 @@ const DropzoneArea = ({ placeholder }) => {
         justifyContent: 'center',
         gap: '8px',
         minHeight: '42px',
-        transition: 'all 0.2s ease'
+        transition: 'all 0.2s ease',
+        overflow: 'hidden'
       }}
     >
-      <Upload size={14} />
-      <span>{placeholder}</span>
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        style={{ display: 'none' }}
+        accept="image/*,.pdf,.doc,.docx"
+      />
+      {preview ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <img
+            src={preview}
+            alt="Preview"
+            style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }}
+            onError={(e) => { e.target.style.display = 'none'; }}
+          />
+          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>File Selected (Click to change)</span>
+        </div>
+      ) : (
+        <>
+          <Upload size={14} />
+          <span>{placeholder}</span>
+        </>
+      )}
     </div>
   );
 };
