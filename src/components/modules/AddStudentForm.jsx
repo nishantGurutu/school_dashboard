@@ -86,17 +86,17 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     category: initialData?.category || '',
     gender: initialData?.gender || 'Male',
     dob: initialData?.dob || initialData?.dateOfBirth || '',
-    phone: initialData?.phone || '',
+    phone: initialData?.phone ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : '',
     email: initialData?.email || '',
     studentPhoto: initialData?.avatar || initialData?.studentPhoto || null,
 
     // Parent & Guardian Info
     fatherName: initialData?.fatherName || '',
-    fatherPhone: initialData?.fatherPhone || '',
+    fatherPhone: initialData?.fatherPhone ? String(initialData.fatherPhone).replace(/\D/g, '').slice(0, 15) : '',
     fatherOccupation: initialData?.fatherOccupation || '',
     fatherPhoto: initialData?.fatherPhoto || null,
     motherName: initialData?.motherName || '',
-    motherPhone: initialData?.motherPhone || '',
+    motherPhone: initialData?.motherPhone ? String(initialData.motherPhone).replace(/\D/g, '').slice(0, 15) : '',
     motherOccupation: initialData?.motherOccupation || '',
     motherPhoto: initialData?.motherPhoto || null,
 
@@ -104,7 +104,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     guardianRelation: initialData?.guardianRelation || 'Father',
     guardianName: initialData?.guardianName || initialData?.guardian || '',
     guardianEmail: initialData?.guardianEmail || '',
-    guardianPhone: initialData?.guardianPhone || '',
+    guardianPhone: initialData?.guardianPhone ? String(initialData.guardianPhone).replace(/\D/g, '').slice(0, 15) : '',
     guardianOccupation: initialData?.guardianOccupation || '',
     guardianAddress: initialData?.guardianAddress || '',
     guardianPhoto: initialData?.guardianPhoto || null,
@@ -115,7 +115,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     weight: initialData?.weight || '',
 
     // Bank Details
-    bankAccountNumber: initialData?.bankAccountNumber || '',
+    bankAccountNumber: initialData?.bankAccountNumber ? String(initialData.bankAccountNumber).replace(/\D/g, '').slice(0, 25) : '',
     bankName: initialData?.bankName || '',
     ifscCode: initialData?.ifscCode || '',
     nationalIdNumber: initialData?.nationalIdNumber || '',
@@ -155,31 +155,31 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
         section: sec || prev.section,
         rollNumber: initialData.rollNo || initialData.rollNumber || prev.rollNumber,
         admissionNo: initialData.admissionNo || initialData.id || prev.admissionNo,
-        phone: initialData.phone || prev.phone,
+        phone: initialData.phone ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : prev.phone,
         email: initialData.email || prev.email,
         category: initialData.category || prev.category,
         gender: initialData.gender || prev.gender,
         dob: initialData.dob || initialData.dateOfBirth || prev.dob,
         studentPhoto: initialData.avatar || initialData.studentPhoto || prev.studentPhoto,
         fatherName: initialData.fatherName || prev.fatherName,
-        fatherPhone: initialData.fatherPhone || prev.fatherPhone,
+        fatherPhone: initialData.fatherPhone ? String(initialData.fatherPhone).replace(/\D/g, '').slice(0, 15) : prev.fatherPhone,
         fatherOccupation: initialData.fatherOccupation || prev.fatherOccupation,
         fatherPhoto: initialData.fatherPhoto || prev.fatherPhoto,
         motherName: initialData.motherName || prev.motherName,
-        motherPhone: initialData.motherPhone || prev.motherPhone,
+        motherPhone: initialData.motherPhone ? String(initialData.motherPhone).replace(/\D/g, '').slice(0, 15) : prev.motherPhone,
         motherOccupation: initialData.motherOccupation || prev.motherOccupation,
         motherPhoto: initialData.motherPhoto || prev.motherPhoto,
         guardianRelation: initialData.guardianRelation || prev.guardianRelation,
         guardianName: initialData.guardianName || initialData.guardian || prev.guardianName,
         guardianEmail: initialData.guardianEmail || prev.guardianEmail,
-        guardianPhone: initialData.guardianPhone || prev.guardianPhone,
+        guardianPhone: initialData.guardianPhone ? String(initialData.guardianPhone).replace(/\D/g, '').slice(0, 15) : prev.guardianPhone,
         guardianOccupation: initialData.guardianOccupation || prev.guardianOccupation,
         guardianAddress: initialData.guardianAddress || prev.guardianAddress,
         guardianPhoto: initialData.guardianPhoto || prev.guardianPhoto,
         bloodGroup: initialData.bloodGroup || prev.bloodGroup,
         height: initialData.height || prev.height,
         weight: initialData.weight || prev.weight,
-        bankAccountNumber: initialData.bankAccountNumber || prev.bankAccountNumber,
+        bankAccountNumber: initialData.bankAccountNumber ? String(initialData.bankAccountNumber).replace(/\D/g, '').slice(0, 25) : prev.bankAccountNumber,
         bankName: initialData.bankName || prev.bankName,
         ifscCode: initialData.ifscCode || prev.ifscCode,
         nationalIdNumber: initialData.nationalIdNumber || prev.nationalIdNumber,
@@ -198,8 +198,35 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     }
   }, [initialData]);
 
+  const handleNumericKeyDown = (e) => {
+    if (
+      !/[0-9]/.test(e.key) &&
+      !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter'].includes(e.key) &&
+      !e.ctrlKey &&
+      !e.metaKey
+    ) {
+      e.preventDefault();
+    }
+  };
+
+  const handlePhoneChange = (field, e) => {
+    const numericValue = e.target.value.replace(/\D/g, '').slice(0, 15);
+    handleChange(field, numericValue);
+  };
+
+  const handleBankAccountChange = (e) => {
+    const numericValue = e.target.value.replace(/\D/g, '').slice(0, 25);
+    handleChange('bankAccountNumber', numericValue);
+  };
+
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'email' && (!prev.loginEmail || prev.loginEmail === prev.email)) {
+        updated.loginEmail = value;
+      }
+      return updated;
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -389,9 +416,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={15}
                 placeholder="Enter your Phone Number"
                 value={formData.phone}
-                onChange={(e) => handleChange('phone', e.target.value)}
+                onChange={(e) => handlePhoneChange('phone', e)}
+                onKeyDown={handleNumericKeyDown}
                 style={inputStyle}
                 required
               />
@@ -449,9 +480,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={15}
                 placeholder="Enter Fathers Number"
                 value={formData.fatherPhone}
-                onChange={(e) => handleChange('fatherPhone', e.target.value)}
+                onChange={(e) => handlePhoneChange('fatherPhone', e)}
+                onKeyDown={handleNumericKeyDown}
                 style={inputStyle}
               />
             </div>
@@ -499,9 +534,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={15}
                 placeholder="Enter mothers Number"
                 value={formData.motherPhone}
-                onChange={(e) => handleChange('motherPhone', e.target.value)}
+                onChange={(e) => handlePhoneChange('motherPhone', e)}
+                onKeyDown={handleNumericKeyDown}
                 style={inputStyle}
               />
             </div>
@@ -585,9 +624,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={15}
                 placeholder="Enter Guardian Number"
                 value={formData.guardianPhone}
-                onChange={(e) => handleChange('guardianPhone', e.target.value)}
+                onChange={(e) => handlePhoneChange('guardianPhone', e)}
+                onKeyDown={handleNumericKeyDown}
                 style={inputStyle}
               />
             </div>
@@ -699,9 +742,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
               </label>
               <input
                 type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={25}
                 placeholder="Enter bank account number"
                 value={formData.bankAccountNumber}
-                onChange={(e) => handleChange('bankAccountNumber', e.target.value)}
+                onChange={handleBankAccountChange}
+                onKeyDown={handleNumericKeyDown}
                 style={inputStyle}
               />
             </div>
@@ -910,14 +957,15 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
           <div className="grid-responsive">
             <div className="col-span-6">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Email <span style={{ color: '#ef4444' }}>*</span>
+                Login ID / Email <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
-                type="email"
-                placeholder="Enter Email"
+                type="text"
+                placeholder="Enter Email or Login ID"
                 value={formData.loginEmail}
                 onChange={(e) => handleChange('loginEmail', e.target.value)}
                 style={inputStyle}
+                required
               />
             </div>
 

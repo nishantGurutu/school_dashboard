@@ -66,9 +66,17 @@ export const StudentsModule = () => {
 
   const handleSaveStudent = async (formData) => {
     setError('');
+    const studentPayload = {
+      ...formData,
+      email: formData.loginEmail || formData.email,
+      loginEmail: formData.loginEmail || formData.email,
+      password: formData.loginPassword || formData.password,
+      loginPassword: formData.loginPassword
+    };
+
     if (editingStudent) {
       try {
-        const updated = await studentService.update(editingStudent.id, formData);
+        const updated = await studentService.update(editingStudent.id, studentPayload);
         setStudentsData((prev) =>
           prev.map((s) => (s.id === editingStudent.id ? { ...s, ...updated } : s))
         );
@@ -80,7 +88,7 @@ export const StudentsModule = () => {
     } else {
       try {
         const created = await studentService.create({
-          ...formData,
+          ...studentPayload,
           admissionNo: formData.admissionNo || `ADM-${Date.now()}`
         });
         setStudentsData((prev) => [created, ...prev]);

@@ -159,7 +159,13 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
   }, [initialData]);
 
   const handleChange = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      const updated = { ...prev, [field]: value };
+      if (field === 'email' && (!prev.loginEmail || prev.loginEmail === prev.email)) {
+        updated.loginEmail = value;
+      }
+      return updated;
+    });
   };
 
   const handleNumericKeyDown = (e) => {
