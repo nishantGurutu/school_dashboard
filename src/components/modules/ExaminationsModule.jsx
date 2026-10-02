@@ -17,6 +17,8 @@ import {
   Award
 } from 'lucide-react';
 import { examService } from '../../services/examService';
+import { classService } from '../../services/classService';
+import { subjectService } from '../../services/subjectService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
 // Utility helpers for Date and Time inputs
@@ -63,6 +65,7 @@ const formatTimeForDisplay = (timeStr) => {
 
 const initialModalFormData = {
   name: '',
+  examName: '',
   date: '',
   startTime: '',
   endTime: '',
@@ -118,14 +121,22 @@ export const ExaminationsModule = () => {
   // 3. Exam Result State & Data (Screenshot 5)
   const [results, setResults] = useState([]);
 
+  // Dynamic dropdown lists loaded from backend APIs
+  const [sectionsList, setSectionsList] = useState([]);
+  const [subjectsList, setSubjectsList] = useState([]);
+  const [classesList, setClassesList] = useState([]);
+
   const fetchExamsData = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
-      const [examRes, schedRes, resultRes] = await Promise.all([
+      const [examRes, schedRes, resultRes, secRes, subRes, clsRes] = await Promise.all([
         examService.exams.list(),
         examService.schedules.list(),
-        examService.results.list()
+        examService.results.list(),
+        classService.sections.list().catch(() => []),
+        subjectService.list().catch(() => []),
+        classService.classes.list().catch(() => [])
       ]);
       const examItems = Array.isArray(examRes) ? examRes : [];
       const schedItems = Array.isArray(schedRes) ? schedRes : [];
@@ -133,6 +144,9 @@ export const ExaminationsModule = () => {
       setExams((prev) => (examItems.length ? examItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
       setSchedules((prev) => (schedItems.length ? schedItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
       setResults((prev) => (resultItems.length ? resultItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setSectionsList(Array.isArray(secRes) ? secRes : []);
+      setSubjectsList(Array.isArray(subRes) ? subRes : []);
+      setClassesList(Array.isArray(clsRes) ? clsRes : []);
     } catch (e) {
       setError(e.message || 'Failed to load examination data');
     } finally {
@@ -165,15 +179,16 @@ export const ExaminationsModule = () => {
     setEditingItem(item);
     setActiveDropdownId(null);
     setModalFormData({
-      name: item.name || item.exam || '',
+      name: item.name || item.examName || item.exam || '',
+      examName: item.examName || item.name || item.exam || item.className || '',
       date: toInputDate(item.date),
       startTime: toInputTime(item.startTime),
       endTime: toInputTime(item.endTime),
       status: item.status || 'Active',
-      className: item.className || 'Class 1 (A)',
-      section: item.section || 'Section A',
+      className: item.className || '',
+      section: item.section || '',
       room: item.room || '',
-      subject: item.subject || 'English',
+      subject: item.subject || '',
       duration: item.duration || '',
       admissionNo: item.admissionNo || '',
       rollNo: item.rollNo || '',
@@ -232,7 +247,9 @@ export const ExaminationsModule = () => {
           setExams((prev) => prev.map((ex) => (ex.id === id ? { ...ex, ...updated } : ex)));
         } else if (currentSubTab === 'schedule') {
           const updated = await examService.schedules.update(id, {
-            className: modalFormData.className || '',
+            examName: modalFormData.examName || modalFormData.name || '',
+            className: modalFormData.className || modalFormData.examName || '',
+            section: modalFormData.section || '',
             subject: modalFormData.subject || '',
             date: modalFormData.date || '',
             startTime: formatTimeForDisplay(modalFormData.startTime) || '',
@@ -267,8 +284,10 @@ export const ExaminationsModule = () => {
           setExams((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         } else if (currentSubTab === 'schedule') {
           const created = await examService.schedules.create({
-            className: modalFormData.className || 'Class 1 (A)',
-            subject: modalFormData.subject || 'English',
+            examName: modalFormData.examName || modalFormData.name || '',
+            className: modalFormData.className || modalFormData.examName || '',
+            section: modalFormData.section || '',
+            subject: modalFormData.subject || '',
             date: modalFormData.date || '',
             startTime: formatTimeForDisplay(modalFormData.startTime) || '',
             endTime: formatTimeForDisplay(modalFormData.endTime) || '',
@@ -555,7 +574,8 @@ export const ExaminationsModule = () => {
 
                 {currentSubTab === 'schedule' && (
                   <>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Class</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Exam Name</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Section</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Subject</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Exam Date</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Start Time</th>
@@ -622,7 +642,12 @@ export const ExaminationsModule = () => {
               {/* 2. Render Exam Schedule (Screenshot 3) */}
               {currentSubTab === 'schedule' &&
                 schedules
-                  .filter((sc) => sc.subject.toLowerCase().includes(searchTerm.toLowerCase()) || sc.className.toLowerCase().includes(searchTerm.toLowerCase()))
+                  .filter((sc) =>
+                    (sc.subject || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (sc.className || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (sc.examName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    (sc.section || '').toLowerCase().includes(searchTerm.toLowerCase())
+                  )
                   .map((row) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                       <td style={{ padding: '14px 16px' }}>
@@ -634,8 +659,29 @@ export const ExaminationsModule = () => {
                         />
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700 }}>{row.className}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.subject}</td>
+                      <td style={{ padding: '14px 16px', fontWeight: 700 }}>
+                        <div style={{ color: 'var(--text-primary)' }}>{row.examName || row.className}</div>
+                        {row.examName && row.className && row.examName !== row.className && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
+                            {row.className}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: 'var(--bg-app)',
+                            border: '1px solid var(--border-color)',
+                            fontSize: '0.8rem',
+                            fontWeight: 600
+                          }}
+                        >
+                          {row.section || 'All'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px', fontWeight: 600, color: 'var(--text-primary)' }}>{row.subject}</td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.date}</td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.startTime}</td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.endTime}</td>
@@ -869,34 +915,114 @@ export const ExaminationsModule = () => {
                   <div style={{ display: 'flex', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Exam Name (Class)
+                        Exam Name <span style={{ color: '#ef4444' }}>*</span>
                       </label>
                       <select
-                        value={modalFormData.className}
-                        onChange={(e) => setModalFormData({ ...modalFormData, className: e.target.value })}
+                        id="schedule-exam-name-select"
+                        value={modalFormData.examName || modalFormData.name || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setModalFormData({
+                            ...modalFormData,
+                            examName: val,
+                            name: val,
+                            className: modalFormData.className || val
+                          });
+                        }}
                         style={inputStyle}
+                        required
                       >
-                        <option value="Class 1 (A)">Class 1 (A)</option>
-                        <option value="Class 2 (B)">Class 2 (B)</option>
-                        <option value="Class 3 (C)">Class 3 (C)</option>
-                        <option value="Class 4 (A)">Class 4 (A)</option>
-                        <option value="Class 5 (B)">Class 5 (B)</option>
+                        <option value="">Select Exam</option>
+                        {exams.length > 0 ? (
+                          exams.map((ex) => (
+                            <option key={ex.id || ex.name} value={ex.name}>
+                              {ex.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>No exams available</option>
+                        )}
+                        {modalFormData.examName && !exams.some((e) => e.name === modalFormData.examName) && (
+                          <option value={modalFormData.examName}>{modalFormData.examName}</option>
+                        )}
                       </select>
                     </div>
 
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Section
+                        Section <span style={{ color: '#ef4444' }}>*</span>
                       </label>
                       <select
-                        value={modalFormData.section}
+                        id="schedule-section-select"
+                        value={modalFormData.section || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, section: e.target.value })}
                         style={inputStyle}
+                        required
                       >
-                        <option value="Section A">Select a Section</option>
-                        <option value="Section A">Section A</option>
-                        <option value="Section B">Section B</option>
-                        <option value="Section C">Section C</option>
+                        <option value="">Select Section</option>
+                        {sectionsList.length > 0 ? (
+                          sectionsList.map((sec) => (
+                            <option key={sec.id || sec.name} value={sec.name}>
+                              {sec.name}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>No sections available</option>
+                        )}
+                        {modalFormData.section && !sectionsList.some((s) => s.name === modalFormData.section) && (
+                          <option value={modalFormData.section}>{modalFormData.section}</option>
+                        )}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '16px' }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                        Subject <span style={{ color: '#ef4444' }}>*</span>
+                      </label>
+                      <select
+                        id="schedule-subject-select"
+                        value={modalFormData.subject || ''}
+                        onChange={(e) => setModalFormData({ ...modalFormData, subject: e.target.value })}
+                        style={inputStyle}
+                        required
+                      >
+                        <option value="">Select Subject</option>
+                        {subjectsList.length > 0 ? (
+                          subjectsList.map((sub) => (
+                            <option key={sub.id || sub.name} value={sub.name}>
+                              {sub.name} {sub.code ? `(${sub.code})` : ''}
+                            </option>
+                          ))
+                        ) : (
+                          <option value="" disabled>No subjects available</option>
+                        )}
+                        {modalFormData.subject && !subjectsList.some((s) => s.name === modalFormData.subject) && (
+                          <option value={modalFormData.subject}>{modalFormData.subject}</option>
+                        )}
+                      </select>
+                    </div>
+
+                    <div style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                        Class (Optional)
+                      </label>
+                      <select
+                        id="schedule-class-select"
+                        value={modalFormData.className || ''}
+                        onChange={(e) => setModalFormData({ ...modalFormData, className: e.target.value })}
+                        style={inputStyle}
+                      >
+                        <option value="">Select Class</option>
+                        {classesList.map((c) => (
+                          <option key={c.id || c.name} value={c.name}>
+                            {c.name} {c.section ? `(${c.section})` : ''}
+                          </option>
+                        ))}
+                        {modalFormData.className && !classesList.some((c) => c.name === modalFormData.className) && (
+                          <option value={modalFormData.className}>{modalFormData.className}</option>
+                        )}
                       </select>
                     </div>
                   </div>
@@ -917,19 +1043,15 @@ export const ExaminationsModule = () => {
 
                     <div style={{ flex: 1 }}>
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Subject
+                        Duration
                       </label>
-                      <select
-                        value={modalFormData.subject}
-                        onChange={(e) => setModalFormData({ ...modalFormData, subject: e.target.value })}
+                      <input
+                        type="text"
+                        placeholder="e.g. 3 Hours"
+                        value={modalFormData.duration || ''}
+                        onChange={(e) => setModalFormData({ ...modalFormData, duration: e.target.value })}
                         style={inputStyle}
-                      >
-                        <option value="English">English</option>
-                        <option value="Mathematics">Mathematics</option>
-                        <option value="Science">Science</option>
-                        <option value="History">History</option>
-                        <option value="Physics">Physics</option>
-                      </select>
+                      />
                     </div>
                   </div>
 
@@ -983,19 +1105,6 @@ export const ExaminationsModule = () => {
                             try { e.target.showPicker(); } catch (_) {}
                           }
                         }}
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Duration
-                      </label>
-                      <input
-                        type="text"
-                        placeholder="e.g. 3 Hours"
-                        value={modalFormData.duration || ''}
-                        onChange={(e) => setModalFormData({ ...modalFormData, duration: e.target.value })}
                         style={inputStyle}
                       />
                     </div>
@@ -1203,10 +1312,14 @@ export const ExaminationsModule = () => {
 
               {currentSubTab === 'schedule' && (
                 <>
-                  <div><strong>Class & Section:</strong> {viewingItem.className}</div>
+                  <div><strong>Exam Name:</strong> {viewingItem.examName || viewingItem.name || viewingItem.className}</div>
+                  {viewingItem.className && viewingItem.className !== viewingItem.examName && (
+                    <div><strong>Class:</strong> {viewingItem.className}</div>
+                  )}
+                  <div><strong>Section:</strong> {viewingItem.section || 'All'}</div>
                   <div><strong>Subject:</strong> {viewingItem.subject}</div>
                   <div><strong>Scheduled Date:</strong> {viewingItem.date}</div>
-                  <div><strong>Time Slot:</strong> {viewingItem.startTime} to {viewingItem.endTime} ({viewingItem.duration})</div>
+                  <div><strong>Time Slot:</strong> {viewingItem.startTime} to {viewingItem.endTime} {viewingItem.duration ? `(${viewingItem.duration})` : ''}</div>
                   <div><strong>Assigned Classroom:</strong> Room {viewingItem.room}</div>
                 </>
               )}
