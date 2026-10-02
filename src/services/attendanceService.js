@@ -2,9 +2,15 @@ import NetworkService from './networkService';
 import { API_ENDPOINTS } from './apiConfig';
 
 export const attendanceService = {
-  list: (type = '', date = '', className = '') => {
+  list: (typeOrQueryOrParams = '', date = '', className = '') => {
+    if (typeof typeOrQueryOrParams === 'object' && typeOrQueryOrParams !== null) {
+      return NetworkService.get(API_ENDPOINTS.ATTENDANCE.BASE, typeOrQueryOrParams);
+    }
+    if (typeof typeOrQueryOrParams === 'string' && typeOrQueryOrParams.includes('=')) {
+      return NetworkService.get(`${API_ENDPOINTS.ATTENDANCE.BASE}?${typeOrQueryOrParams}`);
+    }
     const params = {};
-    if (type) params.type = type;
+    if (typeOrQueryOrParams) params.type = typeOrQueryOrParams;
     if (date) params.date = date;
     if (className) params.className = className;
     return NetworkService.get(API_ENDPOINTS.ATTENDANCE.BASE, params);

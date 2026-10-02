@@ -10,7 +10,8 @@ import {
   CheckCircle,
   Clock,
   UserCheck,
-  Award
+  Award,
+  RefreshCw
 } from 'lucide-react';
 import { attendanceService } from '../../services/attendanceService';
 import { useApiAction } from '../../hooks/useApiAction';
@@ -59,10 +60,13 @@ export const AttendanceModule = () => {
     setError('');
     try {
       const type = currentSubTab === 'teacher' ? 'TEACHER' : currentSubTab === 'employee' ? 'EMPLOYEE' : 'STUDENT';
-      const result = await attendanceService.list(`type=${type}`);
-      const items = (Array.isArray(result) ? result : []).map((r, i) => ({
+      const result = await attendanceService.list(type);
+      const rawList = Array.isArray(result) ? result : (Array.isArray(result?.data) ? result.data : []);
+      const items = rawList.map((r, i) => ({
         ...r,
         sl: String(i + 1).padStart(2, '0'),
+        checkInTime: r.checkInTime || r.checkIn || '—',
+        checkOutTime: r.checkOutTime || r.checkOut || '—',
         attendance: normalizeStatus(r.status)
       }));
       if (currentSubTab === 'student') setStudentList(items);
@@ -224,54 +228,76 @@ export const AttendanceModule = () => {
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{headerInfo.breadcrumb}</p>
         </div>
 
-        {/* Sub-Nav Tabs */}
-        <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-app)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
-          <button
-            onClick={() => handleSubTabChange('student')}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              backgroundColor: currentSubTab === 'student' ? '#0d9488' : 'transparent',
-              color: currentSubTab === 'student' ? '#ffffff' : 'var(--text-secondary)',
-              fontWeight: currentSubTab === 'student' ? 700 : 500,
-              fontSize: '0.8rem',
-              cursor: 'pointer'
-            }}
-          >
-            Student Attendance
-          </button>
+        {/* Sub-Nav Tabs & Refresh Button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-app)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+            <button
+              onClick={() => handleSubTabChange('student')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                backgroundColor: currentSubTab === 'student' ? '#0d9488' : 'transparent',
+                color: currentSubTab === 'student' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: currentSubTab === 'student' ? 700 : 500,
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Student Attendance
+            </button>
+
+            <button
+              onClick={() => handleSubTabChange('teacher')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                backgroundColor: currentSubTab === 'teacher' ? '#0d9488' : 'transparent',
+                color: currentSubTab === 'teacher' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: currentSubTab === 'teacher' ? 700 : 500,
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Teacher Attendance
+            </button>
+
+            <button
+              onClick={() => handleSubTabChange('employee')}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                backgroundColor: currentSubTab === 'employee' ? '#0d9488' : 'transparent',
+                color: currentSubTab === 'employee' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: currentSubTab === 'employee' ? 700 : 500,
+                fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              Employee Attendance
+            </button>
+          </div>
 
           <button
-            onClick={() => handleSubTabChange('teacher')}
+            onClick={() => fetchAttendance()}
+            disabled={isLoading}
+            title="Refresh Attendance"
             style={{
-              padding: '6px 14px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              backgroundColor: currentSubTab === 'teacher' ? '#0d9488' : 'transparent',
-              color: currentSubTab === 'teacher' ? '#ffffff' : 'var(--text-secondary)',
-              fontWeight: currentSubTab === 'teacher' ? 700 : 500,
-              fontSize: '0.8rem',
-              cursor: 'pointer'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '8px',
+              borderRadius: 'var(--radius-md)',
+              border: '1px solid var(--border-light)',
+              backgroundColor: 'var(--bg-app)',
+              color: 'var(--text-primary)',
+              cursor: isLoading ? 'not-allowed' : 'pointer',
+              opacity: isLoading ? 0.6 : 1
             }}
           >
-            Teacher Attendance
-          </button>
-
-          <button
-            onClick={() => handleSubTabChange('employee')}
-            style={{
-              padding: '6px 14px',
-              borderRadius: 'var(--radius-sm)',
-              border: 'none',
-              backgroundColor: currentSubTab === 'employee' ? '#0d9488' : 'transparent',
-              color: currentSubTab === 'employee' ? '#ffffff' : 'var(--text-secondary)',
-              fontWeight: currentSubTab === 'employee' ? 700 : 500,
-              fontSize: '0.8rem',
-              cursor: 'pointer'
-            }}
-          >
-            Employee Attendance
+            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
           </button>
         </div>
       </div>
@@ -596,7 +622,6 @@ export const AttendanceModule = () => {
                     S.L <span>▲</span>
                   </div>
                 </th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Admission No</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Name</th>
 
                 {currentSubTab === 'student' && (
@@ -614,7 +639,9 @@ export const AttendanceModule = () => {
                   </>
                 )}
 
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Attendance</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Check-In</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Check-Out</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Status</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Note</th>
               </tr>
             </thead>
@@ -623,9 +650,14 @@ export const AttendanceModule = () => {
               {currentSubTab === 'student' &&
                 studentList
                   .filter((s) => {
-                    const matchesSearch = s.name.toLowerCase().includes(searchTerm.toLowerCase()) || s.admissionNo.toLowerCase().includes(searchTerm.toLowerCase());
+                    const name = (s.name || '').toLowerCase();
+                    const adm = (s.admissionNo || '').toLowerCase();
+                    const q = searchTerm.toLowerCase();
+                    const matchesSearch = name.includes(q) || adm.includes(q);
                     if (!appliedStudentFilter) return matchesSearch;
-                    return matchesSearch && s.className.includes(appliedStudentFilter.className);
+                    const classFilter = (appliedStudentFilter.className || '').trim().toLowerCase();
+                    const matchesClass = !classFilter || classFilter === 'all' || (s.className || '').toLowerCase().includes(classFilter);
+                    return matchesSearch && matchesClass;
                   })
                   .map((row) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -638,10 +670,17 @@ export const AttendanceModule = () => {
                         />
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0d9488' }}>{row.admissionNo}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <img src={row.avatar} alt={row.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                          <img
+                            src={row.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || 'Student')}&background=0d9488&color=fff`}
+                            alt={row.name}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || 'Student')}&background=0d9488&color=fff`;
+                            }}
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
                           <div>
                             <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{row.name}</div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Roll No: {row.rollNo}</div>
@@ -650,9 +689,39 @@ export const AttendanceModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', fontWeight: 500 }}>{row.className}</td>
                       <td style={{ padding: '14px 16px' }}>
-                        <AttendanceRadioGroup
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: row.checkInTime && row.checkInTime !== '—' ? '#0d9488' : 'var(--text-muted)'
+                          }}
+                        >
+                          <Clock size={13} style={{ opacity: 0.7 }} />
+                          {row.checkInTime || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: row.checkOutTime && row.checkOutTime !== '—' ? '#0284c7' : 'var(--text-muted)'
+                          }}
+                        >
+                          <Clock size={13} style={{ opacity: 0.7 }} />
+                          {row.checkOutTime || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <StatusBadge
                           id={row.id}
-                          selectedStatus={row.attendance}
+                          status={row.attendance}
                           busy={busyKey === `attendance-${row.id}`}
                           onChange={(status) => runAction(`attendance-${row.id}`, () => handleAttendanceChange(row.id, status))}
                         />
@@ -661,7 +730,7 @@ export const AttendanceModule = () => {
                         <input
                           type="text"
                           placeholder="Write note..."
-                          value={row.note}
+                          value={row.note || ''}
                           onChange={(e) => handleNoteChange(row.id, e.target.value)}
                           style={tableNoteInputStyle}
                         />
@@ -673,9 +742,14 @@ export const AttendanceModule = () => {
               {currentSubTab === 'teacher' &&
                 teacherList
                   .filter((t) => {
-                    const matchesSearch = t.name.toLowerCase().includes(searchTerm.toLowerCase()) || t.admissionNo.toLowerCase().includes(searchTerm.toLowerCase());
+                    const name = (t.name || '').toLowerCase();
+                    const adm = (t.admissionNo || '').toLowerCase();
+                    const q = searchTerm.toLowerCase();
+                    const matchesSearch = name.includes(q) || adm.includes(q);
                     if (!appliedTeacherFilter) return matchesSearch;
-                    return matchesSearch && t.className.toLowerCase() === appliedTeacherFilter.subject.toLowerCase();
+                    const subjFilter = (appliedTeacherFilter.subject || '').trim().toLowerCase();
+                    const matchesSubj = !subjFilter || subjFilter === 'all' || (t.className || '').toLowerCase().includes(subjFilter);
+                    return matchesSearch && matchesSubj;
                   })
                   .map((row) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -688,18 +762,55 @@ export const AttendanceModule = () => {
                         />
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0d9488' }}>{row.admissionNo}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <img src={row.avatar} alt={row.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                          <img
+                            src={row.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || 'Teacher')}&background=0d9488&color=fff`}
+                            alt={row.name}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || 'Teacher')}&background=0d9488&color=fff`;
+                            }}
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
                           <span style={{ fontWeight: 700 }}>{row.name}</span>
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', fontWeight: 500 }}>{row.className}</td>
                       <td style={{ padding: '14px 16px' }}>
-                        <AttendanceRadioGroup
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: row.checkInTime && row.checkInTime !== '—' ? '#0d9488' : 'var(--text-muted)'
+                          }}
+                        >
+                          <Clock size={13} style={{ opacity: 0.7 }} />
+                          {row.checkInTime || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: row.checkOutTime && row.checkOutTime !== '—' ? '#0284c7' : 'var(--text-muted)'
+                          }}
+                        >
+                          <Clock size={13} style={{ opacity: 0.7 }} />
+                          {row.checkOutTime || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <StatusBadge
                           id={row.id}
-                          selectedStatus={row.attendance}
+                          status={row.attendance}
                           busy={busyKey === `attendance-${row.id}`}
                           onChange={(status) => runAction(`attendance-${row.id}`, () => handleAttendanceChange(row.id, status))}
                         />
@@ -708,7 +819,7 @@ export const AttendanceModule = () => {
                         <input
                           type="text"
                           placeholder="Write note..."
-                          value={row.note}
+                          value={row.note || ''}
                           onChange={(e) => handleNoteChange(row.id, e.target.value)}
                           style={tableNoteInputStyle}
                         />
@@ -720,9 +831,14 @@ export const AttendanceModule = () => {
               {currentSubTab === 'employee' &&
                 employeeList
                   .filter((e) => {
-                    const matchesSearch = e.name.toLowerCase().includes(searchTerm.toLowerCase()) || e.admissionNo.toLowerCase().includes(searchTerm.toLowerCase());
+                    const name = (e.name || '').toLowerCase();
+                    const adm = (e.admissionNo || '').toLowerCase();
+                    const q = searchTerm.toLowerCase();
+                    const matchesSearch = name.includes(q) || adm.includes(q);
                     if (!appliedEmployeeFilter) return matchesSearch;
-                    return matchesSearch && e.department.toLowerCase() === appliedEmployeeFilter.department.toLowerCase();
+                    const deptFilter = (appliedEmployeeFilter.department || '').trim().toLowerCase();
+                    const matchesDept = !deptFilter || deptFilter === 'all' || (e.department || '').toLowerCase().includes(deptFilter);
+                    return matchesSearch && matchesDept;
                   })
                   .map((row) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
@@ -735,19 +851,56 @@ export const AttendanceModule = () => {
                         />
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
-                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0d9488' }}>{row.admissionNo}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                          <img src={row.avatar} alt={row.name} style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }} />
+                          <img
+                            src={row.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || 'Employee')}&background=0d9488&color=fff`}
+                            alt={row.name}
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || 'Employee')}&background=0d9488&color=fff`;
+                            }}
+                            style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
+                          />
                           <span style={{ fontWeight: 700 }}>{row.name}</span>
                         </div>
                       </td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', fontWeight: 500 }}>{row.department}</td>
                       <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', fontWeight: 500 }}>{row.designation}</td>
                       <td style={{ padding: '14px 16px' }}>
-                        <AttendanceRadioGroup
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: row.checkInTime && row.checkInTime !== '—' ? '#0d9488' : 'var(--text-muted)'
+                          }}
+                        >
+                          <Clock size={13} style={{ opacity: 0.7 }} />
+                          {row.checkInTime || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.82rem',
+                            fontWeight: 600,
+                            color: row.checkOutTime && row.checkOutTime !== '—' ? '#0284c7' : 'var(--text-muted)'
+                          }}
+                        >
+                          <Clock size={13} style={{ opacity: 0.7 }} />
+                          {row.checkOutTime || '—'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '14px 16px' }}>
+                        <StatusBadge
                           id={row.id}
-                          selectedStatus={row.attendance}
+                          status={row.attendance}
                           busy={busyKey === `attendance-${row.id}`}
                           onChange={(status) => runAction(`attendance-${row.id}`, () => handleAttendanceChange(row.id, status))}
                         />
@@ -756,7 +909,7 @@ export const AttendanceModule = () => {
                         <input
                           type="text"
                           placeholder="Write note..."
-                          value={row.note}
+                          value={row.note || ''}
                           onChange={(e) => handleNoteChange(row.id, e.target.value)}
                           style={tableNoteInputStyle}
                         />
@@ -771,52 +924,80 @@ export const AttendanceModule = () => {
   );
 };
 
-// Inline Attendance Radio Group Component matching screenshots
-const AttendanceRadioGroup = ({ id, selectedStatus, onChange, busy }) => {
-  const options = ['Present', 'Late', 'Absent', 'Halfday', 'Holiday'];
-
+// Inline Status Badge Component with dropdown selector
+const StatusBadge = ({ id, status, onChange, busy }) => {
   if (busy) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'nowrap' }}>
-        <Spinner size={16} color="#0d9488" />
+      <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 8px' }}>
+        <Spinner size={14} color="#0d9488" />
       </div>
     );
   }
 
+  const s = String(status || 'Present').toLowerCase();
+  let bg = '#dcfce7';
+  let color = '#15803d';
+  let border = '#bbf7d0';
+
+  if (s.includes('late')) {
+    bg = '#fef3c7';
+    color = '#b45309';
+    border = '#fde68a';
+  } else if (s.includes('absent')) {
+    bg = '#fee2e2';
+    color = '#b91c1c';
+    border = '#fca5a5';
+  } else if (s.includes('holiday')) {
+    bg = '#e0e7ff';
+    color = '#4338ca';
+    border = '#c7d2fe';
+  } else if (s.includes('half')) {
+    bg = '#fef9c3';
+    color = '#a16207';
+    border = '#fef08a';
+  }
+
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flexWrap: 'nowrap' }}>
-      {options.map((opt) => {
-        const isChecked = selectedStatus === opt;
-        return (
-          <label
-            key={opt}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-              cursor: 'pointer',
-              fontSize: '0.82rem',
-              color: 'var(--text-primary)',
-              fontWeight: isChecked ? 600 : 400,
-              userSelect: 'none'
-            }}
-          >
-            <input
-              type="radio"
-              name={`attendance-radio-${id}`}
-              checked={isChecked}
-              onChange={() => onChange(opt)}
-              style={{
-                accentColor: '#0d9488',
-                cursor: 'pointer',
-                width: '14px',
-                height: '14px'
-              }}
-            />
-            <span>{opt}</span>
-          </label>
-        );
-      })}
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <select
+        value={status || 'Present'}
+        onChange={(e) => onChange(e.target.value)}
+        title="Click to change status"
+        style={{
+          appearance: 'none',
+          WebkitAppearance: 'none',
+          MozAppearance: 'none',
+          backgroundColor: bg,
+          color: color,
+          border: `1px solid ${border}`,
+          borderRadius: '9999px',
+          padding: '5px 24px 5px 12px',
+          fontSize: '0.78rem',
+          fontWeight: 700,
+          cursor: 'pointer',
+          outline: 'none',
+          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)',
+          transition: 'all 0.15s ease'
+        }}
+      >
+        <option value="Present">Present</option>
+        <option value="Late">Late</option>
+        <option value="Absent">Absent</option>
+        <option value="Halfday">Half Day</option>
+        <option value="Holiday">Holiday</option>
+      </select>
+      <ChevronDown
+        size={12}
+        style={{
+          position: 'absolute',
+          right: '8px',
+          top: '50%',
+          transform: 'translateY(-50%)',
+          pointerEvents: 'none',
+          color: color,
+          strokeWidth: 2.5
+        }}
+      />
     </div>
   );
 };

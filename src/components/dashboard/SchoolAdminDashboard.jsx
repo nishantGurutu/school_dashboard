@@ -138,16 +138,17 @@ export const SchoolAdminDashboard = () => {
       nextErrors.notices = e.message;
     }
     try {
-      const list = await attendanceService.list('type=STUDENT');
-      if (Array.isArray(list) && list.length) {
-        const present = list.filter((r) => r.status === 'Present').length;
+      const res = await attendanceService.list('type=STUDENT');
+      const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      if (list.length) {
+        const present = list.filter((r) => (r.status || '').toLowerCase() === 'present').length;
         setAttendancePct(Math.round((present / list.length) * 1000) / 10);
         const byClass = {};
         list.forEach((r) => {
           const c = r.className || 'Other';
           if (!byClass[c]) byClass[c] = { total: 0, present: 0 };
           byClass[c].total += 1;
-          if (r.status === 'Present') byClass[c].present += 1;
+          if ((r.status || '').toLowerCase() === 'present') byClass[c].present += 1;
         });
         setAttendanceSeries(
           Object.entries(byClass).map(([c, v]) => Math.round((v.present / v.total) * 1000) / 10)
