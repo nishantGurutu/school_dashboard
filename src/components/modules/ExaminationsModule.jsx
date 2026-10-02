@@ -19,6 +19,66 @@ import {
 import { examService } from '../../services/examService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
+// Utility helpers for Date and Time inputs
+const toInputDate = (dateStr) => {
+  if (!dateStr) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+  const parsed = new Date(dateStr);
+  if (!isNaN(parsed.getTime())) {
+    const yyyy = parsed.getFullYear();
+    const mm = String(parsed.getMonth() + 1).padStart(2, '0');
+    const dd = String(parsed.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  }
+  return '';
+};
+
+const toInputTime = (timeStr) => {
+  if (!timeStr) return '';
+  if (/^\d{2}:\d{2}$/.test(timeStr)) return timeStr;
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)?$/i);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const modifier = match[3] ? match[3].toUpperCase() : null;
+    if (modifier === 'PM' && hours < 12) hours += 12;
+    if (modifier === 'AM' && hours === 12) hours = 0;
+    return `${String(hours).padStart(2, '0')}:${minutes}`;
+  }
+  return '';
+};
+
+const formatTimeForDisplay = (timeStr) => {
+  if (!timeStr) return '';
+  const match = timeStr.match(/^(\d{1,2}):(\d{2})$/);
+  if (match) {
+    let hours = parseInt(match[1], 10);
+    const minutes = match[2];
+    const period = hours >= 12 ? 'PM' : 'AM';
+    hours = hours % 12 || 12;
+    return `${String(hours).padStart(2, '0')}:${minutes} ${period}`;
+  }
+  return timeStr;
+};
+
+const initialModalFormData = {
+  name: '',
+  date: '',
+  startTime: '',
+  endTime: '',
+  status: 'Active',
+  className: '',
+  section: '',
+  room: '',
+  subject: '',
+  duration: '',
+  admissionNo: '',
+  rollNo: '',
+  total: '',
+  percent: '',
+  grade: '',
+  result: 'Pass'
+};
 
 export const ExaminationsModule = () => {
   const { activeTab, setActiveTab } = useTheme();
@@ -85,24 +145,7 @@ export const ExaminationsModule = () => {
   }, [fetchExamsData]);
 
   // Modal Form State
-  const [modalFormData, setModalFormData] = useState({
-    name: '',
-    date: '2026-09-15',
-    startTime: '10:00 AM',
-    endTime: '01:00 PM',
-    status: 'Active',
-    className: 'Class 1 (A)',
-    section: 'Section A',
-    room: '101',
-    subject: 'English',
-    duration: '3 Hours',
-    admissionNo: 'AD52371',
-    rollNo: '15',
-    total: 600,
-    percent: 85,
-    grade: 'A',
-    result: 'Pass'
-  });
+  const [modalFormData, setModalFormData] = useState(initialModalFormData);
 
   const handleSubTabChange = (tabKey) => {
     setCurrentSubTab(tabKey);
@@ -114,24 +157,7 @@ export const ExaminationsModule = () => {
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
-    setModalFormData({
-      name: '',
-      date: '05 Jun 2015',
-      startTime: '10:00 AM',
-      endTime: '01:00 PM',
-      status: 'Active',
-      className: 'Class 1 (A)',
-      section: 'Section A',
-      room: '101',
-      subject: 'English',
-      duration: '3 Hours',
-      admissionNo: 'AD52371',
-      rollNo: '15',
-      total: 600,
-      percent: 85,
-      grade: 'A',
-      result: 'Pass'
-    });
+    setModalFormData(initialModalFormData);
     setIsModalOpen(true);
   };
 
@@ -140,19 +166,19 @@ export const ExaminationsModule = () => {
     setActiveDropdownId(null);
     setModalFormData({
       name: item.name || item.exam || '',
-      date: item.date || '05 Jun 2015',
-      startTime: item.startTime || '10:00 AM',
-      endTime: item.endTime || '01:00 PM',
+      date: toInputDate(item.date),
+      startTime: toInputTime(item.startTime),
+      endTime: toInputTime(item.endTime),
       status: item.status || 'Active',
       className: item.className || 'Class 1 (A)',
-      section: 'Section A',
-      room: item.room || '101',
+      section: item.section || 'Section A',
+      room: item.room || '',
       subject: item.subject || 'English',
-      duration: item.duration || '3 Hours',
-      admissionNo: item.admissionNo || 'AD52365',
-      rollNo: item.rollNo || '12',
-      total: item.total || 600,
-      percent: item.percent || 85,
+      duration: item.duration || '',
+      admissionNo: item.admissionNo || '',
+      rollNo: item.rollNo || '',
+      total: item.total ?? '',
+      percent: item.percent ?? '',
       grade: item.grade || 'A',
       result: item.result || 'Pass'
     });
@@ -198,67 +224,67 @@ export const ExaminationsModule = () => {
         if (currentSubTab === 'exam') {
           const updated = await examService.exams.update(id, {
             name: modalFormData.name,
-            date: modalFormData.date,
-            startTime: modalFormData.startTime,
-            endTime: modalFormData.endTime,
-            status: modalFormData.status
+            date: modalFormData.date || '',
+            startTime: formatTimeForDisplay(modalFormData.startTime) || '',
+            endTime: formatTimeForDisplay(modalFormData.endTime) || '',
+            status: modalFormData.status || 'Active'
           });
           setExams((prev) => prev.map((ex) => (ex.id === id ? { ...ex, ...updated } : ex)));
         } else if (currentSubTab === 'schedule') {
           const updated = await examService.schedules.update(id, {
-            className: modalFormData.className,
-            subject: modalFormData.subject,
-            date: modalFormData.date,
-            startTime: modalFormData.startTime,
-            endTime: modalFormData.endTime,
-            duration: modalFormData.duration,
-            room: modalFormData.room
+            className: modalFormData.className || '',
+            subject: modalFormData.subject || '',
+            date: modalFormData.date || '',
+            startTime: formatTimeForDisplay(modalFormData.startTime) || '',
+            endTime: formatTimeForDisplay(modalFormData.endTime) || '',
+            duration: modalFormData.duration || '',
+            room: modalFormData.room || ''
           });
           setSchedules((prev) => prev.map((sc) => (sc.id === id ? { ...sc, ...updated } : sc)));
         } else if (currentSubTab === 'result') {
           const updated = await examService.results.update(id, {
             name: modalFormData.name,
-            admissionNo: modalFormData.admissionNo,
-            rollNo: modalFormData.rollNo,
-            className: modalFormData.className,
-            exam: modalFormData.subject,
-            total: modalFormData.total,
-            percent: modalFormData.percent,
-            grade: modalFormData.grade,
-            result: modalFormData.result
+            admissionNo: modalFormData.admissionNo || '',
+            rollNo: modalFormData.rollNo || '',
+            className: modalFormData.className || '',
+            exam: modalFormData.subject || 'Exam',
+            total: modalFormData.total || '',
+            percent: modalFormData.percent || '',
+            grade: modalFormData.grade || 'A',
+            result: modalFormData.result || 'Pass'
           });
           setResults((prev) => prev.map((rs) => (rs.id === id ? { ...rs, ...updated } : rs)));
         }
       } else {
         if (currentSubTab === 'exam') {
           const created = await examService.exams.create({
-            name: modalFormData.name || 'New Exam',
-            date: modalFormData.date || '05 Jun 2015',
-            startTime: modalFormData.startTime || '10:00 AM',
-            endTime: modalFormData.endTime || '01:00 PM',
-            status: modalFormData.status
+            name: modalFormData.name,
+            date: modalFormData.date || '',
+            startTime: formatTimeForDisplay(modalFormData.startTime) || '',
+            endTime: formatTimeForDisplay(modalFormData.endTime) || '',
+            status: modalFormData.status || 'Active'
           });
           setExams((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         } else if (currentSubTab === 'schedule') {
           const created = await examService.schedules.create({
             className: modalFormData.className || 'Class 1 (A)',
             subject: modalFormData.subject || 'English',
-            date: modalFormData.date || '05 Jun 2015',
-            startTime: modalFormData.startTime || '10:00 AM',
-            endTime: modalFormData.endTime || '01:00 PM',
-            duration: modalFormData.duration || '3 hrs',
-            room: modalFormData.room || '101'
+            date: modalFormData.date || '',
+            startTime: formatTimeForDisplay(modalFormData.startTime) || '',
+            endTime: formatTimeForDisplay(modalFormData.endTime) || '',
+            duration: modalFormData.duration || '',
+            room: modalFormData.room || ''
           });
           setSchedules((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         } else if (currentSubTab === 'result') {
           const created = await examService.results.create({
-            admissionNo: modalFormData.admissionNo || 'AD52372',
-            name: modalFormData.name || 'New Student Result',
-            rollNo: modalFormData.rollNo || '21',
+            admissionNo: modalFormData.admissionNo || '',
+            name: modalFormData.name || '',
+            rollNo: modalFormData.rollNo || '',
             className: modalFormData.className || 'Class 1 (A)',
-            exam: 'Monthly Test',
-            total: modalFormData.total || 620,
-            percent: modalFormData.percent || 88,
+            exam: modalFormData.subject || 'Exam',
+            total: modalFormData.total || '',
+            percent: modalFormData.percent || '',
             grade: modalFormData.grade || 'A',
             result: modalFormData.result || 'Pass'
           });
@@ -770,10 +796,14 @@ export const ExaminationsModule = () => {
                         Exam Date
                       </label>
                       <input
-                        type="text"
-                        placeholder="dd/mm/yyyy"
-                        value={modalFormData.date}
+                        type="date"
+                        value={modalFormData.date || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, date: e.target.value })}
+                        onClick={(e) => {
+                          if (typeof e.target.showPicker === 'function') {
+                            try { e.target.showPicker(); } catch (_) {}
+                          }
+                        }}
                         style={inputStyle}
                       />
                     </div>
@@ -783,10 +813,14 @@ export const ExaminationsModule = () => {
                         Start Time
                       </label>
                       <input
-                        type="text"
-                        placeholder="dd/mm/yyyy"
-                        value={modalFormData.startTime}
+                        type="time"
+                        value={modalFormData.startTime || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, startTime: e.target.value })}
+                        onClick={(e) => {
+                          if (typeof e.target.showPicker === 'function') {
+                            try { e.target.showPicker(); } catch (_) {}
+                          }
+                        }}
                         style={inputStyle}
                       />
                     </div>
@@ -798,10 +832,14 @@ export const ExaminationsModule = () => {
                         End Time
                       </label>
                       <input
-                        type="text"
-                        placeholder="dd/mm/yyyy"
-                        value={modalFormData.endTime}
+                        type="time"
+                        value={modalFormData.endTime || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, endTime: e.target.value })}
+                        onClick={(e) => {
+                          if (typeof e.target.showPicker === 'function') {
+                            try { e.target.showPicker(); } catch (_) {}
+                          }
+                        }}
                         style={inputStyle}
                       />
                     </div>
@@ -868,16 +906,13 @@ export const ExaminationsModule = () => {
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                         Room
                       </label>
-                      <select
-                        value={modalFormData.room}
+                      <input
+                        type="text"
+                        placeholder="e.g. Room 101"
+                        value={modalFormData.room || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, room: e.target.value })}
                         style={inputStyle}
-                      >
-                        <option value="101">101</option>
-                        <option value="102">102</option>
-                        <option value="103">103</option>
-                        <option value="104">104</option>
-                      </select>
+                      />
                     </div>
 
                     <div style={{ flex: 1 }}>
@@ -904,10 +939,14 @@ export const ExaminationsModule = () => {
                         Exam Date
                       </label>
                       <input
-                        type="text"
-                        placeholder="dd/mm/yyyy"
-                        value={modalFormData.date}
+                        type="date"
+                        value={modalFormData.date || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, date: e.target.value })}
+                        onClick={(e) => {
+                          if (typeof e.target.showPicker === 'function') {
+                            try { e.target.showPicker(); } catch (_) {}
+                          }
+                        }}
                         style={inputStyle}
                       />
                     </div>
@@ -917,10 +956,14 @@ export const ExaminationsModule = () => {
                         Start Time
                       </label>
                       <input
-                        type="text"
-                        placeholder="dd/mm/yyyy"
-                        value={modalFormData.startTime}
+                        type="time"
+                        value={modalFormData.startTime || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, startTime: e.target.value })}
+                        onClick={(e) => {
+                          if (typeof e.target.showPicker === 'function') {
+                            try { e.target.showPicker(); } catch (_) {}
+                          }
+                        }}
                         style={inputStyle}
                       />
                     </div>
@@ -932,10 +975,14 @@ export const ExaminationsModule = () => {
                         End Time
                       </label>
                       <input
-                        type="text"
-                        placeholder="dd/mm/yyyy"
-                        value={modalFormData.endTime}
+                        type="time"
+                        value={modalFormData.endTime || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, endTime: e.target.value })}
+                        onClick={(e) => {
+                          if (typeof e.target.showPicker === 'function') {
+                            try { e.target.showPicker(); } catch (_) {}
+                          }
+                        }}
                         style={inputStyle}
                       />
                     </div>
@@ -946,8 +993,8 @@ export const ExaminationsModule = () => {
                       </label>
                       <input
                         type="text"
-                        placeholder="3 Hours"
-                        value={modalFormData.duration}
+                        placeholder="e.g. 3 Hours"
+                        value={modalFormData.duration || ''}
                         onChange={(e) => setModalFormData({ ...modalFormData, duration: e.target.value })}
                         style={inputStyle}
                       />
@@ -1339,5 +1386,6 @@ const inputStyle = {
   fontSize: '0.875rem',
   outline: 'none',
   fontFamily: 'var(--font-sans)',
-  transition: 'border-color 0.2s ease'
+  transition: 'border-color 0.2s ease',
+  colorScheme: 'light dark'
 };
