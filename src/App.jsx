@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
+import { ToastProvider } from './context/ToastContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { authStorage } from './services/api';
@@ -142,7 +143,9 @@ export default function App() {
 
   return (
     <ThemeProvider>
-      {isAuthenticated ? <MainLayout onLogout={handleLogout} /> : <LoginScreen onLogin={() => setIsAuthenticated(true)} />}
+      <ToastProvider>
+        {isAuthenticated ? <MainLayout onLogout={handleLogout} /> : <LoginScreen onLogin={() => setIsAuthenticated(true)} />}
+      </ToastProvider>
     </ThemeProvider>
   );
 }

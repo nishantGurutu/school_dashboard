@@ -21,6 +21,7 @@ import { classService } from '../../services/classService';
 import { subjectService } from '../../services/subjectService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
+import { useToast } from '../../context/ToastContext';
 // Utility helpers for Date and Time inputs
 const toInputDate = (dateStr) => {
   if (!dateStr) return '';
@@ -84,6 +85,7 @@ const initialModalFormData = {
 };
 
 export const ExaminationsModule = () => {
+  const toast = useToast();
   const { activeTab, setActiveTab } = useTheme();
 
   const getSubTabFromActiveTab = () => {
@@ -219,7 +221,9 @@ export const ExaminationsModule = () => {
         await examService.results.remove(id);
         setResults((prev) => prev.filter((item) => item.id !== id));
       }
+      toast.info('Item deleted successfully', 'Examinations');
     } catch (e) {
+      toast.error(e.message || 'Failed to delete item', 'Examinations');
       setError(e.message || 'Failed to delete item');
     }
   };
@@ -272,6 +276,7 @@ export const ExaminationsModule = () => {
           });
           setResults((prev) => prev.map((rs) => (rs.id === id ? { ...rs, ...updated } : rs)));
         }
+        toast.success('Updated successfully and synced to Mobile App!', 'Examinations');
       } else {
         if (currentSubTab === 'exam') {
           const created = await examService.exams.create({
@@ -309,11 +314,13 @@ export const ExaminationsModule = () => {
           });
           setResults((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         }
+        toast.success('Created successfully and synced to Mobile App!', 'Examinations');
       }
 
       setIsModalOpen(false);
       setEditingItem(null);
     } catch (e) {
+      toast.error(e.message || 'Failed to save item', 'Examinations');
       setError(e.message || 'Failed to save item');
     } finally {
       savingRef.current = false;

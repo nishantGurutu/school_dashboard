@@ -27,6 +27,31 @@ export const Sidebar = () => {
   const { activeTab, setActiveTab, isSidebarCollapsed } = useTheme();
   const [openSubMenu, setOpenSubMenu] = useState('classes'); // Default open classes sub-menu
   const currentUser = authStorage.getUser();
+  const rawRole = (currentUser?.role || currentUser?.userType || 'MASTER_ADMIN').toString().toUpperCase();
+
+  // Normalize logged in role for granular dashboard permissions
+  let normalizedRole = 'SUPER_ADMIN';
+  if (rawRole.includes('SUPER') || rawRole.includes('MASTER') || rawRole === 'ADMIN') {
+    normalizedRole = 'SUPER_ADMIN';
+  } else if (rawRole.includes('PRINCIPAL')) {
+    normalizedRole = 'PRINCIPAL';
+  } else if (rawRole.includes('TEACHER')) {
+    normalizedRole = 'TEACHER';
+  } else if (rawRole.includes('ACCOUNT') || rawRole.includes('FINANCE')) {
+    normalizedRole = 'ACCOUNTANT';
+  } else if (rawRole.includes('LIBRAR')) {
+    normalizedRole = 'LIBRARIAN';
+  }
+
+  const roleModuleMap = {
+    SUPER_ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice'],
+    PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'notice'],
+    TEACHER: ['dashboard', 'students', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'notice'],
+    ACCOUNTANT: ['dashboard', 'students', 'fees', 'accounts', 'hrm', 'holidays', 'notice'],
+    LIBRARIAN: ['dashboard', 'library', 'holidays', 'notice']
+  };
+
+  const allowedKeys = roleModuleMap[normalizedRole] || roleModuleMap.SUPER_ADMIN;
 
   const menuItems = [
     { key: 'dashboard', label: 'Dashboard', icon: Home, hasSub: true },
@@ -119,6 +144,8 @@ export const Sidebar = () => {
     { key: 'hrm', label: 'HRM', icon: UserCog, hasSub: true },
     { key: 'notice', label: 'Notice Board', icon: BookMarked, hasSub: false }
   ];
+
+  const visibleMenuItems = menuItems.filter(item => allowedKeys.includes(item.key));
 
   const handleParentNavClick = (item) => {
     if (item.subItems) {
@@ -252,7 +279,9 @@ export const Sidebar = () => {
             />
             <div>
               <div style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1.2 }}>{(currentUser && currentUser.name) || 'Admin'}</div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{(currentUser && currentUser.role) || 'Admin'}</div>
+              <div style={{ fontSize: '0.7rem', color: '#0d9488', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                {normalizedRole.replace('_', ' ')}
+              </div>
             </div>
           </div>
           <ChevronRight size={16} color="var(--text-muted)" />
@@ -261,7 +290,7 @@ export const Sidebar = () => {
 
       {/* Sidebar Function List */}
       <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-        {menuItems.map((item) => {
+        {visibleMenuItems.map((item) => {
           const IconComp = item.icon;
           const isActive = isItemActive(item);
           const isSubMenuOpen = openSubMenu === item.key;
