@@ -14,7 +14,8 @@ import {
   Layers,
   BookOpen,
   GraduationCap,
-  DoorOpen
+  DoorOpen,
+  Calendar
 } from 'lucide-react';
 import { classService } from '../../services/classService';
 import { useApiAction } from '../../hooks/useApiAction';
@@ -460,6 +461,26 @@ export const ClassesModule = () => {
             borderRadius: 'var(--radius-md)',
             border: '1px solid var(--border-light)'
           }}>
+            <button
+              onClick={() => setActiveTab('classes-timetable')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: 'var(--text-secondary)',
+                fontWeight: 500,
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Calendar size={15} /> Timetable
+            </button>
+
             <button
               onClick={() => handleSubTabChange('section')}
               style={{

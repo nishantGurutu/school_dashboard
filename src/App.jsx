@@ -23,6 +23,7 @@ import { AccountsModule } from './components/modules/AccountsModule';
 import { HrmModule } from './components/modules/HrmModule';
 import { NoticeBoardModule } from './components/modules/NoticeBoardModule';
 import { HolidaysModule } from './components/modules/HolidaysModule';
+import { TimetableModule } from './components/modules/TimetableModule';
 
 import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerModal';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -40,6 +41,10 @@ const MainLayout = ({ onLogout }) => {
         return <TeachersModule />;
       case 'guardian':
         return <GuardianModule />;
+      case 'classes-timetable':
+      case 'academic-timetable':
+      case 'timetable':
+        return <TimetableModule />;
       case 'classes':
       case 'classes-section':
       case 'classes-subjects':

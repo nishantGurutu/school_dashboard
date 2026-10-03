@@ -35,10 +35,11 @@ export const Sidebar = () => {
     { key: 'guardian', label: 'Guardian', icon: User, hasSub: true },
     {
       key: 'classes',
-      label: 'Classes',
+      label: 'Academic',
       icon: ListOrdered,
       hasSub: true,
       subItems: [
+        { key: 'classes-timetable', label: 'Timetable' },
         { key: 'classes-section', label: 'Section' },
         { key: 'classes-subjects', label: 'Subjects' },
         { key: 'classes-list', label: 'Class List' },
@@ -126,7 +127,7 @@ export const Sidebar = () => {
       } else {
         setOpenSubMenu(item.key);
         if (item.key === 'classes' && !activeTab.startsWith('classes')) {
-          setActiveTab('classes-section');
+          setActiveTab('classes-timetable');
         }
         if (item.key === 'examinations' && !activeTab.startsWith('examinations')) {
           setActiveTab('examinations-exam');

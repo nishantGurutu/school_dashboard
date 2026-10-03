@@ -59,6 +59,18 @@ export const API_ENDPOINTS = {
     BY_ID: (id) => `/staff/${id}`
   },
 
+  // Subjects Management
+  SUBJECTS: {
+    BASE: '/classes/subjects',
+    BY_ID: (id) => `/classes/subjects/${id}`
+  },
+
+  // Sections Management
+  SECTIONS: {
+    BASE: '/classes/sections',
+    BY_ID: (id) => `/classes/sections/${id}`
+  },
+
   // School Classes, Sections, Subjects & Classrooms
   CLASSES: {
     CLASSES: '/classes/classes',
@@ -69,6 +81,14 @@ export const API_ENDPOINTS = {
     SUBJECT_BY_ID: (id) => `/classes/subjects/${id}`,
     ROOMS: '/classes/rooms',
     ROOM_BY_ID: (id) => `/classes/rooms/${id}`
+  },
+
+  // Academic Timetable Management
+  TIMETABLE: {
+    BASE: '/timetable',
+    BY_ID: (id) => `/timetable/${id}`,
+    BY_CLASS_SECTION: (className, section) => `/timetable/class/${encodeURIComponent(className)}/section/${encodeURIComponent(section)}`,
+    BY_TEACHER: (teacherName) => `/timetable/teacher/${encodeURIComponent(teacherName)}`
   },
 
   // Examinations, Schedules & Results
