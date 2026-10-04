@@ -80,7 +80,9 @@ export const API_ENDPOINTS = {
     SUBJECTS: '/classes/subjects',
     SUBJECT_BY_ID: (id) => `/classes/subjects/${id}`,
     ROOMS: '/classes/rooms',
-    ROOM_BY_ID: (id) => `/classes/rooms/${id}`
+    ROOM_BY_ID: (id) => `/classes/rooms/${id}`,
+    DEPARTMENTS: '/classes/departments',
+    DEPARTMENT_BY_ID: (id) => `/classes/departments/${id}`
   },
 
   // Academic Timetable Management

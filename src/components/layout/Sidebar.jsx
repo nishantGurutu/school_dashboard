@@ -65,6 +65,7 @@ export const Sidebar = () => {
       hasSub: true,
       subItems: [
         { key: 'classes-timetable', label: 'Timetable' },
+        { key: 'classes-department', label: 'Department' },
         { key: 'classes-section', label: 'Section' },
         { key: 'classes-subjects', label: 'Subjects' },
         { key: 'classes-list', label: 'Class List' },
@@ -141,7 +142,7 @@ export const Sidebar = () => {
         { key: 'accounts-transaction', label: 'Transaction' }
       ]
     },
-    { key: 'hrm', label: 'HRM', icon: UserCog, hasSub: true },
+    { key: 'hrm', label: 'Staff & HRM', icon: UserCog, hasSub: false },
     { key: 'notice', label: 'Notice Board', icon: BookMarked, hasSub: false }
   ];
 

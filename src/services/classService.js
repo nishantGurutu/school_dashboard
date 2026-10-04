@@ -33,6 +33,14 @@ const roomsEndpoints = {
   remove: (id) => NetworkService.delete(API_ENDPOINTS.CLASSES.ROOM_BY_ID(id))
 };
 
+const departmentsEndpoints = {
+  list: () => NetworkService.get(API_ENDPOINTS.CLASSES.DEPARTMENTS),
+  get: (id) => NetworkService.get(API_ENDPOINTS.CLASSES.DEPARTMENT_BY_ID(id)),
+  create: (data) => NetworkService.post(API_ENDPOINTS.CLASSES.DEPARTMENTS, data),
+  update: (id, data) => NetworkService.put(API_ENDPOINTS.CLASSES.DEPARTMENT_BY_ID(id), data),
+  remove: (id) => NetworkService.delete(API_ENDPOINTS.CLASSES.DEPARTMENT_BY_ID(id))
+};
+
 export const classService = {
   // Direct methods
   listClasses: classesEndpoints.list,
@@ -59,12 +67,19 @@ export const classService = {
   updateRoom: roomsEndpoints.update,
   deleteRoom: roomsEndpoints.remove,
 
+  listDepartments: departmentsEndpoints.list,
+  getDepartment: departmentsEndpoints.get,
+  createDepartment: departmentsEndpoints.create,
+  updateDepartment: departmentsEndpoints.update,
+  deleteDepartment: departmentsEndpoints.remove,
+
   // Sub-namespace objects for UI components compatibility
   classes: classesEndpoints,
   list: classesEndpoints, // Alias for backward compatibility
   sections: sectionsEndpoints,
   subjects: subjectsEndpoints,
-  rooms: roomsEndpoints
+  rooms: roomsEndpoints,
+  departments: departmentsEndpoints
 };
 
 export default classService;

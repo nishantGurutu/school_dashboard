@@ -6,7 +6,9 @@ import {
   EyeOff,
   ArrowLeft,
   Save,
-  UserCheck
+  UserCheck,
+  ShieldCheck,
+  Users
 } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
 import { classService } from '../../services/classService';
@@ -82,8 +84,21 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     return list;
   }, [classesList]);
 
+  const resolveInitialType = (data) => {
+    if (!data) return 'Teacher';
+    const rawType = (data.type || data.memberType || data.role || data.designation || '').toString().toLowerCase();
+    if (rawType.includes('princip')) return 'Principal';
+    if (rawType.includes('staff')) return 'Staff';
+    return 'Teacher';
+  };
+
   // Form State containing all fields (teacherId preserved in state for backend payload, removed from form inputs)
   const [formData, setFormData] = useState({
+    // Account Type / Role
+    type: resolveInitialType(initialData),
+    department: initialData?.department || '',
+    designation: initialData?.designation || '',
+
     // Personal Info
     teacherId: initialData?.employeeId || initialData?.id || '',
     fullName: initialData?.name || initialData?.fullName || '',
@@ -145,6 +160,9 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     if (initialData) {
       setFormData((prev) => ({
         ...prev,
+        type: resolveInitialType(initialData),
+        department: initialData.department || prev.department,
+        designation: initialData.designation || prev.designation,
         teacherId: initialData.employeeId || initialData.id || prev.teacherId,
         fullName: initialData.name || initialData.fullName || prev.fullName,
         subject: initialData.subject && initialData.subject !== 'All Subjects' ? initialData.subject : prev.subject,
@@ -157,6 +175,44 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       }));
     }
   }, [initialData]);
+
+  const handleTypeChange = (newType) => {
+    setFormData((prev) => {
+      const updated = { ...prev, type: newType };
+      if (newType === 'Principal') {
+        if (!prev.designation || prev.designation === 'Teacher' || prev.designation === 'Staff' || prev.designation === 'Administrative Staff') {
+          updated.designation = 'Principal';
+        }
+        if (!prev.department || prev.department === 'Academic' || prev.department === 'General Faculty' || prev.department === 'Mathematics') {
+          updated.department = 'Administration';
+        }
+        if (!prev.subject) {
+          updated.subject = 'Administration';
+        }
+      } else if (newType === 'Staff') {
+        if (!prev.designation || prev.designation === 'Teacher' || prev.designation === 'Principal') {
+          updated.designation = 'Administrative Staff';
+        }
+        if (!prev.department || prev.department === 'Academic' || prev.department === 'General Faculty' || prev.department === 'Mathematics') {
+          updated.department = 'Administration';
+        }
+        if (!prev.subject) {
+          updated.subject = 'General';
+        }
+      } else {
+        if (prev.designation === 'Principal' || prev.designation === 'Administrative Staff' || prev.designation === 'Staff') {
+          updated.designation = 'Teacher';
+        }
+        if (prev.department === 'Administration') {
+          updated.department = 'Academic';
+        }
+        if (prev.subject === 'Administration' || prev.subject === 'General') {
+          updated.subject = '';
+        }
+      }
+      return updated;
+    });
+  };
 
   const handleChange = (field, value) => {
     setFormData((prev) => {
@@ -207,6 +263,9 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
   const handleReset = () => {
     if (initialData) {
       setFormData({
+        type: resolveInitialType(initialData),
+        department: initialData?.department || '',
+        designation: initialData?.designation || '',
         teacherId: initialData.employeeId || initialData.id || '',
         fullName: initialData.name || initialData.fullName || '',
         subject: initialData.subject && initialData.subject !== 'All Subjects' ? initialData.subject : '',
@@ -222,7 +281,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         joinDate: initialData.joiningDate || initialData.joinDate || '',
         phone: initialData.phone && initialData.phone !== 'N/A' ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : '',
         email: initialData.email && initialData.email !== 'N/A' ? initialData.email : '',
-        experience: initialData.experience || (initialData.experienceYears ? `${initialData.experienceYears} Years` : ''),
+        experience: initialData.experience || (initialData?.experienceYears ? `${initialData.experienceYears} Years` : ''),
         qualification: initialData.qualification || '',
         teacherPhoto: null,
         bloodGroup: initialData.bloodGroup || 'A+',
@@ -248,6 +307,9 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       });
     } else {
       setFormData({
+        type: 'Teacher',
+        department: '',
+        designation: '',
         teacherId: '',
         fullName: '',
         subject: '',
@@ -299,34 +361,229 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       >
         <div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-            Dashboard / Teacher / <strong style={{ color: 'var(--text-primary)' }}>{isEditMode ? 'Edit Teacher' : 'Add New Teacher'}</strong>
+            Dashboard / Faculty & Staff / <strong style={{ color: 'var(--text-primary)' }}>{isEditMode ? `Edit ${formData.type}` : `Add New ${formData.type}`}</strong>
           </div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>
-            {isEditMode ? `Edit Teacher Profile (${initialData?.name || 'Teacher'})` : 'Add New Teacher'}
+            {isEditMode ? `Edit ${formData.type} Profile (${initialData?.name || formData.fullName || formData.type})` : `Add New ${formData.type}`}
           </h2>
         </div>
 
         <button className="btn btn-secondary" onClick={onBack} style={{ padding: '8px 16px' }}>
-          <ArrowLeft size={16} /> Back to Teacher Directory
+          <ArrowLeft size={16} /> Back to Faculty Directory
         </button>
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+        {/* Account Type / Role Selection (Teacher, Principal, Staff) */}
+        <div
+          className="card animate-fade-in"
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px',
+            border: '2px solid var(--border-color)',
+            borderRadius: '12px',
+            padding: '20px'
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                Account Type (Role) <span style={{ color: '#ef4444' }}>*</span>
+              </h3>
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                Admin selects type: <strong>1. Teacher</strong> (faculty), <strong>2. Principal</strong> (school head), or <strong>3. Staff</strong> (administrative).
+              </p>
+            </div>
+
+            <div style={{ minWidth: '190px' }}>
+              <select
+                id="member-type-select"
+                value={formData.type}
+                onChange={(e) => handleTypeChange(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  fontWeight: 700,
+                  borderColor: formData.type === 'Principal' ? '#8b5cf6' : formData.type === 'Staff' ? '#10b981' : '#3b82f6',
+                  color: formData.type === 'Principal' ? '#7c3aed' : formData.type === 'Staff' ? '#059669' : '#2563eb'
+                }}
+              >
+                <option value="Teacher">1. Teacher</option>
+                <option value="Principal">2. Principal</option>
+                <option value="Staff">3. Staff</option>
+              </select>
+            </div>
+          </div>
+
+          {/* 3 Interactive Cards for Visual Selection */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+              gap: '12px'
+            }}
+          >
+            {/* 1. Teacher */}
+            <div
+              id="type-card-teacher"
+              onClick={() => handleTypeChange('Teacher')}
+              style={{
+                cursor: 'pointer',
+                padding: '14px 16px',
+                borderRadius: '10px',
+                border: formData.type === 'Teacher' ? '2px solid #3b82f6' : '1px solid var(--border-color)',
+                backgroundColor: formData.type === 'Teacher' ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-app)',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  backgroundColor: formData.type === 'Teacher' ? '#3b82f6' : 'rgba(59, 130, 246, 0.1)',
+                  color: formData.type === 'Teacher' ? '#ffffff' : '#3b82f6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <UserCheck size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <strong style={{ fontSize: '0.95rem', color: formData.type === 'Teacher' ? '#1d4ed8' : 'var(--text-primary)' }}>
+                    1. Teacher
+                  </strong>
+                  {formData.type === 'Teacher' && (
+                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#3b82f6', color: '#fff', fontWeight: 700 }}>
+                      Selected
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Teaching faculty & subject assignments
+                </div>
+              </div>
+            </div>
+
+            {/* 2. Principal */}
+            <div
+              id="type-card-principal"
+              onClick={() => handleTypeChange('Principal')}
+              style={{
+                cursor: 'pointer',
+                padding: '14px 16px',
+                borderRadius: '10px',
+                border: formData.type === 'Principal' ? '2px solid #8b5cf6' : '1px solid var(--border-color)',
+                backgroundColor: formData.type === 'Principal' ? 'rgba(139, 92, 246, 0.08)' : 'var(--bg-app)',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  backgroundColor: formData.type === 'Principal' ? '#8b5cf6' : 'rgba(139, 92, 246, 0.1)',
+                  color: formData.type === 'Principal' ? '#ffffff' : '#8b5cf6',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <ShieldCheck size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <strong style={{ fontSize: '0.95rem', color: formData.type === 'Principal' ? '#6d28d9' : 'var(--text-primary)' }}>
+                    2. Principal
+                  </strong>
+                  {formData.type === 'Principal' && (
+                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#8b5cf6', color: '#fff', fontWeight: 700 }}>
+                      Selected
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  School head & executive administration
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Staff */}
+            <div
+              id="type-card-staff"
+              onClick={() => handleTypeChange('Staff')}
+              style={{
+                cursor: 'pointer',
+                padding: '14px 16px',
+                borderRadius: '10px',
+                border: formData.type === 'Staff' ? '2px solid #10b981' : '1px solid var(--border-color)',
+                backgroundColor: formData.type === 'Staff' ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-app)',
+                transition: 'all 0.2s ease',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '12px'
+              }}
+            >
+              <div
+                style={{
+                  width: '40px',
+                  height: '40px',
+                  borderRadius: '8px',
+                  backgroundColor: formData.type === 'Staff' ? '#10b981' : 'rgba(16, 185, 129, 0.1)',
+                  color: formData.type === 'Staff' ? '#ffffff' : '#10b981',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}
+              >
+                <Users size={20} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <strong style={{ fontSize: '0.95rem', color: formData.type === 'Staff' ? '#047857' : 'var(--text-primary)' }}>
+                    3. Staff
+                  </strong>
+                  {formData.type === 'Staff' && (
+                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#10b981', color: '#fff', fontWeight: 700 }}>
+                      Selected
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                  Administrative & operations personnel
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* Section 1: Personal Info */}
         <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-            Personal Info
+            Personal Info ({formData.type})
           </h3>
 
           <div className="grid-responsive">
-            {/* Row 1: Full Name, Dynamic Subject, Dynamic Class (Teacher ID removed) */}
+            {/* Row 1: Full Name, Designation, Department */}
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Full Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <input
                 type="text"
-                placeholder="Enter your Full Name"
+                placeholder="Enter Full Name"
                 value={formData.fullName}
                 onChange={(e) => handleChange('fullName', e.target.value)}
                 style={inputStyle}
@@ -336,14 +593,43 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Subject
+                Designation / Position
+              </label>
+              <input
+                type="text"
+                placeholder={formData.type === 'Principal' ? 'Principal' : (formData.type === 'Staff' ? 'Administrative Staff' : 'Teacher')}
+                value={formData.designation}
+                onChange={(e) => handleChange('designation', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            <div className="col-span-4">
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                Department
+              </label>
+              <input
+                type="text"
+                placeholder={formData.type === 'Teacher' ? 'Academic / Science / Arts' : 'Administration'}
+                value={formData.department}
+                onChange={(e) => handleChange('department', e.target.value)}
+                style={inputStyle}
+              />
+            </div>
+
+            {/* Row 2: Subject & Class */}
+            <div className="col-span-6">
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                {formData.type === 'Teacher' ? 'Subject Specialization' : 'Primary Domain / Subject'}
               </label>
               <select
                 value={formData.subject}
                 onChange={(e) => handleChange('subject', e.target.value)}
                 style={inputStyle}
               >
-                <option value="">{isLoadingDropdowns ? 'Loading subjects...' : 'Select Subject'}</option>
+                <option value="">{isLoadingDropdowns ? 'Loading subjects...' : 'Select Subject (Optional)'}</option>
+                {formData.type !== 'Teacher' && <option value="Administration">Administration</option>}
+                {formData.type !== 'Teacher' && <option value="General">General</option>}
                 {availableSubjects.map((sub) => (
                   <option key={sub.id || sub.name} value={sub.name}>
                     {sub.name} {sub.code ? `(${sub.code})` : ''}
@@ -355,16 +641,16 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               </select>
             </div>
 
-            <div className="col-span-4">
+            <div className="col-span-6">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Class
+                {formData.type === 'Teacher' ? 'Assigned Class' : 'Assigned Class / Division (Optional)'}
               </label>
               <select
                 value={formData.assignedClass}
                 onChange={(e) => handleChange('assignedClass', e.target.value)}
                 style={inputStyle}
               >
-                <option value="">{isLoadingDropdowns ? 'Loading classes...' : 'Select Class'}</option>
+                <option value="">{isLoadingDropdowns ? 'Loading classes...' : 'Select Class (Optional)'}</option>
                 {availableClasses.map((cls) => (
                   <option key={cls.id || cls.label} value={cls.label}>
                     {cls.label}
@@ -562,7 +848,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
             <div className="col-span-6">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Teacher Photo <span style={{ color: '#ef4444' }}>*</span>
+                {formData.type} Photo <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <DropzoneArea placeholder="Drag & drop a file here or click" />
             </div>
@@ -951,7 +1237,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               gap: '8px'
             }}
           >
-            {isSaving ? (<><Spinner size={16} color="#ffffff" /> Saving...</>) : (isEditMode ? 'Update Teacher Details' : 'Save Changes')}
+            {isSaving ? (<><Spinner size={16} color="#ffffff" /> Saving...</>) : (isEditMode ? `Update ${formData.type} Details` : `Create ${formData.type}`)}
           </button>
         </div>
       </form>

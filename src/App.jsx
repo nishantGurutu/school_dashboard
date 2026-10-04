@@ -47,6 +47,10 @@ const MainLayout = ({ onLogout }) => {
       case 'timetable':
         return <TimetableModule />;
       case 'classes':
+      case 'classes-department':
+      case 'classes-departments':
+      case 'department':
+      case 'departments':
       case 'classes-section':
       case 'classes-subjects':
       case 'classes-list':

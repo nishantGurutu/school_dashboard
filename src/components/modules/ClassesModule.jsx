@@ -15,7 +15,9 @@ import {
   BookOpen,
   GraduationCap,
   DoorOpen,
-  Calendar
+  Calendar,
+  Building2,
+  Eye
 } from 'lucide-react';
 import { classService } from '../../services/classService';
 import { useApiAction } from '../../hooks/useApiAction';
@@ -24,12 +26,13 @@ import { Spinner } from '../ui/Spinner';
 export const ClassesModule = () => {
   const { activeTab, setActiveTab } = useTheme();
 
-  // Determine current active sub-tab (section, subjects, classList, classRoom)
+  // Determine current active sub-tab (department, section, subjects, classList, classRoom)
   const getSubTabFromActiveTab = () => {
+    if (activeTab === 'classes-department' || activeTab === 'classes-departments' || activeTab === 'department' || activeTab === 'departments') return 'department';
     if (activeTab === 'classes-subjects') return 'subjects';
     if (activeTab === 'classes-list') return 'classList';
     if (activeTab === 'classes-room') return 'classRoom';
-    return 'section';
+    return 'department';
   };
 
   const [currentSubTab, setCurrentSubTab] = useState(getSubTabFromActiveTab());
@@ -37,6 +40,8 @@ export const ClassesModule = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [viewingDepartment, setViewingDepartment] = useState(null);
+  const [isDetailsLoading, setIsDetailsLoading] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [activeDropdownId, setActiveDropdownId] = useState(null);
   const [selectedRows, setSelectedRows] = useState([]);
@@ -47,7 +52,8 @@ export const ClassesModule = () => {
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // Data states for 4 sections
+  // Data states for 5 academic sections
+  const [departments, setDepartments] = useState([]);
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [classList, setClassList] = useState([]);
@@ -74,18 +80,21 @@ export const ClassesModule = () => {
     setIsLoading(true);
     setError('');
     try {
-      const [secRes, subRes, clsRes, roomRes] = await Promise.all([
+      const [deptRes, secRes, subRes, clsRes, roomRes] = await Promise.all([
+        classService.departments.list(),
         classService.sections.list(),
         classService.subjects.list(),
         classService.classes.list(),
         classService.rooms.list()
       ]);
 
+      const deptItems = Array.isArray(deptRes) ? deptRes : [];
       const secItems = Array.isArray(secRes) ? secRes : [];
       const subItems = Array.isArray(subRes) ? subRes : [];
       const clsItems = Array.isArray(clsRes) ? clsRes : [];
       const roomItems = Array.isArray(roomRes) ? roomRes : [];
 
+      setDepartments(deptItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
       setSections(secItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
       setSubjects(subItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
       setClassList(clsItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
@@ -105,6 +114,8 @@ export const ClassesModule = () => {
   const [modalFormData, setModalFormData] = useState({
     name: '',
     code: '',
+    headOfDepartment: '',
+    description: '',
     sectionId: '',
     section: '',
     room: '',
@@ -118,6 +129,7 @@ export const ClassesModule = () => {
     setSelectedRows([]);
     setCurrentPage(1);
     setSearchTerm('');
+    if (tabKey === 'department') setActiveTab('classes-department');
     if (tabKey === 'section') setActiveTab('classes-section');
     if (tabKey === 'subjects') setActiveTab('classes-subjects');
     if (tabKey === 'classList') setActiveTab('classes-list');
@@ -139,6 +151,8 @@ export const ClassesModule = () => {
     setModalFormData({
       name: '',
       code: '',
+      headOfDepartment: '',
+      description: '',
       sectionId: defaultSectionId,
       section: defaultSectionName,
       room: '',
@@ -167,6 +181,8 @@ export const ClassesModule = () => {
     setModalFormData({
       name: item.name || item.room || '',
       code: item.code || '',
+      headOfDepartment: item.headOfDepartment || '',
+      description: item.description || '',
       sectionId: secId,
       section: secName,
       room: item.room || item.name || '',
@@ -176,10 +192,31 @@ export const ClassesModule = () => {
     setIsModalOpen(true);
   };
 
+  // View Details (fetches fresh details from Details API GET /api/classes/departments/{id})
+  const handleOpenDetailsModal = async (item) => {
+    setActiveDropdownId(null);
+    setViewingDepartment(item);
+    setIsDetailsLoading(true);
+    try {
+      const detailed = await classService.departments.get(item.id);
+      if (detailed) {
+        setViewingDepartment(detailed);
+      }
+    } catch (e) {
+      console.warn('Using cached department details as fallback:', e);
+    } finally {
+      setIsDetailsLoading(false);
+    }
+  };
+
   const handleDeleteItem = async (id) => {
     setActiveDropdownId(null);
     try {
-      if (currentSubTab === 'section') {
+      if (currentSubTab === 'department') {
+        await classService.departments.remove(id);
+        setDepartments((prev) => prev.filter((item) => item.id !== id).map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+        setSuccessMessage('Department deleted successfully!');
+      } else if (currentSubTab === 'section') {
         await classService.sections.remove(id);
         setSections((prev) => prev.filter((item) => item.id !== id).map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
         setSuccessMessage('Section deleted successfully!');
@@ -208,7 +245,8 @@ export const ClassesModule = () => {
     try {
       setIsLoading(true);
       for (const id of selectedRows) {
-        if (currentSubTab === 'section') await classService.sections.remove(id);
+        if (currentSubTab === 'department') await classService.departments.remove(id);
+        else if (currentSubTab === 'section') await classService.sections.remove(id);
         else if (currentSubTab === 'subjects') await classService.subjects.remove(id);
         else if (currentSubTab === 'classList') await classService.classes.remove(id);
         else if (currentSubTab === 'classRoom') await classService.rooms.remove(id);
@@ -234,7 +272,17 @@ export const ClassesModule = () => {
     try {
       if (editingItem) {
         const id = editingItem.id;
-        if (currentSubTab === 'section') {
+        if (currentSubTab === 'department') {
+          const updated = await classService.departments.update(id, {
+            name: modalFormData.name.trim(),
+            code: modalFormData.code.trim().toUpperCase(),
+            headOfDepartment: modalFormData.headOfDepartment?.trim() || null,
+            description: modalFormData.description?.trim() || null,
+            status: modalFormData.status
+          });
+          setDepartments((prev) => prev.map((d) => (d.id === id ? { ...d, ...updated } : d)));
+          setSuccessMessage('Department updated successfully!');
+        } else if (currentSubTab === 'section') {
           const updated = await classService.sections.update(id, {
             name: modalFormData.name.trim(),
             status: modalFormData.status
@@ -270,7 +318,17 @@ export const ClassesModule = () => {
         }
       } else {
         // Create new item
-        if (currentSubTab === 'section') {
+        if (currentSubTab === 'department') {
+          const created = await classService.departments.create({
+            name: modalFormData.name.trim(),
+            code: modalFormData.code.trim().toUpperCase(),
+            headOfDepartment: modalFormData.headOfDepartment?.trim() || null,
+            description: modalFormData.description?.trim() || null,
+            status: modalFormData.status
+          });
+          setDepartments((prev) => [{ ...created, sl: '01' }, ...prev.map((d, i) => ({ ...d, sl: String(i + 2).padStart(2, '0') }))]);
+          setSuccessMessage('Department created successfully!');
+        } else if (currentSubTab === 'section') {
           const created = await classService.sections.create({
             name: modalFormData.name.trim(),
             status: modalFormData.status
@@ -321,7 +379,11 @@ export const ClassesModule = () => {
     let rows = [];
     let filename = '';
 
-    if (currentSubTab === 'section') {
+    if (currentSubTab === 'department') {
+      headers = ['S.L', 'Department Name', 'Code', 'Head of Department', 'Description', 'Status'];
+      rows = departments.map((d, idx) => [idx + 1, d.name, d.code, d.headOfDepartment || 'N/A', d.description || '', d.status]);
+      filename = 'academic_departments.csv';
+    } else if (currentSubTab === 'section') {
       headers = ['S.L', 'Section Name', 'Status'];
       rows = sections.map((s, idx) => [idx + 1, s.name, s.status]);
       filename = 'school_sections.csv';
@@ -353,6 +415,13 @@ export const ClassesModule = () => {
   // Header Details Config
   const getHeaderInfo = () => {
     switch (currentSubTab) {
+      case 'department':
+        return {
+          title: 'Academic Departments',
+          breadcrumb: 'Dashboard / Academic / Department',
+          addBtnLabel: '+ Add Department',
+          searchPlaceholder: 'Search departments by name, code, HOD...'
+        };
       case 'subjects':
         return {
           title: 'Subjects List',
@@ -389,6 +458,7 @@ export const ClassesModule = () => {
 
   // Current active list & filtered items
   const getCurrentList = () => {
+    if (currentSubTab === 'department') return departments;
     if (currentSubTab === 'section') return sections;
     if (currentSubTab === 'subjects') return subjects;
     if (currentSubTab === 'classList') return classList;
@@ -399,6 +469,15 @@ export const ClassesModule = () => {
 
   const filteredItems = fullList.filter((item) => {
     const q = searchTerm.toLowerCase();
+    if (currentSubTab === 'department') {
+      return (
+        (item.name || '').toLowerCase().includes(q) ||
+        (item.code || '').toLowerCase().includes(q) ||
+        (item.headOfDepartment || '').toLowerCase().includes(q) ||
+        (item.description || '').toLowerCase().includes(q) ||
+        (item.status || '').toLowerCase().includes(q)
+      );
+    }
     if (currentSubTab === 'section') {
       return (item.name || '').toLowerCase().includes(q) || (item.status || '').toLowerCase().includes(q);
     }
@@ -479,6 +558,26 @@ export const ClassesModule = () => {
               }}
             >
               <Calendar size={15} /> Timetable
+            </button>
+
+            <button
+              onClick={() => handleSubTabChange('department')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                backgroundColor: currentSubTab === 'department' ? '#0d9488' : 'transparent',
+                color: currentSubTab === 'department' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: currentSubTab === 'department' ? 700 : 500,
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Building2 size={15} /> Department ({departments.length})
             </button>
 
             <button
@@ -729,6 +828,14 @@ export const ClassesModule = () => {
                 </th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, width: '70px' }}>S.L</th>
 
+                {currentSubTab === 'department' && (
+                  <>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Department Name</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Code</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Head of Department (HOD)</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Description</th>
+                  </>
+                )}
                 {currentSubTab === 'section' && (
                   <th style={{ padding: '12px 16px', fontWeight: 600 }}>Section Name</th>
                 )}
@@ -758,14 +865,14 @@ export const ClassesModule = () => {
             <tbody>
               {isLoading && paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={currentSubTab === 'department' ? 7 : 6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     <Spinner size={24} color="#0d9488" />
                     <div style={{ marginTop: '8px' }}>Loading data from server...</div>
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={currentSubTab === 'department' ? 7 : 6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     No records found. Click <strong>{headerInfo.addBtnLabel}</strong> to add one!
                   </td>
                 </tr>
@@ -790,6 +897,69 @@ export const ClassesModule = () => {
                     <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>
                       {String((currentPage - 1) * rowsPerPage + idx + 1).padStart(2, '0')}
                     </td>
+
+                    {/* Department tab */}
+                    {currentSubTab === 'department' && (
+                      <>
+                        <td style={{ padding: '14px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '8px',
+                              backgroundColor: '#ccfbf1',
+                              color: '#0d9488',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontWeight: 700,
+                              fontSize: '0.85rem'
+                            }}>
+                              <Building2 size={18} />
+                            </div>
+                            <div>
+                              <div
+                                style={{ fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                                onClick={() => handleOpenDetailsModal(row)}
+                                title="Click to view full department details"
+                              >
+                                {row.name}
+                                <span style={{ fontSize: '0.75rem', color: '#0d9488' }}>🔍</span>
+                              </div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                Academic Stream
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ padding: '14px 16px' }}>
+                          <span style={{
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            backgroundColor: 'var(--bg-app)',
+                            border: '1px solid var(--border-color)',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.5px',
+                            color: '#0d9488'
+                          }}>
+                            {row.code}
+                          </span>
+                        </td>
+                        <td style={{ padding: '14px 16px', color: 'var(--text-primary)', fontWeight: 500 }}>
+                          {row.headOfDepartment ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              <span>👤</span> {row.headOfDepartment}
+                            </span>
+                          ) : (
+                            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.8rem' }}>Not Assigned</span>
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.description}>
+                          {row.description || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>}
+                        </td>
+                      </>
+                    )}
 
                     {/* Section tab */}
                     {currentSubTab === 'section' && (
@@ -863,6 +1033,7 @@ export const ClassesModule = () => {
                         busyKey={busyKey}
                         isOpen={activeDropdownId === row.id}
                         onToggle={() => setActiveDropdownId(activeDropdownId === row.id ? null : row.id)}
+                        onViewDetails={currentSubTab === 'department' ? () => handleOpenDetailsModal(row) : null}
                         onEdit={() => handleOpenEditModal(row)}
                         onDelete={() => runAction(`delete-${row.id}`, () => handleDeleteItem(row.id))}
                       />
@@ -980,13 +1151,16 @@ export const ClassesModule = () => {
               <div>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0 }}>
                   {editingItem ? 'Edit ' : 'Add New '}
+                  {currentSubTab === 'department' && 'Department'}
                   {currentSubTab === 'section' && 'Section'}
                   {currentSubTab === 'subjects' && 'Subject'}
                   {currentSubTab === 'classList' && 'Class'}
                   {currentSubTab === 'classRoom' && 'Class Room'}
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                  {currentSubTab === 'classList'
+                  {currentSubTab === 'department'
+                    ? 'Fill out department details, code, and assign Head of Department'
+                    : currentSubTab === 'classList'
                     ? 'Enter class name, choose section from dropdown, and set status'
                     : 'Fill out the details below and click Save'}
                 </p>
@@ -1013,6 +1187,110 @@ export const ClassesModule = () => {
                 <div style={{ padding: '10px 14px', borderRadius: '6px', backgroundColor: '#fee2e2', color: '#dc2626', fontSize: '0.825rem', fontWeight: 600 }}>
                   {error}
                 </div>
+              )}
+
+              {/* 0. Department Form */}
+              {currentSubTab === 'department' && (
+                <>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      Department Name <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Science, Arts & Humanities, Commerce"
+                      value={modalFormData.name}
+                      onChange={(e) => setModalFormData({ ...modalFormData, name: e.target.value })}
+                      style={inputStyle}
+                      required
+                    />
+                    {/* Quick suggestion buttons */}
+                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Quick Presets:</span>
+                      {[
+                        { name: 'Science', code: 'SCI' },
+                        { name: 'Commerce', code: 'COMM' },
+                        { name: 'Arts & Humanities', code: 'ARTS' },
+                        { name: 'Computer Science & IT', code: 'CSIT' },
+                        { name: 'Vocational Studies', code: 'VOC' }
+                      ].map((sug) => (
+                        <button
+                          key={sug.name}
+                          type="button"
+                          onClick={() => setModalFormData({ ...modalFormData, name: sug.name, code: sug.code })}
+                          style={{
+                            background: 'none',
+                            border: '1px dashed var(--border-color)',
+                            borderRadius: '4px',
+                            padding: '2px 8px',
+                            fontSize: '0.72rem',
+                            color: '#0d9488',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          + {sug.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      Department Code <span style={{ color: '#ef4444' }}>*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. SCI, COMM, ARTS, CSIT"
+                      value={modalFormData.code}
+                      onChange={(e) => setModalFormData({ ...modalFormData, code: e.target.value.toUpperCase() })}
+                      style={inputStyle}
+                      required
+                    />
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                      Short code identifier for academic records
+                    </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      Head of Department (HOD)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Dr. Rajesh Sharma / Prof. Sunita Verma"
+                      value={modalFormData.headOfDepartment}
+                      onChange={(e) => setModalFormData({ ...modalFormData, headOfDepartment: e.target.value })}
+                      style={inputStyle}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      Description
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="e.g. Physics, Chemistry, Biology and Advanced Laboratories"
+                      value={modalFormData.description}
+                      onChange={(e) => setModalFormData({ ...modalFormData, description: e.target.value })}
+                      style={{ ...inputStyle, resize: 'vertical' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      Status
+                    </label>
+                    <select
+                      value={modalFormData.status}
+                      onChange={(e) => setModalFormData({ ...modalFormData, status: e.target.value })}
+                      style={inputStyle}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </div>
+                </>
               )}
 
               {/* 1. Section Form */}
@@ -1279,12 +1557,226 @@ export const ClassesModule = () => {
           </div>
         </div>
       )}
+
+      {/* 5. Department Details Modal */}
+      {viewingDepartment && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 1050,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease'
+          }}
+          onClick={() => setViewingDepartment(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: '560px',
+              maxWidth: '95vw',
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: 'var(--radius-lg, 14px)',
+              boxShadow: '0 20px 50px rgba(0, 0, 0, 0.3)',
+              border: '1px solid var(--border-color)',
+              overflow: 'hidden',
+              display: 'flex',
+              flexDirection: 'column',
+              animation: 'scaleUp 0.25s ease'
+            }}
+          >
+            {/* Modal Header Banner */}
+            <div
+              style={{
+                padding: '20px 24px',
+                background: 'linear-gradient(135deg, #0d9488 0%, #0f766e 100%)',
+                color: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                <div style={{
+                  width: '46px',
+                  height: '46px',
+                  borderRadius: '12px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Building2 size={26} color="#ffffff" />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                    {viewingDepartment.name}
+                  </h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '4px' }}>
+                    <span style={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.25)',
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.5px'
+                    }}>
+                      CODE: {viewingDepartment.code}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>
+                      Academic Stream & Faculty
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingDepartment(null)}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.15)',
+                  border: 'none',
+                  color: '#ffffff',
+                  cursor: 'pointer',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              {isDetailsLoading && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0d9488', fontSize: '0.85rem' }}>
+                  <Spinner size={14} color="#0d9488" /> Syncing fresh department details from API...
+                </div>
+              )}
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(2, 1fr)',
+                gap: '14px',
+                padding: '16px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: 'var(--bg-app)',
+                border: '1px solid var(--border-light)'
+              }}>
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Head of Department (HOD)
+                  </div>
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
+                    {viewingDepartment.headOfDepartment ? `👤 ${viewingDepartment.headOfDepartment}` : 'Not Assigned'}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Status
+                  </div>
+                  <div style={{ marginTop: '4px' }}>
+                    <StatusBadge status={viewingDepartment.status} />
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    System ID
+                  </div>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--text-primary)', marginTop: '4px' }}>
+                    #{viewingDepartment.id}
+                  </div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
+                    Created Date
+                  </div>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '4px' }}>
+                    {viewingDepartment.createdAt ? new Date(viewingDepartment.createdAt).toLocaleDateString() : 'N/A'}
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
+                  Department Description
+                </div>
+                <div style={{
+                  padding: '12px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'var(--bg-app)',
+                  border: '1px solid var(--border-light)',
+                  fontSize: '0.875rem',
+                  lineHeight: '1.5',
+                  color: 'var(--text-primary)'
+                }}>
+                  {viewingDepartment.description || 'No detailed description provided for this academic department.'}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid var(--border-light)',
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              backgroundColor: 'var(--bg-app)'
+            }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setViewingDepartment(null)}
+                style={{ padding: '8px 18px', fontSize: '0.85rem' }}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  const target = viewingDepartment;
+                  setViewingDepartment(null);
+                  handleOpenEditModal(target);
+                }}
+                style={{
+                  padding: '8px 20px',
+                  backgroundColor: '#0d9488',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px'
+                }}
+              >
+                <Edit size={14} /> Edit Department
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 // Action Dropdown Cell Component for Edit and Delete Options
-const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }) => {
+const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, onViewDetails, row, busyKey }) => {
   const isDeleting = busyKey === `delete-${row.id}`;
   const cellRef = useRef(null);
 
@@ -1338,6 +1830,30 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }
             overflow: 'hidden'
           }}
         >
+          {onViewDetails && (
+            <button
+              type="button"
+              onClick={onViewDetails}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '10px 14px',
+                border: 'none',
+                backgroundColor: 'transparent',
+                color: 'var(--text-primary)',
+                cursor: 'pointer',
+                fontSize: '0.85rem',
+                fontWeight: 600,
+                textAlign: 'left',
+                transition: 'background-color 0.15s ease'
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-app)')}
+              onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+            >
+              <Eye size={14} color="#0284c7" /> Details
+            </button>
+          )}
           <button
             type="button"
             onClick={onEdit}
@@ -1353,6 +1869,7 @@ const ActionDropdownCell = ({ isOpen, onToggle, onEdit, onDelete, row, busyKey }
               fontSize: '0.85rem',
               fontWeight: 600,
               textAlign: 'left',
+              borderTop: onViewDetails ? '1px solid var(--border-light)' : 'none',
               transition: 'background-color 0.15s ease'
             }}
             onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'var(--bg-app)')}
