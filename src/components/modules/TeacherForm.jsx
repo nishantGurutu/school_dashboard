@@ -5,12 +5,10 @@ import {
   Eye,
   EyeOff,
   ArrowLeft,
-  Save,
-  UserCheck,
-  ShieldCheck,
-  Users
+  Save
 } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
+import { MultiSelectDropdown } from '../ui/MultiSelectDropdown';
 import { classService } from '../../services/classService';
 
 export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditMode = false }) => {
@@ -18,9 +16,11 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // Dynamic Subjects and Classes loaded from backend APIs
+  // Dynamic Subjects, Classes, Departments, and Designations loaded from backend APIs
   const [subjectsList, setSubjectsList] = useState([]);
   const [classesList, setClassesList] = useState([]);
+  const [departmentsList, setDepartmentsList] = useState([]);
+  const [designationsList, setDesignationsList] = useState([]);
   const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(false);
 
   useEffect(() => {
@@ -35,14 +35,26 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       classService.classes.list().catch((err) => {
         console.warn('Failed to load classes from API:', err);
         return [];
+      }),
+      classService.departments.list().catch((err) => {
+        console.warn('Failed to load departments from API:', err);
+        return [];
+      }),
+      classService.designations.list().catch((err) => {
+        console.warn('Failed to load designations from API:', err);
+        return [];
       })
     ])
-      .then(([subRes, clsRes]) => {
+      .then(([subRes, clsRes, deptRes, desigRes]) => {
         if (!isMounted) return;
         const subs = Array.isArray(subRes) ? subRes : (subRes?.data || []);
         const cls = Array.isArray(clsRes) ? clsRes : (clsRes?.data || []);
+        const depts = Array.isArray(deptRes) ? deptRes : (deptRes?.data || []);
+        const desigs = Array.isArray(desigRes) ? desigRes : (desigRes?.data || []);
         setSubjectsList(subs);
         setClassesList(cls);
+        setDepartmentsList(depts);
+        setDesignationsList(desigs);
       })
       .catch((err) => {
         console.warn('Failed to load dropdown data from API:', err);
@@ -84,26 +96,21 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     return list;
   }, [classesList]);
 
-  const resolveInitialType = (data) => {
-    if (!data) return 'Teacher';
-    const rawType = (data.type || data.memberType || data.role || data.designation || '').toString().toLowerCase();
-    if (rawType.includes('princip')) return 'Principal';
-    if (rawType.includes('staff')) return 'Staff';
-    return 'Teacher';
-  };
-
-  // Form State containing all fields (teacherId preserved in state for backend payload, removed from form inputs)
+  // Form State containing all fields
   const [formData, setFormData] = useState({
-    // Account Type / Role
-    type: resolveInitialType(initialData),
+    type: 'Teacher',
     department: initialData?.department || '',
+    departmentId: initialData?.departmentId || '',
     designation: initialData?.designation || '',
+    designationId: initialData?.designationId || '',
 
     // Personal Info
     teacherId: initialData?.employeeId || initialData?.id || '',
     fullName: initialData?.name || initialData?.fullName || '',
     subject: initialData?.subject && initialData?.subject !== 'All Subjects' ? initialData.subject : '',
+    subjectIds: initialData?.subjectIds || [],
     assignedClass: initialData?.assignedClass || initialData?.className || '',
+    assignedClassIds: initialData?.assignedClassIds || initialData?.classIds || [],
     gender: initialData?.gender || 'Male',
     dob: initialData?.dob || '',
     fatherName: initialData?.fatherName || '',
@@ -131,25 +138,19 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     nationalIdNumber: initialData?.nationalIdNumber || '',
 
     // Upload Documents
-    docName: '',
+    docName: initialData?.docName || '',
     uploadFile: null,
 
     // Previous School Details
-    prevSchoolName: '',
-    prevSchoolAddress: '',
+    prevSchoolName: initialData?.prevSchoolName || '',
+    prevSchoolAddress: initialData?.prevSchoolAddress || '',
 
     // Address
-    currentAddress: initialData?.address || '',
-    permanentAddress: '',
+    currentAddress: initialData?.currentAddress || initialData?.address || '',
+    permanentAddress: initialData?.permanentAddress || '',
 
     // Teacher Details
-    teacherBio: '',
-
-    // Social Links
-    facebookLink: '',
-    linkedInLink: '',
-    instagramLink: '',
-    youTubeLink: '',
+    teacherBio: initialData?.teacherBio || '',
 
     // Login Details
     loginEmail: initialData?.email && initialData.email !== 'N/A' ? initialData.email : '',
@@ -158,61 +159,93 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
   useEffect(() => {
     if (initialData) {
+      let resolvedSubjectIds = Array.isArray(initialData.subjectIds) ? initialData.subjectIds : [];
+      if (!resolvedSubjectIds.length && Array.isArray(initialData.subjects)) {
+        resolvedSubjectIds = initialData.subjects.map((s) => s?.id).filter(Boolean);
+      }
+      if (!resolvedSubjectIds.length && initialData.subject && availableSubjects.length > 0) {
+        const subParts = initialData.subject.split(',').map((s) => s.trim().toLowerCase());
+        resolvedSubjectIds = availableSubjects
+          .filter((s) => subParts.includes((s.name || '').toLowerCase()))
+          .map((s) => s.id);
+      }
+
+      let resolvedClassIds = Array.isArray(initialData.assignedClassIds)
+        ? initialData.assignedClassIds
+        : (Array.isArray(initialData.classIds) ? initialData.classIds : []);
+      if (!resolvedClassIds.length && Array.isArray(initialData.assignedClasses)) {
+        resolvedClassIds = initialData.assignedClasses.map((c) => c?.id).filter(Boolean);
+      }
+      if (!resolvedClassIds.length && (initialData.assignedClass || initialData.className) && availableClasses.length > 0) {
+        const clsRaw = (initialData.assignedClass || initialData.className).toLowerCase();
+        resolvedClassIds = availableClasses
+          .filter((c) => clsRaw.includes((c.label || c.name || '').toLowerCase()))
+          .map((c) => c.id);
+      }
+
       setFormData((prev) => ({
         ...prev,
-        type: resolveInitialType(initialData),
+        type: initialData.type || prev.type || 'Teacher',
         department: initialData.department || prev.department,
+        departmentId: initialData.departmentId || prev.departmentId,
         designation: initialData.designation || prev.designation,
+        designationId: initialData.designationId || prev.designationId,
         teacherId: initialData.employeeId || initialData.id || prev.teacherId,
         fullName: initialData.name || initialData.fullName || prev.fullName,
         subject: initialData.subject && initialData.subject !== 'All Subjects' ? initialData.subject : prev.subject,
+        subjectIds: resolvedSubjectIds.length ? resolvedSubjectIds : (prev.subjectIds || []),
         assignedClass: initialData.assignedClass || initialData.className || prev.assignedClass,
+        assignedClassIds: resolvedClassIds.length ? resolvedClassIds : (prev.assignedClassIds || []),
+        gender: initialData.gender || prev.gender,
+        dob: initialData.dob || prev.dob,
+        fatherName: initialData.fatherName || prev.fatherName,
+        motherName: initialData.motherName || prev.motherName,
+        maritalStatus: initialData.maritalStatus || prev.maritalStatus,
+        contractType: initialData.contractType || prev.contractType,
+        shift: initialData.shift || prev.shift,
+        workLocation: initialData.workLocation || prev.workLocation,
+        joinDate: initialData.joiningDate || initialData.joinDate || prev.joinDate,
         phone: initialData.phone && initialData.phone !== 'N/A' ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : prev.phone,
         email: initialData.email && initialData.email !== 'N/A' ? initialData.email : prev.email,
+        experience: initialData.experience || (initialData?.experienceYears ? `${initialData.experienceYears} Years` : prev.experience),
         qualification: initialData.qualification || prev.qualification,
+        bloodGroup: initialData.bloodGroup || prev.bloodGroup,
+        height: initialData.height || prev.height,
+        weight: initialData.weight || prev.weight,
         bankAccountNumber: initialData.bankAccountNumber ? String(initialData.bankAccountNumber).replace(/\D/g, '').slice(0, 25) : prev.bankAccountNumber,
+        bankName: initialData.bankName || prev.bankName,
+        ifscCode: initialData.ifscCode || prev.ifscCode,
+        nationalIdNumber: initialData.nationalIdNumber || prev.nationalIdNumber,
+        docName: initialData.docName || prev.docName,
+        prevSchoolName: initialData.prevSchoolName || prev.prevSchoolName,
+        prevSchoolAddress: initialData.prevSchoolAddress || prev.prevSchoolAddress,
+        currentAddress: initialData.currentAddress || initialData.address || prev.currentAddress,
+        permanentAddress: initialData.permanentAddress || prev.permanentAddress,
+        teacherBio: initialData.teacherBio || prev.teacherBio,
         loginEmail: initialData.email && initialData.email !== 'N/A' ? initialData.email : prev.loginEmail
       }));
     }
-  }, [initialData]);
+  }, [initialData, availableSubjects, availableClasses]);
 
-  const handleTypeChange = (newType) => {
-    setFormData((prev) => {
-      const updated = { ...prev, type: newType };
-      if (newType === 'Principal') {
-        if (!prev.designation || prev.designation === 'Teacher' || prev.designation === 'Staff' || prev.designation === 'Administrative Staff') {
-          updated.designation = 'Principal';
-        }
-        if (!prev.department || prev.department === 'Academic' || prev.department === 'General Faculty' || prev.department === 'Mathematics') {
-          updated.department = 'Administration';
-        }
-        if (!prev.subject) {
-          updated.subject = 'Administration';
-        }
-      } else if (newType === 'Staff') {
-        if (!prev.designation || prev.designation === 'Teacher' || prev.designation === 'Principal') {
-          updated.designation = 'Administrative Staff';
-        }
-        if (!prev.department || prev.department === 'Academic' || prev.department === 'General Faculty' || prev.department === 'Mathematics') {
-          updated.department = 'Administration';
-        }
-        if (!prev.subject) {
-          updated.subject = 'General';
-        }
-      } else {
-        if (prev.designation === 'Principal' || prev.designation === 'Administrative Staff' || prev.designation === 'Staff') {
-          updated.designation = 'Teacher';
-        }
-        if (prev.department === 'Administration') {
-          updated.department = 'Academic';
-        }
-        if (prev.subject === 'Administration' || prev.subject === 'General') {
-          updated.subject = '';
-        }
+  // Sync departmentId if only department name was set
+  useEffect(() => {
+    if (departmentsList.length > 0 && formData.department && !formData.departmentId) {
+      const matched = departmentsList.find((d) => (d.name || '').toLowerCase() === formData.department.toLowerCase());
+      if (matched) {
+        setFormData((prev) => ({ ...prev, departmentId: matched.id }));
       }
-      return updated;
-    });
-  };
+    }
+  }, [departmentsList, formData.department, formData.departmentId]);
+
+  // Sync designationId if only designation name was set
+  useEffect(() => {
+    if (designationsList.length > 0 && formData.designation && !formData.designationId) {
+      const matched = designationsList.find((d) => (d.name || '').toLowerCase() === formData.designation.toLowerCase());
+      if (matched) {
+        setFormData((prev) => ({ ...prev, designationId: matched.id }));
+      }
+    }
+  }, [designationsList, formData.designation, formData.designationId]);
 
   const handleChange = (field, value) => {
     setFormData((prev) => {
@@ -253,7 +286,15 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     savingRef.current = true;
     setIsSaving(true);
     try {
-      await onSaveTeacher(formData);
+      await onSaveTeacher({
+        ...formData,
+        joiningDate: formData.joinDate || formData.joiningDate || new Date().toISOString().split('T')[0],
+        departmentId: formData.departmentId ? Number(formData.departmentId) : null,
+        designationId: formData.designationId ? Number(formData.designationId) : null,
+        subjectIds: formData.subjectIds || [],
+        assignedClassIds: formData.assignedClassIds || [],
+        classIds: formData.assignedClassIds || []
+      });
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -263,13 +304,17 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
   const handleReset = () => {
     if (initialData) {
       setFormData({
-        type: resolveInitialType(initialData),
+        type: 'Teacher',
         department: initialData?.department || '',
+        departmentId: initialData?.departmentId || '',
         designation: initialData?.designation || '',
+        designationId: initialData?.designationId || '',
         teacherId: initialData.employeeId || initialData.id || '',
         fullName: initialData.name || initialData.fullName || '',
         subject: initialData.subject && initialData.subject !== 'All Subjects' ? initialData.subject : '',
+        subjectIds: initialData.subjectIds || [],
         assignedClass: initialData.assignedClass || initialData.className || '',
+        assignedClassIds: initialData.assignedClassIds || initialData.classIds || [],
         gender: initialData.gender || 'Male',
         dob: initialData.dob || '',
         fatherName: initialData.fatherName || '',
@@ -291,13 +336,13 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         bankName: initialData.bankName || '',
         ifscCode: initialData.ifscCode || '',
         nationalIdNumber: initialData.nationalIdNumber || '',
-        docName: '',
+        docName: initialData.docName || '',
         uploadFile: null,
-        prevSchoolName: '',
-        prevSchoolAddress: '',
-        currentAddress: initialData.address || '',
-        permanentAddress: '',
-        teacherBio: '',
+        prevSchoolName: initialData.prevSchoolName || '',
+        prevSchoolAddress: initialData.prevSchoolAddress || '',
+        currentAddress: initialData.currentAddress || initialData.address || '',
+        permanentAddress: initialData.permanentAddress || '',
+        teacherBio: initialData.teacherBio || '',
         facebookLink: '',
         linkedInLink: '',
         instagramLink: '',
@@ -309,11 +354,15 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       setFormData({
         type: 'Teacher',
         department: '',
+        departmentId: '',
         designation: '',
+        designationId: '',
         teacherId: '',
         fullName: '',
         subject: '',
+        subjectIds: [],
         assignedClass: '',
+        assignedClassIds: [],
         gender: 'Male',
         dob: '',
         fatherName: '',
@@ -361,10 +410,10 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       >
         <div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-            Dashboard / Faculty & Staff / <strong style={{ color: 'var(--text-primary)' }}>{isEditMode ? `Edit ${formData.type}` : `Add New ${formData.type}`}</strong>
+            Dashboard / Faculty & Teachers / <strong style={{ color: 'var(--text-primary)' }}>{isEditMode ? 'Edit Teacher' : 'Add New Teacher'}</strong>
           </div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>
-            {isEditMode ? `Edit ${formData.type} Profile (${initialData?.name || formData.fullName || formData.type})` : `Add New ${formData.type}`}
+            {isEditMode ? `Edit Teacher Profile (${initialData?.name || formData.fullName || 'Teacher'})` : 'Add New Teacher'}
           </h2>
         </div>
 
@@ -374,205 +423,10 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       </div>
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-        {/* Account Type / Role Selection (Teacher, Principal, Staff) */}
-        <div
-          className="card animate-fade-in"
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '16px',
-            border: '2px solid var(--border-color)',
-            borderRadius: '12px',
-            padding: '20px'
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-            <div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                Account Type (Role) <span style={{ color: '#ef4444' }}>*</span>
-              </h3>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                Admin selects type: <strong>1. Teacher</strong> (faculty), <strong>2. Principal</strong> (school head), or <strong>3. Staff</strong> (administrative).
-              </p>
-            </div>
-
-            <div style={{ minWidth: '190px' }}>
-              <select
-                id="member-type-select"
-                value={formData.type}
-                onChange={(e) => handleTypeChange(e.target.value)}
-                style={{
-                  ...inputStyle,
-                  fontWeight: 700,
-                  borderColor: formData.type === 'Principal' ? '#8b5cf6' : formData.type === 'Staff' ? '#10b981' : '#3b82f6',
-                  color: formData.type === 'Principal' ? '#7c3aed' : formData.type === 'Staff' ? '#059669' : '#2563eb'
-                }}
-              >
-                <option value="Teacher">1. Teacher</option>
-                <option value="Principal">2. Principal</option>
-                <option value="Staff">3. Staff</option>
-              </select>
-            </div>
-          </div>
-
-          {/* 3 Interactive Cards for Visual Selection */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
-              gap: '12px'
-            }}
-          >
-            {/* 1. Teacher */}
-            <div
-              id="type-card-teacher"
-              onClick={() => handleTypeChange('Teacher')}
-              style={{
-                cursor: 'pointer',
-                padding: '14px 16px',
-                borderRadius: '10px',
-                border: formData.type === 'Teacher' ? '2px solid #3b82f6' : '1px solid var(--border-color)',
-                backgroundColor: formData.type === 'Teacher' ? 'rgba(59, 130, 246, 0.08)' : 'var(--bg-app)',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}
-            >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '8px',
-                  backgroundColor: formData.type === 'Teacher' ? '#3b82f6' : 'rgba(59, 130, 246, 0.1)',
-                  color: formData.type === 'Teacher' ? '#ffffff' : '#3b82f6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                <UserCheck size={20} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <strong style={{ fontSize: '0.95rem', color: formData.type === 'Teacher' ? '#1d4ed8' : 'var(--text-primary)' }}>
-                    1. Teacher
-                  </strong>
-                  {formData.type === 'Teacher' && (
-                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#3b82f6', color: '#fff', fontWeight: 700 }}>
-                      Selected
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  Teaching faculty & subject assignments
-                </div>
-              </div>
-            </div>
-
-            {/* 2. Principal */}
-            <div
-              id="type-card-principal"
-              onClick={() => handleTypeChange('Principal')}
-              style={{
-                cursor: 'pointer',
-                padding: '14px 16px',
-                borderRadius: '10px',
-                border: formData.type === 'Principal' ? '2px solid #8b5cf6' : '1px solid var(--border-color)',
-                backgroundColor: formData.type === 'Principal' ? 'rgba(139, 92, 246, 0.08)' : 'var(--bg-app)',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}
-            >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '8px',
-                  backgroundColor: formData.type === 'Principal' ? '#8b5cf6' : 'rgba(139, 92, 246, 0.1)',
-                  color: formData.type === 'Principal' ? '#ffffff' : '#8b5cf6',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                <ShieldCheck size={20} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <strong style={{ fontSize: '0.95rem', color: formData.type === 'Principal' ? '#6d28d9' : 'var(--text-primary)' }}>
-                    2. Principal
-                  </strong>
-                  {formData.type === 'Principal' && (
-                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#8b5cf6', color: '#fff', fontWeight: 700 }}>
-                      Selected
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  School head & executive administration
-                </div>
-              </div>
-            </div>
-
-            {/* 3. Staff */}
-            <div
-              id="type-card-staff"
-              onClick={() => handleTypeChange('Staff')}
-              style={{
-                cursor: 'pointer',
-                padding: '14px 16px',
-                borderRadius: '10px',
-                border: formData.type === 'Staff' ? '2px solid #10b981' : '1px solid var(--border-color)',
-                backgroundColor: formData.type === 'Staff' ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-app)',
-                transition: 'all 0.2s ease',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px'
-              }}
-            >
-              <div
-                style={{
-                  width: '40px',
-                  height: '40px',
-                  borderRadius: '8px',
-                  backgroundColor: formData.type === 'Staff' ? '#10b981' : 'rgba(16, 185, 129, 0.1)',
-                  color: formData.type === 'Staff' ? '#ffffff' : '#10b981',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}
-              >
-                <Users size={20} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <strong style={{ fontSize: '0.95rem', color: formData.type === 'Staff' ? '#047857' : 'var(--text-primary)' }}>
-                    3. Staff
-                  </strong>
-                  {formData.type === 'Staff' && (
-                    <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '12px', backgroundColor: '#10b981', color: '#fff', fontWeight: 700 }}>
-                      Selected
-                    </span>
-                  )}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  Administrative & operations personnel
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Section 1: Personal Info */}
         <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-            Personal Info ({formData.type})
+            Personal Info
           </h3>
 
           <div className="grid-responsive">
@@ -593,73 +447,111 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Designation / Position
+                Designation <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input
-                type="text"
-                placeholder={formData.type === 'Principal' ? 'Principal' : (formData.type === 'Staff' ? 'Administrative Staff' : 'Teacher')}
-                value={formData.designation}
-                onChange={(e) => handleChange('designation', e.target.value)}
+              <select
+                id="teacher-designation-select"
+                value={formData.designationId || ''}
+                onChange={(e) => {
+                  const selId = e.target.value;
+                  const sel = designationsList.find((d) => String(d.id) === String(selId));
+                  setFormData((prev) => ({
+                    ...prev,
+                    designationId: selId ? Number(selId) : '',
+                    designation: sel ? sel.name : ''
+                  }));
+                }}
                 style={inputStyle}
-              />
+                required
+              >
+                <option value="">{isLoadingDropdowns ? 'Loading designations...' : '-- Select Designation --'}</option>
+                {designationsList.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} {d.category ? `• ${d.category}` : ''}
+                  </option>
+                ))}
+                {formData.designation && !designationsList.some((d) => String(d.id) === String(formData.designationId)) && (
+                  <option value={formData.designationId || ''}>{formData.designation}</option>
+                )}
+              </select>
             </div>
 
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Department
+                Department <span style={{ color: '#ef4444' }}>*</span>
               </label>
-              <input
-                type="text"
-                placeholder={formData.type === 'Teacher' ? 'Academic / Science / Arts' : 'Administration'}
-                value={formData.department}
-                onChange={(e) => handleChange('department', e.target.value)}
+              <select
+                id="teacher-department-select"
+                value={formData.departmentId || ''}
+                onChange={(e) => {
+                  const selId = e.target.value;
+                  const sel = departmentsList.find((d) => String(d.id) === String(selId));
+                  setFormData((prev) => ({
+                    ...prev,
+                    departmentId: selId ? Number(selId) : '',
+                    department: sel ? sel.name : ''
+                  }));
+                }}
                 style={inputStyle}
+                required
+              >
+                <option value="">{isLoadingDropdowns ? 'Loading departments...' : '-- Select Department --'}</option>
+                {departmentsList.map((dept) => (
+                  <option key={dept.id} value={dept.id}>
+                    {dept.name} {dept.code ? `(${dept.code})` : ''}
+                  </option>
+                ))}
+                {formData.department && !departmentsList.some((d) => String(d.id) === String(formData.departmentId)) && (
+                  <option value={formData.departmentId || ''}>{formData.department}</option>
+                )}
+              </select>
+            </div>
+
+            {/* Row 2: Subject & Class (Multi-select) */}
+            <div className="col-span-6">
+              <MultiSelectDropdown
+                label="Subject Specialization"
+                placeholder="Select Subject Specialization..."
+                options={availableSubjects.map((sub) => ({
+                  id: sub.id,
+                  label: sub.name,
+                  code: sub.code,
+                  name: sub.name
+                }))}
+                selectedIds={formData.subjectIds}
+                onChange={(newIds, newItems) => {
+                  const names = newItems.map((item) => item.name || item.label).join(', ');
+                  setFormData((prev) => ({
+                    ...prev,
+                    subjectIds: newIds,
+                    subject: names
+                  }));
+                }}
+                isLoading={isLoadingDropdowns}
               />
             </div>
 
-            {/* Row 2: Subject & Class */}
             <div className="col-span-6">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                {formData.type === 'Teacher' ? 'Subject Specialization' : 'Primary Domain / Subject'}
-              </label>
-              <select
-                value={formData.subject}
-                onChange={(e) => handleChange('subject', e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">{isLoadingDropdowns ? 'Loading subjects...' : 'Select Subject (Optional)'}</option>
-                {formData.type !== 'Teacher' && <option value="Administration">Administration</option>}
-                {formData.type !== 'Teacher' && <option value="General">General</option>}
-                {availableSubjects.map((sub) => (
-                  <option key={sub.id || sub.name} value={sub.name}>
-                    {sub.name} {sub.code ? `(${sub.code})` : ''}
-                  </option>
-                ))}
-                {formData.subject && !availableSubjects.some((s) => s.name === formData.subject) && (
-                  <option value={formData.subject}>{formData.subject}</option>
-                )}
-              </select>
-            </div>
-
-            <div className="col-span-6">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                {formData.type === 'Teacher' ? 'Assigned Class' : 'Assigned Class / Division (Optional)'}
-              </label>
-              <select
-                value={formData.assignedClass}
-                onChange={(e) => handleChange('assignedClass', e.target.value)}
-                style={inputStyle}
-              >
-                <option value="">{isLoadingDropdowns ? 'Loading classes...' : 'Select Class (Optional)'}</option>
-                {availableClasses.map((cls) => (
-                  <option key={cls.id || cls.label} value={cls.label}>
-                    {cls.label}
-                  </option>
-                ))}
-                {formData.assignedClass && !availableClasses.some((c) => c.label === formData.assignedClass) && (
-                  <option value={formData.assignedClass}>{formData.assignedClass}</option>
-                )}
-              </select>
+              <MultiSelectDropdown
+                label="Assign Class"
+                placeholder="Select Classes to Assign..."
+                options={availableClasses.map((c) => ({
+                  id: c.id,
+                  label: c.label,
+                  name: c.name,
+                  section: c.section
+                }))}
+                selectedIds={formData.assignedClassIds}
+                onChange={(newIds, newItems) => {
+                  const labels = newItems.map((item) => item.label || item.name).join(', ');
+                  setFormData((prev) => ({
+                    ...prev,
+                    assignedClassIds: newIds,
+                    assignedClass: labels
+                  }));
+                }}
+                isLoading={isLoadingDropdowns}
+              />
             </div>
 
             {/* Row 2 */}
@@ -1092,65 +984,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
           </div>
         </div>
 
-        {/* Section 7: Social Links */}
-        <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-            Teacher Details (Social Handles)
-          </h3>
-          <div className="grid-responsive">
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Facebook
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your facebook link"
-                value={formData.facebookLink}
-                onChange={(e) => handleChange('facebookLink', e.target.value)}
-                style={inputStyle}
-              />
-            </div>
 
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                LinkedIn
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your LinkedIn link"
-                value={formData.linkedInLink}
-                onChange={(e) => handleChange('linkedInLink', e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Instagram
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your Instagram link"
-                value={formData.instagramLink}
-                onChange={(e) => handleChange('instagramLink', e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                YouTube
-              </label>
-              <input
-                type="text"
-                placeholder="Enter your YouTube link"
-                value={formData.youTubeLink}
-                onChange={(e) => handleChange('youTubeLink', e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-        </div>
 
         {/* Section 8: Login Details */}
         <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>

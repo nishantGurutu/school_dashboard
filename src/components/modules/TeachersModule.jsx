@@ -24,14 +24,25 @@ export const TeachersModule = () => {
       else if (desig.includes('staff') || dept.includes('staff')) rawType = 'Staff';
       else rawType = 'Teacher';
     }
+
+    const assignedClassSummary = t.assignedClass || t.className || (Array.isArray(t.assignedClasses) && t.assignedClasses.map((c) => c.label || c.name).filter(Boolean).join(', ')) || '';
+    const subjectSummary = t.subject || (Array.isArray(t.subjects) && t.subjects.map((s) => s.name).filter(Boolean).join(', ')) || (rawType === 'Teacher' ? 'All Subjects' : 'Administration');
+
     return {
       ...t,
       name: t.fullName || t.name || (t.firstName ? `${t.firstName} ${t.lastName || ''}`.trim() : `${rawType} Member`),
       id: t.id,
       type: rawType,
       department: t.department || (rawType === 'Principal' || rawType === 'Staff' ? 'Administration' : 'General Faculty'),
+      departmentId: t.departmentId || null,
       designation: t.designation || rawType,
-      subject: t.subject || (rawType === 'Teacher' ? 'All Subjects' : 'Administration'),
+      designationId: t.designationId || null,
+      subject: subjectSummary,
+      subjectIds: t.subjectIds || [],
+      subjects: t.subjects || t.subjectSpecializations || [],
+      assignedClass: assignedClassSummary,
+      assignedClasses: t.assignedClasses || [],
+      assignedClassIds: t.assignedClassIds || t.classIds || [],
       qualification: t.qualification || (rawType === 'Principal' ? 'Master Degree' : 'Graduate'),
       phone: t.phone || 'N/A',
       email: t.email || 'N/A',
@@ -88,21 +99,48 @@ export const TeachersModule = () => {
     const defaultDept = selectedType === 'Principal' ? 'Administration' : (selectedType === 'Staff' ? 'Administration' : (formData.subject || 'Academic'));
 
     const payload = {
+      ...formData,
       type: selectedType,
       employeeId: formData.employeeId || formData.teacherId || `${selectedType.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
       firstName: firstName,
       lastName: lastName,
       department: formData.department || defaultDept,
+      departmentId: formData.departmentId ? Number(formData.departmentId) : null,
       subject: formData.subject || (selectedType === 'Principal' ? 'Administration' : (selectedType === 'Staff' ? 'General' : 'General')),
+      subjectIds: Array.isArray(formData.subjectIds) ? formData.subjectIds : [],
+      assignedClass: formData.assignedClass || '',
+      assignedClassIds: Array.isArray(formData.assignedClassIds) ? formData.assignedClassIds : [],
+      classIds: Array.isArray(formData.assignedClassIds) ? formData.assignedClassIds : [],
       qualification: formData.qualification || (selectedType === 'Principal' ? 'Post Graduate / Master' : 'Graduate'),
       designation: formData.designation || defaultDesignation,
+      designationId: formData.designationId ? Number(formData.designationId) : null,
       phone: formData.phone || '+91 9876543210',
       email: formData.loginEmail || formData.email || `${selectedType.toLowerCase()}_${Date.now()}@schooldesk.com`,
       password: formData.loginPassword || formData.password || 'password',
-      address: formData.address || 'School Campus',
-      joiningDate: formData.joiningDate || new Date().toISOString().split('T')[0],
+      address: formData.currentAddress || formData.address || 'School Campus',
+      currentAddress: formData.currentAddress || formData.address || '',
+      permanentAddress: formData.permanentAddress || '',
+      joiningDate: formData.joiningDate || formData.joinDate || new Date().toISOString().split('T')[0],
       experienceYears: formData.experienceYears ? parseInt(formData.experienceYears, 10) : 5,
       bloodGroup: formData.bloodGroup || 'O+',
+      gender: formData.gender || 'Male',
+      dob: formData.dob || null,
+      fatherName: formData.fatherName || '',
+      motherName: formData.motherName || '',
+      maritalStatus: formData.maritalStatus || 'Married',
+      contractType: formData.contractType || 'Contractual',
+      shift: formData.shift || 'Day Shift',
+      workLocation: formData.workLocation || '',
+      height: formData.height || '',
+      weight: formData.weight || '',
+      bankAccountNumber: formData.bankAccountNumber || '',
+      bankName: formData.bankName || '',
+      ifscCode: formData.ifscCode || '',
+      nationalIdNumber: formData.nationalIdNumber || '',
+      docName: formData.docName || '',
+      prevSchoolName: formData.prevSchoolName || '',
+      prevSchoolAddress: formData.prevSchoolAddress || '',
+      teacherBio: formData.teacherBio || '',
       avatar: formData.avatar || formData.teacherPhoto || (selectedType === 'Principal'
         ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
         : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'),
@@ -228,8 +266,8 @@ export const TeachersModule = () => {
       {/* Header Bar */}
       <div className="card animate-fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Teachers, Principals & Staff Directory</h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Manage school teaching faculty, principals, and administrative staff members</p>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Teachers & Faculty Directory</h2>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Manage school teaching faculty and academic staff members</p>
         </div>
 
         <button
@@ -237,7 +275,7 @@ export const TeachersModule = () => {
           onClick={() => setShowAddForm(true)}
           style={{ padding: '10px 18px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
-          <Plus size={18} /> Add New Member (Teacher / Principal / Staff)
+          <Plus size={18} /> Add New Teacher
         </button>
       </div>
 
@@ -399,7 +437,10 @@ export const TeachersModule = () => {
                 </div>
 
                 <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  <div><strong>{t.type === 'Teacher' ? 'Subject' : 'Role / Domain'}:</strong> {t.subject}</div>
+                  <div><strong>{t.type === 'Teacher' ? 'Subject Specialization' : 'Role / Domain'}:</strong> {t.subject || 'All Subjects'}</div>
+                  {t.assignedClass ? (
+                    <div><strong>Assigned Classes:</strong> <span style={{ color: '#0d9488', fontWeight: 600 }}>{t.assignedClass}</span></div>
+                  ) : null}
                   <div><strong>Qualification:</strong> {t.qualification}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Mail size={14} /> {t.email}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}><Phone size={14} /> {t.phone}</div>
