@@ -17,17 +17,20 @@ import {
   DoorOpen,
   Calendar,
   Building2,
-  Eye
+  Eye,
+  Briefcase
 } from 'lucide-react';
 import { classService } from '../../services/classService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
+import { DesignationModule } from './DesignationModule';
 
 export const ClassesModule = () => {
   const { activeTab, setActiveTab } = useTheme();
 
-  // Determine current active sub-tab (department, section, subjects, classList, classRoom)
+  // Determine current active sub-tab (department, designation, section, subjects, classList, classRoom)
   const getSubTabFromActiveTab = () => {
+    if (activeTab === 'classes-designation' || activeTab === 'classes-designations' || activeTab === 'designation' || activeTab === 'designations') return 'designation';
     if (activeTab === 'classes-department' || activeTab === 'classes-departments' || activeTab === 'department' || activeTab === 'departments') return 'department';
     if (activeTab === 'classes-subjects') return 'subjects';
     if (activeTab === 'classes-list') return 'classList';
@@ -52,12 +55,14 @@ export const ClassesModule = () => {
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // Data states for 5 academic sections
+  // Data states for academic sections
   const [departments, setDepartments] = useState([]);
+  const [designations, setDesignations] = useState([]);
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
   const [classList, setClassList] = useState([]);
   const [classRooms, setClassRooms] = useState([]);
+  const [designationAddTrigger, setDesignationAddTrigger] = useState(0);
 
   // Sync sub-tab from parent activeTab
   useEffect(() => {
@@ -80,8 +85,9 @@ export const ClassesModule = () => {
     setIsLoading(true);
     setError('');
     try {
-      const [deptRes, secRes, subRes, clsRes, roomRes] = await Promise.all([
+      const [deptRes, desigRes, secRes, subRes, clsRes, roomRes] = await Promise.all([
         classService.departments.list(),
+        classService.designations.list().catch(() => []),
         classService.sections.list(),
         classService.subjects.list(),
         classService.classes.list(),
@@ -89,12 +95,14 @@ export const ClassesModule = () => {
       ]);
 
       const deptItems = Array.isArray(deptRes) ? deptRes : [];
+      const desigItems = Array.isArray(desigRes) ? desigRes : [];
       const secItems = Array.isArray(secRes) ? secRes : [];
       const subItems = Array.isArray(subRes) ? subRes : [];
       const clsItems = Array.isArray(clsRes) ? clsRes : [];
       const roomItems = Array.isArray(roomRes) ? roomRes : [];
 
       setDepartments(deptItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setDesignations(desigItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
       setSections(secItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
       setSubjects(subItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
       setClassList(clsItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
@@ -129,6 +137,7 @@ export const ClassesModule = () => {
     setSelectedRows([]);
     setCurrentPage(1);
     setSearchTerm('');
+    if (tabKey === 'designation') setActiveTab('classes-designation');
     if (tabKey === 'department') setActiveTab('classes-department');
     if (tabKey === 'section') setActiveTab('classes-section');
     if (tabKey === 'subjects') setActiveTab('classes-subjects');
@@ -137,6 +146,10 @@ export const ClassesModule = () => {
   };
 
   const handleOpenAddModal = () => {
+    if (currentSubTab === 'designation') {
+      setDesignationAddTrigger((prev) => prev + 1);
+      return;
+    }
     setEditingItem(null);
     setError('');
 
@@ -422,6 +435,13 @@ export const ClassesModule = () => {
           addBtnLabel: '+ Add Department',
           searchPlaceholder: 'Search departments by name, code, HOD...'
         };
+      case 'designation':
+        return {
+          title: 'Academic & Staff Designations',
+          breadcrumb: 'Dashboard / Academic / Designation',
+          addBtnLabel: '+ Add Designation',
+          searchPlaceholder: 'Search designations by title, code, category...'
+        };
       case 'subjects':
         return {
           title: 'Subjects List',
@@ -581,6 +601,27 @@ export const ClassesModule = () => {
             </button>
 
             <button
+              id="academic-tab-designation"
+              onClick={() => handleSubTabChange('designation')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 'var(--radius-sm)',
+                border: 'none',
+                backgroundColor: currentSubTab === 'designation' ? '#0d9488' : 'transparent',
+                color: currentSubTab === 'designation' ? '#ffffff' : 'var(--text-secondary)',
+                fontWeight: currentSubTab === 'designation' ? 700 : 500,
+                fontSize: '0.825rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <Briefcase size={15} /> Designation ({designations.length})
+            </button>
+
+            <button
               onClick={() => handleSubTabChange('section')}
               style={{
                 padding: '8px 16px',
@@ -683,8 +724,17 @@ export const ClassesModule = () => {
         </div>
       </div>
 
-      {/* Notifications */}
-      {successMessage && (
+      {/* Designation SubTab View OR Standard Academic Table & Modals */}
+      {currentSubTab === 'designation' ? (
+        <DesignationModule
+          hideHeader={true}
+          openAddTrigger={designationAddTrigger}
+          onDataChange={fetchClassesData}
+        />
+      ) : (
+        <>
+          {/* Notifications */}
+          {successMessage && (
         <div
           style={{
             padding: '12px 18px',
@@ -1770,6 +1820,8 @@ export const ClassesModule = () => {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

@@ -45,7 +45,7 @@ export const Sidebar = () => {
 
   const roleModuleMap = {
     SUPER_ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice'],
-    PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'notice'],
+    PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice'],
     TEACHER: ['dashboard', 'students', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'notice'],
     ACCOUNTANT: ['dashboard', 'students', 'fees', 'accounts', 'hrm', 'holidays', 'notice'],
     LIBRARIAN: ['dashboard', 'library', 'holidays', 'notice']
@@ -66,6 +66,7 @@ export const Sidebar = () => {
       subItems: [
         { key: 'classes-timetable', label: 'Timetable' },
         { key: 'classes-department', label: 'Department' },
+        { key: 'classes-designation', label: 'Designation' },
         { key: 'classes-section', label: 'Section' },
         { key: 'classes-subjects', label: 'Subjects' },
         { key: 'classes-list', label: 'Class List' },
@@ -142,7 +143,16 @@ export const Sidebar = () => {
         { key: 'accounts-transaction', label: 'Transaction' }
       ]
     },
-    { key: 'hrm', label: 'Staff & HRM', icon: UserCog, hasSub: false },
+    {
+      key: 'hrm',
+      label: 'Staff & HRM',
+      icon: UserCog,
+      hasSub: true,
+      subItems: [
+        { key: 'hrm-staff', label: 'Staff Directory' },
+        { key: 'hrm-designation', label: 'Designation' }
+      ]
+    },
     { key: 'notice', label: 'Notice Board', icon: BookMarked, hasSub: false }
   ];
 
@@ -175,6 +185,9 @@ export const Sidebar = () => {
         if (item.key === 'accounts' && !activeTab.startsWith('accounts')) {
           setActiveTab('accounts-income-head');
         }
+        if (item.key === 'hrm' && !activeTab.startsWith('hrm')) {
+          setActiveTab('hrm-staff');
+        }
       }
     } else {
       setActiveTab(item.key);
@@ -190,6 +203,7 @@ export const Sidebar = () => {
     if (item.key === 'leaves' && activeTab.startsWith('leaves')) return true;
     if (item.key === 'library' && activeTab.startsWith('library')) return true;
     if (item.key === 'accounts' && activeTab.startsWith('accounts')) return true;
+    if (item.key === 'hrm' && (activeTab.startsWith('hrm') || activeTab.startsWith('designation'))) return true;
     return false;
   };
 

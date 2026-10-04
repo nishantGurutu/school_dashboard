@@ -4,8 +4,11 @@ import { dashboardService } from '../../services/dashboardService';
 import { staffService } from '../../services/staffService';
 import { Spinner } from '../ui/Spinner';
 import { useToast } from '../../context/ToastContext';
+import { useTheme } from '../../context/ThemeContext';
+import { DesignationModule } from './DesignationModule';
 
 export const HrmModule = () => {
+  const { activeTab, setActiveTab } = useTheme();
   const toast = useToast();
   const [headcount, setHeadcount] = useState({ facultyStaff: 0, administrativeStaff: 0, supportStaff: 0 });
   const [staffList, setStaffList] = useState([]);
@@ -252,8 +255,120 @@ export const HrmModule = () => {
     outline: 'none'
   };
 
+  const isDesignationView = activeTab === 'hrm-designation' || activeTab === 'designation';
+
+  if (isDesignationView) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* Sub-Nav Tabs for HRM */}
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+          backgroundColor: 'var(--bg-app)',
+          padding: '4px',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--border-light)',
+          width: 'fit-content'
+        }}>
+          <button
+            onClick={() => setActiveTab('hrm-staff')}
+            style={{
+              padding: '8px 18px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              backgroundColor: 'transparent',
+              color: 'var(--text-secondary)',
+              fontWeight: 500,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Users size={16} /> Staff Directory ({staffList.length})
+          </button>
+
+          <button
+            onClick={() => setActiveTab('hrm-designation')}
+            style={{
+              padding: '8px 18px',
+              borderRadius: 'var(--radius-sm)',
+              border: 'none',
+              backgroundColor: '#0d9488',
+              color: '#ffffff',
+              fontWeight: 700,
+              fontSize: '0.85rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <Briefcase size={16} /> Designation
+          </button>
+        </div>
+
+        <DesignationModule />
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* Sub-Nav Tabs for HRM */}
+      <div style={{
+        display: 'flex',
+        gap: '4px',
+        backgroundColor: 'var(--bg-app)',
+        padding: '4px',
+        borderRadius: 'var(--radius-md)',
+        border: '1px solid var(--border-light)',
+        width: 'fit-content'
+      }}>
+        <button
+          onClick={() => setActiveTab('hrm-staff')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            backgroundColor: '#0d9488',
+            color: '#ffffff',
+            fontWeight: 700,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <Users size={16} /> Staff Directory ({staffList.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('hrm-designation')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: 'var(--radius-sm)',
+            border: 'none',
+            backgroundColor: 'transparent',
+            color: 'var(--text-secondary)',
+            fontWeight: 500,
+            fontSize: '0.85rem',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <Briefcase size={16} /> Designation
+        </button>
+      </div>
+
       {/* Header Bar */}
       <div className="card animate-fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>

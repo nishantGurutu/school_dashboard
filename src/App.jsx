@@ -22,6 +22,7 @@ import { CertificateModule } from './components/modules/CertificateModule';
 import { LibraryModule } from './components/modules/LibraryModule';
 import { AccountsModule } from './components/modules/AccountsModule';
 import { HrmModule } from './components/modules/HrmModule';
+import { DesignationModule } from './components/modules/DesignationModule';
 import { NoticeBoardModule } from './components/modules/NoticeBoardModule';
 import { HolidaysModule } from './components/modules/HolidaysModule';
 import { TimetableModule } from './components/modules/TimetableModule';
@@ -49,6 +50,8 @@ const MainLayout = ({ onLogout }) => {
       case 'classes':
       case 'classes-department':
       case 'classes-departments':
+      case 'classes-designation':
+      case 'classes-designations':
       case 'department':
       case 'departments':
       case 'classes-section':
@@ -94,7 +97,12 @@ const MainLayout = ({ onLogout }) => {
       case 'accounts-transaction':
         return <AccountsModule />;
       case 'hrm':
+      case 'hrm-staff':
         return <HrmModule />;
+      case 'hrm-designation':
+      case 'designation':
+      case 'designations':
+        return <DesignationModule />;
       case 'notice':
         return <NoticeBoardModule />;
       case 'project':

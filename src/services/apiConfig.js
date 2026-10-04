@@ -149,7 +149,15 @@ export const API_ENDPOINTS = {
 
   // Human Resources Management
   HRM: {
-    SUMMARY: '/hrm/summary'
+    SUMMARY: '/hrm/summary',
+    DESIGNATIONS: '/designations',
+    DESIGNATION_BY_ID: (id) => `/designations/${id}`
+  },
+
+  // Designation Management
+  DESIGNATIONS: {
+    BASE: '/designations',
+    BY_ID: (id) => `/designations/${id}`
   },
 
   // Notice Board

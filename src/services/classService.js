@@ -1,5 +1,6 @@
 import NetworkService from './networkService';
 import { API_ENDPOINTS } from './apiConfig';
+import { designationService } from './designationService';
 
 const classesEndpoints = {
   list: () => NetworkService.get(API_ENDPOINTS.CLASSES.CLASSES),
@@ -73,13 +74,20 @@ export const classService = {
   updateDepartment: departmentsEndpoints.update,
   deleteDepartment: departmentsEndpoints.remove,
 
+  listDesignations: designationService.list,
+  getDesignation: designationService.get,
+  createDesignation: designationService.create,
+  updateDesignation: designationService.update,
+  deleteDesignation: designationService.remove,
+
   // Sub-namespace objects for UI components compatibility
   classes: classesEndpoints,
   list: classesEndpoints, // Alias for backward compatibility
   sections: sectionsEndpoints,
   subjects: subjectsEndpoints,
   rooms: roomsEndpoints,
-  departments: departmentsEndpoints
+  departments: departmentsEndpoints,
+  designations: designationService
 };
 
 export default classService;
