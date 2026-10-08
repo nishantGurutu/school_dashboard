@@ -177,6 +177,20 @@ export const API_ENDPOINTS = {
     BASE: '/holidays',
     BY_ID: (id) => `/holidays/${id}`,
     CHECK: (date) => `/holidays/check?date=${encodeURIComponent(date)}`
+  },
+
+  // Mobile Promotional Banners
+  BANNERS: {
+    BASE: '/banners',
+    ACTIVE: '/banners/active',
+    BY_ID: (id) => `/banners/${id}`
+  },
+
+  // School Photo Gallery
+  GALLERY: {
+    BASE: '/gallery',
+    ACTIVE: '/gallery/active',
+    BY_ID: (id) => `/gallery/${id}`
   }
 };
 

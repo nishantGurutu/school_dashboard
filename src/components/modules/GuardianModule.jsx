@@ -64,6 +64,7 @@ export const GuardianModule = () => {
       email: formData.email,
       address: formData.guardianAddress || formData.address,
       feeStatus: 'Clear',
+      studentAdmissionNo: formData.studentAdmissionNo || undefined,
       password: formData.password || undefined
     };
 

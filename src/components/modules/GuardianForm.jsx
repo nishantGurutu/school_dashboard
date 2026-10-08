@@ -1,19 +1,31 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
+import { studentService } from '../../services/studentService';
 
 export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEditMode = false }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [studentsList, setStudentsList] = useState([]);
   const savingRef = useRef(false);
+
+  useEffect(() => {
+    studentService.list({ page: 0, size: 200 })
+      .then((res) => {
+        const list = Array.isArray(res) ? res : (res?.content || []);
+        setStudentsList(list);
+      })
+      .catch((err) => console.warn('Failed to load students list for guardian form:', err));
+  }, []);
 
   // Form State containing all fields from guardian screenshot
   const [formData, setFormData] = useState({
-    guardianType: initialData?.relation || 'Father',
-    guardianName: initialData?.name || '',
+    guardianType: initialData?.relation || initialData?.guardianType || 'Father',
+    guardianName: initialData?.name || initialData?.guardianName || '',
     instagram: initialData?.phone || '',
     occupation: initialData?.occupation || '',
     guardianAddress: initialData?.address || '',
+    studentAdmissionNo: initialData?.studentAdmissionNo || initialData?.admissionNo || '',
     guardianPhoto: null,
     email: initialData?.email || '',
     password: ''
@@ -23,11 +35,12 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
     if (initialData) {
       setFormData((prev) => ({
         ...prev,
-        guardianType: initialData.relation || prev.guardianType,
-        guardianName: initialData.name || prev.guardianName,
+        guardianType: initialData.relation || initialData.guardianType || prev.guardianType,
+        guardianName: initialData.name || initialData.guardianName || prev.guardianName,
         instagram: initialData.phone || prev.instagram,
         occupation: initialData.occupation || prev.occupation,
         guardianAddress: initialData.address || prev.guardianAddress,
+        studentAdmissionNo: initialData.studentAdmissionNo || initialData.admissionNo || prev.studentAdmissionNo,
         email: initialData.email || prev.email
       }));
     }
@@ -55,11 +68,12 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
   const handleReset = () => {
     if (initialData) {
       setFormData({
-        guardianType: initialData.relation || 'Father',
-        guardianName: initialData.name || '',
+        guardianType: initialData.relation || initialData.guardianType || 'Father',
+        guardianName: initialData.name || initialData.guardianName || '',
         instagram: initialData.phone || '',
         occupation: initialData.occupation || '',
         guardianAddress: initialData.address || '',
+        studentAdmissionNo: initialData.studentAdmissionNo || initialData.admissionNo || '',
         guardianPhoto: null,
         email: initialData.email || '',
         password: ''
@@ -71,6 +85,7 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
         instagram: '',
         occupation: '',
         guardianAddress: '',
+        studentAdmissionNo: '',
         guardianPhoto: null,
         email: '',
         password: ''
@@ -181,9 +196,27 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
 
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Teacher Photo <span style={{ color: '#ef4444' }}>*</span>
+                Link Student / Child (Ward)
               </label>
-              <DropzoneArea placeholder="Darg & drop a file here or click" />
+              <select
+                value={formData.studentAdmissionNo}
+                onChange={(e) => handleChange('studentAdmissionNo', e.target.value)}
+                style={inputStyle}
+              >
+                <option value="">-- Select Child / Student --</option>
+                {studentsList.map((stu) => (
+                  <option key={stu.id || stu.admissionNo} value={stu.admissionNo}>
+                    {stu.name} ({stu.className || 'Class'} • Adm: {stu.admissionNo})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="col-span-4">
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                Guardian Photo
+              </label>
+              <DropzoneArea placeholder="Drag & drop photo here or click" />
             </div>
           </div>
         </div>

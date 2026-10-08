@@ -9,6 +9,7 @@ import {
   Save
 } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
+import { MultiSelectDropdown } from '../ui/MultiSelectDropdown';
 import { classService } from '../../services/classService';
 
 export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEditMode = false }) => {
@@ -16,9 +17,10 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
 
-  // Dynamic Classes and Sections loaded from backend APIs
+  // Dynamic Classes, Sections, and Subjects loaded from backend APIs
   const [classesList, setClassesList] = useState([]);
   const [sectionsList, setSectionsList] = useState([]);
+  const [subjectsList, setSubjectsList] = useState([]);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
 
   useEffect(() => {
@@ -26,16 +28,19 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     setIsLoadingClasses(true);
     Promise.all([
       classService.classes.list().catch(() => []),
-      classService.sections.list().catch(() => [])
+      classService.sections.list().catch(() => []),
+      classService.subjects.list().catch(() => [])
     ])
-      .then(([clsRes, secRes]) => {
+      .then(([clsRes, secRes, subRes]) => {
         if (!isMounted) return;
         const cls = Array.isArray(clsRes) ? clsRes : (clsRes?.data || []);
         const secs = Array.isArray(secRes) ? secRes : (secRes?.data || []);
+        const subs = Array.isArray(subRes) ? subRes : (subRes?.data || []);
         setClassesList(cls);
         setSectionsList(secs);
+        setSubjectsList(subs);
       })
-      .catch((err) => console.warn('Failed to load classes and sections from API:', err))
+      .catch((err) => console.warn('Failed to load classes, sections, and subjects from API:', err))
       .finally(() => {
         if (isMounted) setIsLoadingClasses(false);
       });
@@ -71,6 +76,19 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     return list;
   }, [sectionsList]);
 
+  const availableSubjects = useMemo(() => {
+    const list = [];
+    const seen = new Set();
+    subjectsList.forEach((sub) => {
+      const name = sub?.name?.trim();
+      if (name && !seen.has(name.toLowerCase())) {
+        seen.add(name.toLowerCase());
+        list.push({ id: sub.id, name, code: sub.code });
+      }
+    });
+    return list;
+  }, [subjectsList]);
+
   const initialClassName = initialData?.studentClass || initialData?.className || (initialData?.class ? initialData.class.split(' - ')[0] : '');
   const initialSection = initialData?.section || (initialData?.class && initialData.class.includes(' - ') ? initialData.class.split(' - ')[1] : '');
 
@@ -80,6 +98,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     academicYear: initialData?.academicYear || '2025/2026',
     studentClass: initialClassName || '',
     section: initialSection || '',
+    subjectIds: initialData?.subjectIds || [],
     rollNumber: initialData?.rollNo || initialData?.rollNumber || '',
     admissionNo: initialData?.admissionNo || initialData?.id || '',
     fullName: initialData?.name || initialData?.fullName || '',
@@ -153,6 +172,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
         fullName: initialData.name || initialData.fullName || prev.fullName,
         studentClass: cls || prev.studentClass,
         section: sec || prev.section,
+        subjectIds: initialData.subjectIds || prev.subjectIds || [],
         rollNumber: initialData.rollNo || initialData.rollNumber || prev.rollNumber,
         admissionNo: initialData.admissionNo || initialData.id || prev.admissionNo,
         phone: initialData.phone ? String(initialData.phone).replace(/\D/g, '').slice(0, 15) : prev.phone,
@@ -336,6 +356,28 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
                 value={formData.rollNumber}
                 onChange={(e) => handleChange('rollNumber', e.target.value)}
                 style={inputStyle}
+              />
+            </div>
+
+            {/* Multi-select Subject Assignment */}
+            <div className="col-span-12">
+              <MultiSelectDropdown
+                label="Assign Subjects (Select subjects for this student)"
+                placeholder="Choose subjects from academic curriculum..."
+                options={availableSubjects.map((s) => ({
+                  id: s.id,
+                  label: s.code ? `${s.name} (${s.code})` : s.name,
+                  name: s.name,
+                  code: s.code
+                }))}
+                selectedIds={formData.subjectIds || []}
+                onChange={(newIds) => {
+                  setFormData((prev) => ({
+                    ...prev,
+                    subjectIds: newIds
+                  }));
+                }}
+                isLoading={isLoadingClasses}
               />
             </div>
 

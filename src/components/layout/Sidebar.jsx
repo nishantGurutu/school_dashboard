@@ -17,6 +17,8 @@ import {
   DollarSign,
   UserCog,
   BookMarked,
+  Image,
+  Images,
   ChevronRight,
   ChevronDown,
   FolderKanban,
@@ -44,8 +46,8 @@ export const Sidebar = () => {
   }
 
   const roleModuleMap = {
-    SUPER_ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice'],
-    PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice'],
+    SUPER_ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery'],
+    PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice', 'banners', 'gallery'],
     TEACHER: ['dashboard', 'students', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'notice'],
     ACCOUNTANT: ['dashboard', 'students', 'fees', 'accounts', 'hrm', 'holidays', 'notice'],
     LIBRARIAN: ['dashboard', 'library', 'holidays', 'notice']
@@ -153,7 +155,9 @@ export const Sidebar = () => {
         { key: 'hrm-designation', label: 'Designation' }
       ]
     },
-    { key: 'notice', label: 'Notice Board', icon: BookMarked, hasSub: false }
+    { key: 'notice', label: 'Notice Board', icon: BookMarked, hasSub: false },
+    { key: 'banners', label: 'Promotional Banners', icon: Image, hasSub: false },
+    { key: 'gallery', label: 'School Gallery', icon: Images, hasSub: false }
   ];
 
   const visibleMenuItems = menuItems.filter(item => allowedKeys.includes(item.key));

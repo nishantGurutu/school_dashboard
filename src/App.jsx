@@ -26,6 +26,8 @@ import { DesignationModule } from './components/modules/DesignationModule';
 import { NoticeBoardModule } from './components/modules/NoticeBoardModule';
 import { HolidaysModule } from './components/modules/HolidaysModule';
 import { TimetableModule } from './components/modules/TimetableModule';
+import { BannersModule } from './components/modules/BannersModule';
+import { GalleryModule } from './components/modules/GalleryModule';
 
 import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerModal';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -105,6 +107,10 @@ const MainLayout = ({ onLogout }) => {
         return <DesignationModule />;
       case 'notice':
         return <NoticeBoardModule />;
+      case 'banners':
+        return <BannersModule />;
+      case 'gallery':
+        return <GalleryModule />;
       case 'project':
         return <ProjectDashboard />;
       case 'kanban':
