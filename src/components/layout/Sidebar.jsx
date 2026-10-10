@@ -48,7 +48,7 @@ export const Sidebar = () => {
   const roleModuleMap = {
     SUPER_ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery'],
     PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice', 'banners', 'gallery'],
-    TEACHER: ['dashboard', 'students', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'notice'],
+    TEACHER: ['dashboard', 'students', 'classes', 'curriculum', 'examinations', 'attendance', 'holidays', 'leaves', 'notice'],
     ACCOUNTANT: ['dashboard', 'students', 'fees', 'accounts', 'hrm', 'holidays', 'notice'],
     LIBRARIAN: ['dashboard', 'library', 'holidays', 'notice']
   };
@@ -75,6 +75,7 @@ export const Sidebar = () => {
         { key: 'classes-room', label: 'Class Room' }
       ]
     },
+    { key: 'curriculum', label: 'Curriculum & Notes', icon: BookOpen, hasSub: false },
     {
       key: 'examinations',
       label: 'Examinations',

@@ -28,6 +28,7 @@ import { HolidaysModule } from './components/modules/HolidaysModule';
 import { TimetableModule } from './components/modules/TimetableModule';
 import { BannersModule } from './components/modules/BannersModule';
 import { GalleryModule } from './components/modules/GalleryModule';
+import { TeacherCurriculumModule } from './components/modules/TeacherCurriculumModule';
 
 import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerModal';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -49,6 +50,10 @@ const MainLayout = ({ onLogout }) => {
       case 'academic-timetable':
       case 'timetable':
         return <TimetableModule />;
+      case 'curriculum':
+      case 'teacher-curriculum':
+      case 'curriculum-notes':
+        return <TeacherCurriculumModule />;
       case 'classes':
       case 'classes-department':
       case 'classes-departments':
