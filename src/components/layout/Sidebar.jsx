@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { authStorage } from '../../services/api';
+import { roleFor, visibleMenu } from '../../config/roleAccess';
 import {
   Home,
   GraduationCap,
@@ -29,31 +30,7 @@ export const Sidebar = () => {
   const { activeTab, setActiveTab, isSidebarCollapsed } = useTheme();
   const [openSubMenu, setOpenSubMenu] = useState('classes'); // Default open classes sub-menu
   const currentUser = authStorage.getUser();
-  const rawRole = (currentUser?.role || currentUser?.userType || 'MASTER_ADMIN').toString().toUpperCase();
-
-  // Normalize logged in role for granular dashboard permissions
-  let normalizedRole = 'SUPER_ADMIN';
-  if (rawRole.includes('SUPER') || rawRole.includes('MASTER') || rawRole === 'ADMIN') {
-    normalizedRole = 'SUPER_ADMIN';
-  } else if (rawRole.includes('PRINCIPAL')) {
-    normalizedRole = 'PRINCIPAL';
-  } else if (rawRole.includes('TEACHER')) {
-    normalizedRole = 'TEACHER';
-  } else if (rawRole.includes('ACCOUNT') || rawRole.includes('FINANCE')) {
-    normalizedRole = 'ACCOUNTANT';
-  } else if (rawRole.includes('LIBRAR')) {
-    normalizedRole = 'LIBRARIAN';
-  }
-
-  const roleModuleMap = {
-    SUPER_ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery'],
-    PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice', 'banners', 'gallery'],
-    TEACHER: ['dashboard', 'students', 'classes', 'curriculum', 'examinations', 'attendance', 'holidays', 'leaves', 'notice'],
-    ACCOUNTANT: ['dashboard', 'students', 'fees', 'accounts', 'hrm', 'holidays', 'notice'],
-    LIBRARIAN: ['dashboard', 'library', 'holidays', 'notice']
-  };
-
-  const allowedKeys = roleModuleMap[normalizedRole] || roleModuleMap.SUPER_ADMIN;
+  const normalizedRole = roleFor(currentUser);
 
   const menuItems = [
     { key: 'dashboard', label: 'Dashboard', icon: Home, hasSub: true },
@@ -75,6 +52,7 @@ export const Sidebar = () => {
         { key: 'classes-room', label: 'Class Room' }
       ]
     },
+    { key: 'homework', label: 'Assignments', icon: FileEdit, hasSub: false },
     { key: 'curriculum', label: 'Curriculum & Notes', icon: BookOpen, hasSub: false },
     {
       key: 'examinations',
@@ -161,7 +139,7 @@ export const Sidebar = () => {
     { key: 'gallery', label: 'School Gallery', icon: Images, hasSub: false }
   ];
 
-  const visibleMenuItems = menuItems.filter(item => allowedKeys.includes(item.key));
+  const visibleMenuItems = visibleMenu(currentUser, menuItems);
 
   const handleParentNavClick = (item) => {
     if (item.subItems) {
@@ -182,7 +160,7 @@ export const Sidebar = () => {
           setActiveTab('attendance-student');
         }
         if (item.key === 'leaves' && !activeTab.startsWith('leaves')) {
-          setActiveTab('leaves-type');
+          setActiveTab(item.subItems[0].key);
         }
         if (item.key === 'library' && !activeTab.startsWith('library')) {
           setActiveTab('library-books');
@@ -480,3 +458,5 @@ export const Sidebar = () => {
     </aside>
   );
 };
+
+

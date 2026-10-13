@@ -4,6 +4,9 @@ import { ToastProvider } from './context/ToastContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { authStorage } from './services/api';
+import { canAccess, roleFor } from './config/roleAccess';
+import { TeacherDashboard } from './components/dashboard/TeacherDashboard';
+import { HomeworkModule } from './components/modules/HomeworkModule';
 import { authService } from './services/authService';
 
 import { SchoolAdminDashboard } from './components/dashboard/SchoolAdminDashboard';
@@ -37,9 +40,12 @@ const MainLayout = ({ onLogout }) => {
   const { activeTab, isSidebarCollapsed } = useTheme();
 
   const renderModule = () => {
+    if (!canAccess(authStorage.getUser(), activeTab)) return <p role="alert">You do not have access to this module.</p>;
     switch (activeTab) {
       case 'dashboard':
-        return <SchoolAdminDashboard />;
+        return roleFor(authStorage.getUser()) === 'TEACHER' ? <TeacherDashboard /> : <SchoolAdminDashboard />;
+      case 'homework':
+        return <HomeworkModule />;
       case 'students':
         return <StudentsModule />;
       case 'teachers':
@@ -172,3 +178,5 @@ export default function App() {
     </ThemeProvider>
   );
 }
+
+
