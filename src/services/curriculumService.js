@@ -3,16 +3,18 @@ import NetworkService from './networkService';
 export const curriculumService = {
   // Teacher assigned subjects (optionally filtered by class)
   getSubjects: (className) =>
-    NetworkService.get('/teacher/curriculum/subjects', {
-      params: className && className !== 'All' ? { className } : {}
-    }),
+    NetworkService.get(
+      '/teacher/curriculum/subjects',
+      className && className !== 'All' ? { className } : null
+    ),
 
   createSubject: (data) => NetworkService.post('/teacher/curriculum/subjects', data),
 
   // Chapters & Topics tree
   getChapters: (subjectId, className) =>
     NetworkService.get('/teacher/curriculum/chapters', {
-      params: { subjectId, ...(className ? { className } : {}) }
+      ...(subjectId ? { subjectId } : {}),
+      ...(className && className !== 'All' ? { className } : {})
     }),
 
   // Chapter operations

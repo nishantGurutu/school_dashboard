@@ -81,9 +81,14 @@ class NetworkServiceClass {
 
     let url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
 
-    if (params && Object.keys(params).length > 0) {
+    const resolvedParams =
+      params && typeof params === 'object' && params.params && typeof params.params === 'object'
+        ? { ...params.params }
+        : params;
+
+    if (resolvedParams && Object.keys(resolvedParams).length > 0) {
       const searchParams = new URLSearchParams();
-      Object.entries(params).forEach(([key, val]) => {
+      Object.entries(resolvedParams).forEach(([key, val]) => {
         if (val !== undefined && val !== null && val !== '') {
           searchParams.append(key, val);
         }

@@ -329,28 +329,43 @@ export const TeacherCurriculumModule = () => {
 
     try {
       setSavingChapter(true);
+      const targetClass = chapterForm.className || selectedClass || 'Class 10';
+      let saved;
+
       if (chapterModalMode === 'create') {
-        const saved = await curriculumService.createChapter({
-          subjectId: targetSubId,
-          className: chapterForm.className || selectedClass,
-          chapterNumber: chapterForm.chapterNumber,
-          chapterTitle: chapterForm.chapterTitle,
-          description: chapterForm.description,
-          displayOrder: chapterForm.displayOrder
+        saved = await curriculumService.createChapter({
+          subjectId: Number(targetSubId),
+          className: targetClass,
+          chapterNumber: chapterForm.chapterNumber?.trim() || `Chapter ${chapters.length + 1}`,
+          chapterTitle: chapterForm.chapterTitle.trim(),
+          description: chapterForm.description || '',
+          displayOrder: Number(chapterForm.displayOrder) || chapters.length + 1
         });
-        showToast('success', `${saved.chapterNumber} added to ${selectedSubject?.name || 'Subject'}!`);
+        showToast('success', `${saved?.chapterNumber || chapterForm.chapterNumber} added successfully!`);
       } else {
-        await curriculumService.updateChapter(editingChapter.id, {
-          chapterNumber: chapterForm.chapterNumber,
-          chapterTitle: chapterForm.chapterTitle,
-          description: chapterForm.description,
-          displayOrder: chapterForm.displayOrder
+        saved = await curriculumService.updateChapter(editingChapter.id, {
+          subjectId: Number(targetSubId),
+          className: targetClass,
+          chapterNumber: chapterForm.chapterNumber?.trim() || editingChapter.chapterNumber,
+          chapterTitle: chapterForm.chapterTitle.trim(),
+          description: chapterForm.description || '',
+          displayOrder: Number(chapterForm.displayOrder) || 1
         });
         showToast('success', 'Chapter updated successfully!');
       }
 
       setIsChapterModalOpen(false);
-      loadChaptersForSubject(targetSubId, chapterForm.className || selectedClass);
+
+      // Keep active subject and class synchronized with the saved chapter
+      const matchedSub = subjects.find((s) => String(s.id) === String(targetSubId));
+      if (matchedSub && (!selectedSubject || String(selectedSubject.id) !== String(matchedSub.id))) {
+        setSelectedSubject(matchedSub);
+      }
+      if (targetClass && targetClass !== selectedClass) {
+        setSelectedClass(targetClass);
+      }
+
+      await loadChaptersForSubject(targetSubId, targetClass);
     } catch (err) {
       showToast('error', 'Failed to save chapter: ' + (err.message || 'Error'));
     } finally {
@@ -1425,7 +1440,7 @@ export const TeacherCurriculumModule = () => {
                   </div>
                   <select
                     value={chapterForm.subjectId || selectedSubject?.id || ''}
-                    onChange={(e) => setChapterForm({ ...chapterForm, subjectId: e.target.value })}
+                    onChange={(e) => setChapterForm({ ...chapterForm, subjectId: e.target.value ? Number(e.target.value) : '' })}
                     style={inputStyle}
                     required
                   >
