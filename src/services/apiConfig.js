@@ -191,6 +191,27 @@ export const API_ENDPOINTS = {
     BASE: '/gallery',
     ACTIVE: '/gallery/active',
     BY_ID: (id) => `/gallery/${id}`
+  },
+
+  // Transport Management System
+  TRANSPORT: {
+    OVERVIEW: '/v1/transport/overview',
+    BUSES: '/v1/transport/buses',
+    BUS_BY_ID: (id) => `/v1/transport/buses/${id}`,
+    DRIVERS: '/v1/transport/drivers',
+    DRIVER_BY_ID: (id) => `/v1/transport/drivers/${id}`,
+    ROUTES: '/v1/transport/routes',
+    ROUTE_BY_ID: (id) => `/v1/transport/routes/${id}`,
+    ROUTE_STOPS: (routeId) => `/v1/transport/routes/${routeId}/stops`,
+    ASSIGNMENTS: '/v1/transport/assignments',
+    ASSIGNMENT_BY_ID: (id) => `/v1/transport/assignments/${id}`,
+    STUDENT_ASSIGNMENTS: '/v1/transport/student-assignments',
+    LIVE_TRACKING: '/v1/transport/tracking/live',
+    TRIP_PLAYBACK: (tripId) => `/v1/transport/tracking/trips/${tripId}/playback`,
+    TRIP_REPORTS: '/v1/transport/reports/trips',
+    ALERTS: '/v1/transport/alerts',
+    ACK_ALERT: (id) => `/v1/transport/alerts/${id}/acknowledge`,
+    RESOLVE_ALERT: (id) => `/v1/transport/alerts/${id}/resolve`
   }
 };
 

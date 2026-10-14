@@ -1,6 +1,6 @@
 const modules = {
-  ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery'],
-  PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice', 'banners', 'gallery'],
+  ADMIN: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
+  PRINCIPAL: ['dashboard', 'students', 'teachers', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
   TEACHER: ['dashboard', 'students', 'curriculum', 'homework', 'examinations', 'attendance-student', 'holidays', 'leaves-request', 'notice', 'classes-timetable'],
   ACCOUNTANT: ['dashboard', 'fees', 'accounts', 'holidays', 'notice'],
   LIBRARIAN: ['dashboard', 'library', 'holidays', 'notice'],

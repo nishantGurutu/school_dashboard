@@ -32,6 +32,7 @@ import { TimetableModule } from './components/modules/TimetableModule';
 import { BannersModule } from './components/modules/BannersModule';
 import { GalleryModule } from './components/modules/GalleryModule';
 import { TeacherCurriculumModule } from './components/modules/TeacherCurriculumModule';
+import { TransportModule } from './components/modules/TransportModule';
 
 import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerModal';
 import { LoginScreen } from './components/auth/LoginScreen';
@@ -122,6 +123,16 @@ const MainLayout = ({ onLogout }) => {
         return <BannersModule />;
       case 'gallery':
         return <GalleryModule />;
+      case 'transport':
+      case 'transport-overview':
+      case 'transport-buses':
+      case 'transport-drivers':
+      case 'transport-routes':
+      case 'transport-assignments':
+      case 'transport-live':
+      case 'transport-reports':
+      case 'transport-alerts':
+        return <TransportModule />;
       case 'project':
         return <ProjectDashboard />;
       case 'kanban':

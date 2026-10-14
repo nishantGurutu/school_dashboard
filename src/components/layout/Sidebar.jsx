@@ -23,7 +23,8 @@ import {
   ChevronRight,
   ChevronDown,
   FolderKanban,
-  Kanban
+  Kanban,
+  Bus
 } from 'lucide-react';
 
 export const Sidebar = () => {
@@ -136,7 +137,23 @@ export const Sidebar = () => {
     },
     { key: 'notice', label: 'Notice Board', icon: BookMarked, hasSub: false },
     { key: 'banners', label: 'Promotional Banners', icon: Image, hasSub: false },
-    { key: 'gallery', label: 'School Gallery', icon: Images, hasSub: false }
+    { key: 'gallery', label: 'School Gallery', icon: Images, hasSub: false },
+    {
+      key: 'transport',
+      label: 'Transport System',
+      icon: Bus,
+      hasSub: true,
+      subItems: [
+        { key: 'transport-overview', label: 'Overview' },
+        { key: 'transport-buses', label: 'Bus Management' },
+        { key: 'transport-drivers', label: 'Driver Management' },
+        { key: 'transport-routes', label: 'Route & Stops' },
+        { key: 'transport-assignments', label: 'Assignments' },
+        { key: 'transport-live', label: 'Live Tracking' },
+        { key: 'transport-reports', label: 'Reports & Playback' },
+        { key: 'transport-alerts', label: 'Alerts Center' }
+      ]
+    }
   ];
 
   const visibleMenuItems = visibleMenu(currentUser, menuItems);
@@ -169,9 +186,13 @@ export const Sidebar = () => {
           setActiveTab('accounts-income-head');
         }
         if (item.key === 'hrm' && !activeTab.startsWith('hrm')) {
+    if (item.key === 'transport' && activeTab.startsWith('transport')) return true;
           setActiveTab('hrm-staff');
         }
       }
+        if (item.key === 'transport' && !activeTab.startsWith('transport')) {
+          setActiveTab('transport-overview');
+        }
     } else {
       setActiveTab(item.key);
     }
@@ -187,6 +208,7 @@ export const Sidebar = () => {
     if (item.key === 'library' && activeTab.startsWith('library')) return true;
     if (item.key === 'accounts' && activeTab.startsWith('accounts')) return true;
     if (item.key === 'hrm' && (activeTab.startsWith('hrm') || activeTab.startsWith('designation'))) return true;
+    if (item.key === 'transport' && activeTab.startsWith('transport')) return true;
     return false;
   };
 
