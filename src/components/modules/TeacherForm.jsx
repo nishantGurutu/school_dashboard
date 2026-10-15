@@ -273,6 +273,24 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     }
   }, [designationsList, formData.designation, formData.designationId]);
 
+  // Only Teaching / Academics or School Leadership departments have Subject Specialization and Assign Class
+  const isAcademicOrLeadershipDept = useMemo(() => {
+    const selectedDeptObj = departmentsList.find(
+      (d) => String(d.id) === String(formData.departmentId)
+    );
+    const resolvedName = (selectedDeptObj?.name || formData.department || '').toLowerCase().trim();
+    const resolvedCode = (selectedDeptObj?.code || '').toLowerCase().trim();
+
+    return (
+      resolvedName.includes('teach') ||
+      resolvedName.includes('acad') ||
+      resolvedName.includes('leadership') ||
+      resolvedCode.includes('acad') ||
+      resolvedCode.includes('teach') ||
+      resolvedCode.includes('lead')
+    );
+  }, [formData.department, formData.departmentId, departmentsList]);
+
   const handleChange = (field, value) => {
     setFormData((prev) => {
       const updated = { ...prev, [field]: value };
@@ -317,9 +335,11 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         joiningDate: formData.joinDate || formData.joiningDate || new Date().toISOString().split('T')[0],
         departmentId: formData.departmentId ? Number(formData.departmentId) : null,
         designationId: formData.designationId ? Number(formData.designationId) : null,
-        subjectIds: formData.subjectIds || [],
-        assignedClassIds: formData.assignedClassIds || [],
-        classIds: formData.assignedClassIds || []
+        subjectIds: isAcademicOrLeadershipDept ? (formData.subjectIds || []) : [],
+        assignedClassIds: isAcademicOrLeadershipDept ? (formData.assignedClassIds || []) : [],
+        classIds: isAcademicOrLeadershipDept ? (formData.assignedClassIds || []) : [],
+        subject: isAcademicOrLeadershipDept ? formData.subject : '',
+        assignedClass: isAcademicOrLeadershipDept ? formData.assignedClass : ''
       });
     } finally {
       savingRef.current = false;
@@ -482,13 +502,26 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                 onChange={(e) => {
                   const selId = e.target.value;
                   const sel = departmentsList.find((d) => String(d.id) === String(selId));
+                  const deptName = sel ? sel.name : '';
+                  const deptCode = sel ? sel.code : '';
+                  const isAcad = (
+                    deptName.toLowerCase().includes('teach') ||
+                    deptName.toLowerCase().includes('acad') ||
+                    deptName.toLowerCase().includes('leadership') ||
+                    deptCode.toLowerCase().includes('acad') ||
+                    deptCode.toLowerCase().includes('teach') ||
+                    deptCode.toLowerCase().includes('lead')
+                  );
+
                   setFormData((prev) => ({
                     ...prev,
                     departmentId: selId ? Number(selId) : '',
-                    department: sel ? sel.name : '',
+                    department: deptName,
                     // Reset designation when department changes so only valid designations for this department are selected
                     designationId: '',
-                    designation: ''
+                    designation: '',
+                    // Clear subject & assigned classes if switched to non-academic department
+                    ...(isAcad ? {} : { subjectIds: [], subject: '', assignedClassIds: [], assignedClass: '' })
                   }));
                 }}
                 style={inputStyle}
@@ -561,52 +594,56 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               ) : null}
             </div>
 
-            {/* Row 2: Subject & Class (Multi-select) */}
-            <div className="col-span-6">
-              <MultiSelectDropdown
-                label="Subject Specialization"
-                placeholder="Select Subject Specialization..."
-                options={availableSubjects.map((sub) => ({
-                  id: sub.id,
-                  label: sub.name,
-                  code: sub.code,
-                  name: sub.name
-                }))}
-                selectedIds={formData.subjectIds}
-                onChange={(newIds, newItems) => {
-                  const names = newItems.map((item) => item.name || item.label).join(', ');
-                  setFormData((prev) => ({
-                    ...prev,
-                    subjectIds: newIds,
-                    subject: names
-                  }));
-                }}
-                isLoading={isLoadingDropdowns}
-              />
-            </div>
+            {/* Row 2: Subject & Class (Multi-select) - Only shown for Teaching/Academics or School Leadership */}
+            {isAcademicOrLeadershipDept && (
+              <>
+                <div className="col-span-6 animate-fade-in">
+                  <MultiSelectDropdown
+                    label="Subject Specialization"
+                    placeholder="Select Subject Specialization..."
+                    options={availableSubjects.map((sub) => ({
+                      id: sub.id,
+                      label: sub.name,
+                      code: sub.code,
+                      name: sub.name
+                    }))}
+                    selectedIds={formData.subjectIds}
+                    onChange={(newIds, newItems) => {
+                      const names = newItems.map((item) => item.name || item.label).join(', ');
+                      setFormData((prev) => ({
+                        ...prev,
+                        subjectIds: newIds,
+                        subject: names
+                      }));
+                    }}
+                    isLoading={isLoadingDropdowns}
+                  />
+                </div>
 
-            <div className="col-span-6">
-              <MultiSelectDropdown
-                label="Assign Class"
-                placeholder="Select Classes to Assign..."
-                options={availableClasses.map((c) => ({
-                  id: c.id,
-                  label: c.label,
-                  name: c.name,
-                  section: c.section
-                }))}
-                selectedIds={formData.assignedClassIds}
-                onChange={(newIds, newItems) => {
-                  const labels = newItems.map((item) => item.label || item.name).join(', ');
-                  setFormData((prev) => ({
-                    ...prev,
-                    assignedClassIds: newIds,
-                    assignedClass: labels
-                  }));
-                }}
-                isLoading={isLoadingDropdowns}
-              />
-            </div>
+                <div className="col-span-6 animate-fade-in">
+                  <MultiSelectDropdown
+                    label="Assign Class"
+                    placeholder="Select Classes to Assign..."
+                    options={availableClasses.map((c) => ({
+                      id: c.id,
+                      label: c.label,
+                      name: c.name,
+                      section: c.section
+                    }))}
+                    selectedIds={formData.assignedClassIds}
+                    onChange={(newIds, newItems) => {
+                      const labels = newItems.map((item) => item.label || item.name).join(', ');
+                      setFormData((prev) => ({
+                        ...prev,
+                        assignedClassIds: newIds,
+                        assignedClass: labels
+                      }));
+                    }}
+                    isLoading={isLoadingDropdowns}
+                  />
+                </div>
+              </>
+            )}
 
             {/* Row 2 */}
             <div className="col-span-3">
