@@ -157,7 +157,8 @@ export const API_ENDPOINTS = {
   // Designation Management
   DESIGNATIONS: {
     BASE: '/designations',
-    BY_ID: (id) => `/designations/${id}`
+    BY_ID: (id) => `/designations/${id}`,
+    BY_DEPARTMENT: (departmentId) => `/designations/department/${departmentId}`
   },
 
   // Notice Board

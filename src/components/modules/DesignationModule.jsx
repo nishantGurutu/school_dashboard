@@ -18,18 +18,20 @@ import {
   Layers
 } from 'lucide-react';
 import { designationService } from '../../services/designationService';
+import { classService } from '../../services/classService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
 
-export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDataChange }) => {
+export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDataChange, departments: propDepartments = [] }) => {
   const [designations, setDesignations] = useState([]);
+  const [departments, setDepartments] = useState(propDepartments);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
   // Table & Filter States
   const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('ALL');
+  const [departmentFilter, setDepartmentFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -52,8 +54,7 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
   const [formData, setFormData] = useState({
     name: '',
     code: '',
-    category: 'Teaching',
-    description: '',
+    departmentId: '',
     status: 'Active'
   });
 
@@ -64,6 +65,25 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
       return () => clearTimeout(timer);
     }
   }, [successMessage]);
+
+  // Fetch departments list
+  const fetchDepartments = useCallback(async () => {
+    try {
+      const data = await classService.departments.list();
+      const list = Array.isArray(data) ? data : (data?.data || []);
+      setDepartments(list);
+    } catch (e) {
+      console.warn('Could not load departments list:', e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (propDepartments && propDepartments.length > 0) {
+      setDepartments(propDepartments);
+    } else {
+      fetchDepartments();
+    }
+  }, [propDepartments, fetchDepartments]);
 
   // Fetch all designations from backend API
   const fetchDesignations = useCallback(async () => {
@@ -95,11 +115,11 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
   const handleOpenAddModal = () => {
     setEditingItem(null);
     setError('');
+    const defaultDeptId = departments.length > 0 ? String(departments[0].id) : '';
     setFormData({
       name: '',
       code: '',
-      category: 'Teaching',
-      description: '',
+      departmentId: defaultDeptId,
       status: 'Active'
     });
     setIsModalOpen(true);
@@ -110,11 +130,13 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
     setEditingItem(item);
     setActiveDropdownId(null);
     setError('');
+    const deptId = item.departmentId
+      ? String(item.departmentId)
+      : (item.department?.id ? String(item.department.id) : '');
     setFormData({
       name: item.name || '',
       code: item.code || '',
-      category: item.category || 'Teaching',
-      description: item.description || '',
+      departmentId: deptId,
       status: item.status || 'Active'
     });
     setIsModalOpen(true);
@@ -174,6 +196,20 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
   const handleSaveModal = async (e) => {
     e.preventDefault();
     if (savingRef.current) return;
+
+    if (!formData.departmentId) {
+      setError('Please select a department for this designation.');
+      return;
+    }
+    if (!formData.name.trim()) {
+      setError('Please enter designation name.');
+      return;
+    }
+    if (!formData.code.trim()) {
+      setError('Please enter designation code.');
+      return;
+    }
+
     savingRef.current = true;
     setIsSaving(true);
     setError('');
@@ -181,8 +217,7 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
     const payload = {
       name: formData.name.trim(),
       code: formData.code.trim().toUpperCase(),
-      category: formData.category,
-      description: formData.description.trim(),
+      departmentId: Number(formData.departmentId),
       status: formData.status
     };
 
@@ -211,13 +246,12 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
 
   // Export to CSV
   const handleExportCSV = () => {
-    const headers = ['S.L', 'Designation Name', 'Code', 'Category', 'Description', 'Status'];
+    const headers = ['S.L', 'Department', 'Designation Name', 'Code', 'Status'];
     const rows = filteredItems.map((d, idx) => [
       idx + 1,
+      d.departmentName || d.department?.name || 'General / Unassigned',
       d.name,
       d.code || 'N/A',
-      d.category || 'N/A',
-      d.description || '',
       d.status || 'Active'
     ]);
 
@@ -242,13 +276,13 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
     const matchesSearch =
       (item.name || '').toLowerCase().includes(q) ||
       (item.code || '').toLowerCase().includes(q) ||
-      (item.category || '').toLowerCase().includes(q) ||
-      (item.description || '').toLowerCase().includes(q);
+      (item.departmentName || item.department?.name || '').toLowerCase().includes(q);
 
-    const matchesCategory = categoryFilter === 'ALL' || (item.category || '').toLowerCase() === categoryFilter.toLowerCase();
+    const itemDeptId = item.departmentId || item.department?.id;
+    const matchesDepartment = departmentFilter === 'ALL' || String(itemDeptId) === String(departmentFilter);
     const matchesStatus = statusFilter === 'ALL' || (item.status || '').toLowerCase() === statusFilter.toLowerCase();
 
-    return matchesSearch && matchesCategory && matchesStatus;
+    return matchesSearch && matchesDepartment && matchesStatus;
   });
 
   // Pagination
@@ -269,8 +303,8 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
 
   // Summary Metrics
   const activeCount = designations.filter((d) => (d.status || '').toLowerCase() === 'active').length;
-  const teachingCount = designations.filter((d) => (d.category || '').toLowerCase().includes('teach')).length;
-  const adminCount = designations.filter((d) => (d.category || '').toLowerCase().includes('admin')).length;
+  const uniqueDeptCount = new Set(designations.map(d => d.departmentId || d.department?.id).filter(Boolean)).size;
+  const inactiveCount = designations.length - activeCount;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', position: 'relative' }}>
@@ -350,22 +384,22 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
         </div>
 
         <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: '#fef3c7', color: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <Users size={22} />
+          <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: '#ccfbf1', color: '#0d9488', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Building2 size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Academic & Teaching</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>{teachingCount}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Departments Covered</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>{uniqueDeptCount}</div>
           </div>
         </div>
 
         <div className="card" style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: '#f3e8ff', color: '#9333ea', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ width: '42px', height: '42px', borderRadius: '10px', backgroundColor: '#fee2e2', color: '#dc2626', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <ShieldCheck size={22} />
           </div>
           <div>
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Administrative Staff</div>
-            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>{adminCount}</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Inactive Status</div>
+            <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)' }}>{inactiveCount}</div>
           </div>
         </div>
       </div>
@@ -476,7 +510,7 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
               <Search size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: 'var(--text-muted)' }} />
               <input
                 type="text"
-                placeholder="Search by name, code, role..."
+                placeholder="Search by name, code, department..."
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -495,11 +529,11 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
               />
             </div>
 
-            {/* Category Filter */}
+            {/* Department Filter */}
             <select
-              value={categoryFilter}
+              value={departmentFilter}
               onChange={(e) => {
-                setCategoryFilter(e.target.value);
+                setDepartmentFilter(e.target.value);
                 setCurrentPage(1);
               }}
               style={{
@@ -513,11 +547,12 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                 cursor: 'pointer'
               }}
             >
-              <option value="ALL">All Categories</option>
-              <option value="Teaching">Teaching & Faculty</option>
-              <option value="Administration">Administration</option>
-              <option value="Support">Support & Technical</option>
-              <option value="Finance">Finance & Accounts</option>
+              <option value="ALL">All Departments</option>
+              {departments.map((dept) => (
+                <option key={dept.id} value={dept.id}>
+                  {dept.name} ({dept.code})
+                </option>
+              ))}
             </select>
 
             {/* Status Filter */}
@@ -584,10 +619,9 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                   />
                 </th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, width: '70px' }}>S.L</th>
+                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Department</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Designation Title</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600 }}>Code</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Category</th>
-                <th style={{ padding: '12px 16px', fontWeight: 600 }}>Description</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, width: '120px' }}>Status</th>
                 <th style={{ padding: '12px 16px', fontWeight: 600, textAlign: 'center', width: '90px' }}>Action</th>
               </tr>
@@ -595,14 +629,14 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
             <tbody>
               {isLoading && paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     <Spinner size={24} color="#0d9488" />
                     <div style={{ marginTop: '8px' }}>Loading designations from server...</div>
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     No designations found. Click <strong>+ Add Designation</strong> to create one!
                   </td>
                 </tr>
@@ -628,24 +662,65 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                       {String((currentPage - 1) * rowsPerPage + idx + 1).padStart(2, '0')}
                     </td>
 
+                    {/* Department */}
+                    <td style={{ padding: '14px 16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <div style={{
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          backgroundColor: '#ccfbf1',
+                          color: '#0d9488',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          <Building2 size={16} />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.875rem' }}>
+                            {row.departmentName || row.department?.name || 'General / Unassigned'}
+                          </div>
+                          {(row.departmentCode || row.department?.code) && (
+                            <span style={{
+                              display: 'inline-block',
+                              marginTop: '2px',
+                              padding: '1px 6px',
+                              borderRadius: '4px',
+                              backgroundColor: 'var(--bg-app)',
+                              border: '1px solid var(--border-color)',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              color: '#0d9488',
+                              letterSpacing: '0.4px'
+                            }}>
+                              {row.departmentCode || row.department?.code}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
+
                     {/* Designation Title & click to details */}
                     <td style={{ padding: '14px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                         <div
                           style={{
-                            width: '36px',
-                            height: '36px',
+                            width: '32px',
+                            height: '32px',
                             borderRadius: '8px',
-                            backgroundColor: '#ccfbf1',
-                            color: '#0d9488',
+                            backgroundColor: '#e0f2fe',
+                            color: '#0284c7',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontWeight: 700,
-                            fontSize: '0.85rem'
+                            fontSize: '0.85rem',
+                            flexShrink: 0
                           }}
                         >
-                          <Briefcase size={18} />
+                          <Briefcase size={16} />
                         </div>
                         <div>
                           <div
@@ -686,26 +761,6 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                       >
                         {row.code || '—'}
                       </span>
-                    </td>
-
-                    {/* Category */}
-                    <td style={{ padding: '14px 16px' }}>
-                      <CategoryBadge category={row.category} />
-                    </td>
-
-                    {/* Description */}
-                    <td
-                      style={{
-                        padding: '14px 16px',
-                        color: 'var(--text-secondary)',
-                        maxWidth: '280px',
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis'
-                      }}
-                      title={row.description}
-                    >
-                      {row.description || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>}
                     </td>
 
                     {/* Status */}
@@ -840,7 +895,7 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                   {editingItem ? 'Edit Designation' : 'Add New Designation'}
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-                  Define position title, identification code and staff category
+                  Select department, enter designation name and code
                 </p>
               </div>
               <button
@@ -871,6 +926,35 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                 </div>
               )}
 
+              {/* Department Dropdown */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                  Department <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  value={formData.departmentId}
+                  onChange={(e) => setFormData({ ...formData, departmentId: e.target.value })}
+                  style={inputStyle}
+                  required
+                >
+                  <option value="">-- Select Department --</option>
+                  {departments.map((dept) => (
+                    <option key={dept.id} value={dept.id}>
+                      {dept.name} ({dept.code})
+                    </option>
+                  ))}
+                </select>
+                {departments.length === 0 ? (
+                  <div style={{ fontSize: '0.75rem', color: '#eab308', marginTop: '4px' }}>
+                    No departments available. Please create a Department in Academic &gt; Department first.
+                  </div>
+                ) : (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                    The designation will be created under this selected department
+                  </div>
+                )}
+              </div>
+
               {/* Designation Name */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
@@ -878,7 +962,7 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Senior Teacher, Principal, Lab Assistant"
+                  placeholder="e.g. Senior Teacher, Head of Department, Lab Assistant"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                   style={inputStyle}
@@ -889,20 +973,17 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                 <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
                   <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Presets:</span>
                   {[
-                    { name: 'Principal', code: 'PRIN', cat: 'Administration' },
-                    { name: 'Vice Principal', code: 'VP', cat: 'Administration' },
-                    { name: 'Head of Department (HOD)', code: 'HOD', cat: 'Teaching' },
-                    { name: 'Senior Teacher (PGT)', code: 'PGT', cat: 'Teaching' },
-                    { name: 'Trained Teacher (TGT)', code: 'TGT', cat: 'Teaching' },
-                    { name: 'Primary Teacher (PRT)', code: 'PRT', cat: 'Teaching' },
-                    { name: 'Librarian', code: 'LIB', cat: 'Support' },
-                    { name: 'Senior Accountant', code: 'ACC', cat: 'Finance' },
-                    { name: 'Lab Assistant', code: 'LAB', cat: 'Support' }
+                    { name: 'Head of Department', code: 'HOD' },
+                    { name: 'Senior Teacher', code: 'SR-TCH' },
+                    { name: 'Assistant Teacher', code: 'ASST-TCH' },
+                    { name: 'Primary Teacher', code: 'PRT' },
+                    { name: 'Lab Assistant', code: 'LAB-AST' },
+                    { name: 'Academic Coordinator', code: 'COORD' }
                   ].map((preset) => (
                     <button
-                      key={preset.name}
+                      key={preset.code}
                       type="button"
-                      onClick={() => setFormData({ ...formData, name: preset.name, code: preset.code, category: preset.cat })}
+                      onClick={() => setFormData(prev => ({ ...prev, name: preset.name, code: preset.code }))}
                       style={{
                         background: 'none',
                         border: '1px dashed var(--border-color)',
@@ -913,7 +994,7 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                         cursor: 'pointer'
                       }}
                     >
-                      + {preset.code}
+                      + {preset.name}
                     </button>
                   ))}
                 </div>
@@ -926,47 +1007,15 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. PRIN, PGT, TGT, HOD, ACC"
+                  placeholder="e.g. HOD, SR-TCH, PRT"
                   value={formData.code}
                   onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
                   style={inputStyle}
                   required
                 />
                 <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                  Short code identifier for HRM and payroll
+                  Short code identifier for academic designation
                 </span>
-              </div>
-
-              {/* Category */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Staff Category
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  style={inputStyle}
-                >
-                  <option value="Teaching">Teaching & Faculty</option>
-                  <option value="Administration">Administration & Leadership</option>
-                  <option value="Support">Support & Technical Staff</option>
-                  <option value="Finance">Finance & Accounts</option>
-                  <option value="Operations">Operations & Facilities</option>
-                </select>
-              </div>
-
-              {/* Description */}
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Role Description & Scope
-                </label>
-                <textarea
-                  rows={3}
-                  placeholder="e.g. Responsible for senior secondary curriculum delivery and student academic assessment."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
               </div>
 
               {/* Status */}
@@ -1104,8 +1153,9 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                     >
                       CODE: {viewingDesignation.code || 'N/A'}
                     </span>
-                    <span style={{ fontSize: '0.75rem', opacity: 0.9 }}>
-                      Category: {viewingDesignation.category || 'Teaching'}
+                    <span style={{ fontSize: '0.75rem', opacity: 0.95, display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                      <Building2 size={13} />
+                      Dept: {viewingDesignation.departmentName || viewingDesignation.department?.name || 'General'}
                     </span>
                   </div>
                 </div>
@@ -1160,10 +1210,16 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
 
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
-                    Category
+                    Department
                   </div>
-                  <div style={{ marginTop: '4px' }}>
-                    <CategoryBadge category={viewingDesignation.category} />
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Building2 size={16} color="var(--primary-color)" />
+                    <span>{viewingDesignation.departmentName || viewingDesignation.department?.name || 'General'}</span>
+                    {viewingDesignation.departmentCode && (
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                        ({viewingDesignation.departmentCode})
+                      </span>
+                    )}
                   </div>
                 </div>
 
@@ -1201,25 +1257,6 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '4px' }}>
                     {viewingDesignation.updatedAt ? new Date(viewingDesignation.updatedAt).toLocaleDateString() : 'N/A'}
                   </div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Role Description & Scope
-                </div>
-                <div
-                  style={{
-                    padding: '12px 14px',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'var(--bg-app)',
-                    border: '1px solid var(--border-light)',
-                    fontSize: '0.875rem',
-                    lineHeight: '1.5',
-                    color: 'var(--text-primary)'
-                  }}
-                >
-                  {viewingDesignation.description || 'No detailed description specified for this designation.'}
                 </div>
               </div>
             </div>
@@ -1269,43 +1306,6 @@ export const DesignationModule = ({ hideHeader = false, openAddTrigger = 0, onDa
         </div>
       )}
     </div>
-  );
-};
-
-// Category Badge
-const CategoryBadge = ({ category }) => {
-  const cat = (category || 'Teaching').toLowerCase();
-  let bg = '#e0f2fe';
-  let color = '#0284c7';
-
-  if (cat.includes('teach')) {
-    bg = '#fef3c7';
-    color = '#b45309';
-  } else if (cat.includes('admin')) {
-    bg = '#f3e8ff';
-    color = '#7e22ce';
-  } else if (cat.includes('finance')) {
-    bg = '#dcfce7';
-    color = '#15803d';
-  } else if (cat.includes('support')) {
-    bg = '#e2e8f0';
-    color = '#475569';
-  }
-
-  return (
-    <span
-      style={{
-        display: 'inline-block',
-        padding: '3px 10px',
-        borderRadius: '12px',
-        fontSize: '0.75rem',
-        fontWeight: 700,
-        backgroundColor: bg,
-        color: color
-      }}
-    >
-      {category || 'Teaching'}
-    </span>
   );
 };
 

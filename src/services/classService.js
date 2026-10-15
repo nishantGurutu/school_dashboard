@@ -75,6 +75,7 @@ export const classService = {
   deleteDepartment: departmentsEndpoints.remove,
 
   listDesignations: designationService.list,
+  listDesignationsByDepartment: designationService.byDepartment,
   getDesignation: designationService.get,
   createDesignation: designationService.create,
   updateDesignation: designationService.update,

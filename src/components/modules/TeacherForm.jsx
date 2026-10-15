@@ -22,6 +22,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
   const [departmentsList, setDepartmentsList] = useState([]);
   const [designationsList, setDesignationsList] = useState([]);
   const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(false);
+  const [isLoadingDesignations, setIsLoadingDesignations] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -39,22 +40,16 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       classService.departments.list().catch((err) => {
         console.warn('Failed to load departments from API:', err);
         return [];
-      }),
-      classService.designations.list().catch((err) => {
-        console.warn('Failed to load designations from API:', err);
-        return [];
       })
     ])
-      .then(([subRes, clsRes, deptRes, desigRes]) => {
+      .then(([subRes, clsRes, deptRes]) => {
         if (!isMounted) return;
         const subs = Array.isArray(subRes) ? subRes : (subRes?.data || []);
         const cls = Array.isArray(clsRes) ? clsRes : (clsRes?.data || []);
         const depts = Array.isArray(deptRes) ? deptRes : (deptRes?.data || []);
-        const desigs = Array.isArray(desigRes) ? desigRes : (desigRes?.data || []);
         setSubjectsList(subs);
         setClassesList(cls);
         setDepartmentsList(depts);
-        setDesignationsList(desigs);
       })
       .catch((err) => {
         console.warn('Failed to load dropdown data from API:', err);
@@ -236,6 +231,37 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       }
     }
   }, [departmentsList, formData.department, formData.departmentId]);
+
+  // Dynamically load designations by selected department ID
+  useEffect(() => {
+    let isMounted = true;
+    if (!formData.departmentId) {
+      setDesignationsList([]);
+      setIsLoadingDesignations(false);
+      return;
+    }
+
+    setIsLoadingDesignations(true);
+    classService.designations
+      .byDepartment(formData.departmentId)
+      .then((res) => {
+        if (!isMounted) return;
+        const list = Array.isArray(res) ? res : (res?.data || res?.content || []);
+        setDesignationsList(list);
+      })
+      .catch((err) => {
+        if (!isMounted) return;
+        console.warn('Failed to load designations for department:', err);
+        setDesignationsList([]);
+      })
+      .finally(() => {
+        if (isMounted) setIsLoadingDesignations(false);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [formData.departmentId]);
 
   // Sync designationId if only designation name was set
   useEffect(() => {
@@ -430,7 +456,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
           </h3>
 
           <div className="grid-responsive">
-            {/* Row 1: Full Name, Designation, Department */}
+            {/* Row 1: Full Name, Department (First), Designation (Second) */}
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Full Name <span style={{ color: '#ef4444' }}>*</span>
@@ -445,37 +471,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               />
             </div>
 
-            <div className="col-span-4">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Designation <span style={{ color: '#ef4444' }}>*</span>
-              </label>
-              <select
-                id="teacher-designation-select"
-                value={formData.designationId || ''}
-                onChange={(e) => {
-                  const selId = e.target.value;
-                  const sel = designationsList.find((d) => String(d.id) === String(selId));
-                  setFormData((prev) => ({
-                    ...prev,
-                    designationId: selId ? Number(selId) : '',
-                    designation: sel ? sel.name : ''
-                  }));
-                }}
-                style={inputStyle}
-                required
-              >
-                <option value="">{isLoadingDropdowns ? 'Loading designations...' : '-- Select Designation --'}</option>
-                {designationsList.map((d) => (
-                  <option key={d.id} value={d.id}>
-                    {d.name} {d.category ? `• ${d.category}` : ''}
-                  </option>
-                ))}
-                {formData.designation && !designationsList.some((d) => String(d.id) === String(formData.designationId)) && (
-                  <option value={formData.designationId || ''}>{formData.designation}</option>
-                )}
-              </select>
-            </div>
-
+            {/* Department (First) */}
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Department <span style={{ color: '#ef4444' }}>*</span>
@@ -489,7 +485,10 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                   setFormData((prev) => ({
                     ...prev,
                     departmentId: selId ? Number(selId) : '',
-                    department: sel ? sel.name : ''
+                    department: sel ? sel.name : '',
+                    // Reset designation when department changes so only valid designations for this department are selected
+                    designationId: '',
+                    designation: ''
                   }));
                 }}
                 style={inputStyle}
@@ -505,6 +504,61 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                   <option value={formData.departmentId || ''}>{formData.department}</option>
                 )}
               </select>
+            </div>
+
+            {/* Designation (Second - dependent on selected Department) */}
+            <div className="col-span-4">
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                Designation <span style={{ color: '#ef4444' }}>*</span>
+              </label>
+              <select
+                id="teacher-designation-select"
+                value={formData.designationId || ''}
+                disabled={!formData.departmentId || isLoadingDesignations}
+                onChange={(e) => {
+                  const selId = e.target.value;
+                  const sel = designationsList.find((d) => String(d.id) === String(selId));
+                  setFormData((prev) => ({
+                    ...prev,
+                    designationId: selId ? Number(selId) : '',
+                    designation: sel ? sel.name : ''
+                  }));
+                }}
+                style={{
+                  ...inputStyle,
+                  cursor: !formData.departmentId ? 'not-allowed' : 'pointer',
+                  backgroundColor: !formData.departmentId ? 'var(--bg-app)' : 'var(--bg-card)',
+                  opacity: !formData.departmentId ? 0.75 : 1
+                }}
+                required
+              >
+                {!formData.departmentId ? (
+                  <option value="">-- Please Select Department First --</option>
+                ) : isLoadingDesignations ? (
+                  <option value="">Loading designations...</option>
+                ) : designationsList.length === 0 ? (
+                  <option value="">-- No designations in this department --</option>
+                ) : (
+                  <option value="">-- Select Designation --</option>
+                )}
+                {designationsList.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name} {d.code ? `(${d.code})` : ''}
+                  </option>
+                ))}
+                {formData.designation && !designationsList.some((d) => String(d.id) === String(formData.designationId)) && (
+                  <option value={formData.designationId || ''}>{formData.designation}</option>
+                )}
+              </select>
+              {!formData.departmentId ? (
+                <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                  Please select a department first to load its designations.
+                </div>
+              ) : designationsList.length === 0 && !isLoadingDesignations ? (
+                <div style={{ fontSize: '0.74rem', color: '#eab308', marginTop: '4px' }}>
+                  No designations found under this department.
+                </div>
+              ) : null}
             </div>
 
             {/* Row 2: Subject & Class (Multi-select) */}

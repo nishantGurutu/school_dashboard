@@ -122,8 +122,6 @@ export const ClassesModule = () => {
   const [modalFormData, setModalFormData] = useState({
     name: '',
     code: '',
-    headOfDepartment: '',
-    description: '',
     sectionId: '',
     section: '',
     room: '',
@@ -164,8 +162,6 @@ export const ClassesModule = () => {
     setModalFormData({
       name: '',
       code: '',
-      headOfDepartment: '',
-      description: '',
       sectionId: defaultSectionId,
       section: defaultSectionName,
       room: '',
@@ -194,8 +190,6 @@ export const ClassesModule = () => {
     setModalFormData({
       name: item.name || item.room || '',
       code: item.code || '',
-      headOfDepartment: item.headOfDepartment || '',
-      description: item.description || '',
       sectionId: secId,
       section: secName,
       room: item.room || item.name || '',
@@ -289,8 +283,6 @@ export const ClassesModule = () => {
           const updated = await classService.departments.update(id, {
             name: modalFormData.name.trim(),
             code: modalFormData.code.trim().toUpperCase(),
-            headOfDepartment: modalFormData.headOfDepartment?.trim() || null,
-            description: modalFormData.description?.trim() || null,
             status: modalFormData.status
           });
           setDepartments((prev) => prev.map((d) => (d.id === id ? { ...d, ...updated } : d)));
@@ -335,8 +327,6 @@ export const ClassesModule = () => {
           const created = await classService.departments.create({
             name: modalFormData.name.trim(),
             code: modalFormData.code.trim().toUpperCase(),
-            headOfDepartment: modalFormData.headOfDepartment?.trim() || null,
-            description: modalFormData.description?.trim() || null,
             status: modalFormData.status
           });
           setDepartments((prev) => [{ ...created, sl: '01' }, ...prev.map((d, i) => ({ ...d, sl: String(i + 2).padStart(2, '0') }))]);
@@ -393,8 +383,8 @@ export const ClassesModule = () => {
     let filename = '';
 
     if (currentSubTab === 'department') {
-      headers = ['S.L', 'Department Name', 'Code', 'Head of Department', 'Description', 'Status'];
-      rows = departments.map((d, idx) => [idx + 1, d.name, d.code, d.headOfDepartment || 'N/A', d.description || '', d.status]);
+      headers = ['S.L', 'Department Name', 'Code', 'Status'];
+      rows = departments.map((d, idx) => [idx + 1, d.name, d.code, d.status]);
       filename = 'academic_departments.csv';
     } else if (currentSubTab === 'section') {
       headers = ['S.L', 'Section Name', 'Status'];
@@ -433,14 +423,14 @@ export const ClassesModule = () => {
           title: 'Academic Departments',
           breadcrumb: 'Dashboard / Academic / Department',
           addBtnLabel: '+ Add Department',
-          searchPlaceholder: 'Search departments by name, code, HOD...'
+          searchPlaceholder: 'Search departments by name, code...'
         };
       case 'designation':
         return {
           title: 'Academic & Staff Designations',
           breadcrumb: 'Dashboard / Academic / Designation',
           addBtnLabel: '+ Add Designation',
-          searchPlaceholder: 'Search designations by title, code, category...'
+          searchPlaceholder: 'Search designations by title, code, department...'
         };
       case 'subjects':
         return {
@@ -493,8 +483,6 @@ export const ClassesModule = () => {
       return (
         (item.name || '').toLowerCase().includes(q) ||
         (item.code || '').toLowerCase().includes(q) ||
-        (item.headOfDepartment || '').toLowerCase().includes(q) ||
-        (item.description || '').toLowerCase().includes(q) ||
         (item.status || '').toLowerCase().includes(q)
       );
     }
@@ -730,6 +718,7 @@ export const ClassesModule = () => {
           hideHeader={true}
           openAddTrigger={designationAddTrigger}
           onDataChange={fetchClassesData}
+          departments={departments}
         />
       ) : (
         <>
@@ -882,8 +871,6 @@ export const ClassesModule = () => {
                   <>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Department Name</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Code</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Head of Department (HOD)</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Description</th>
                   </>
                 )}
                 {currentSubTab === 'section' && (
@@ -915,14 +902,14 @@ export const ClassesModule = () => {
             <tbody>
               {isLoading && paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={currentSubTab === 'department' ? 7 : 6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     <Spinner size={24} color="#0d9488" />
                     <div style={{ marginTop: '8px' }}>Loading data from server...</div>
                   </td>
                 </tr>
               ) : paginatedItems.length === 0 ? (
                 <tr>
-                  <td colSpan={currentSubTab === 'department' ? 7 : 6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
                     No records found. Click <strong>{headerInfo.addBtnLabel}</strong> to add one!
                   </td>
                 </tr>
@@ -995,18 +982,6 @@ export const ClassesModule = () => {
                           }}>
                             {row.code}
                           </span>
-                        </td>
-                        <td style={{ padding: '14px 16px', color: 'var(--text-primary)', fontWeight: 500 }}>
-                          {row.headOfDepartment ? (
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                              <span>👤</span> {row.headOfDepartment}
-                            </span>
-                          ) : (
-                            <span style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '0.8rem' }}>Not Assigned</span>
-                          )}
-                        </td>
-                        <td style={{ padding: '14px 16px', color: 'var(--text-secondary)', maxWidth: '280px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={row.description}>
-                          {row.description || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>—</span>}
                         </td>
                       </>
                     )}
@@ -1209,7 +1184,7 @@ export const ClassesModule = () => {
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
                   {currentSubTab === 'department'
-                    ? 'Fill out department details, code, and assign Head of Department'
+                    ? 'Fill out department name, code, and status'
                     : currentSubTab === 'classList'
                     ? 'Enter class name, choose section from dropdown, and set status'
                     : 'Fill out the details below and click Save'}
@@ -1299,32 +1274,6 @@ export const ClassesModule = () => {
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
                       Short code identifier for academic records
                     </div>
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Head of Department (HOD)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Dr. Rajesh Sharma / Prof. Sunita Verma"
-                      value={modalFormData.headOfDepartment}
-                      onChange={(e) => setModalFormData({ ...modalFormData, headOfDepartment: e.target.value })}
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Description
-                    </label>
-                    <textarea
-                      rows={3}
-                      placeholder="e.g. Physics, Chemistry, Biology and Advanced Laboratories"
-                      value={modalFormData.description}
-                      onChange={(e) => setModalFormData({ ...modalFormData, description: e.target.value })}
-                      style={{ ...inputStyle, resize: 'vertical' }}
-                    />
                   </div>
 
                   <div>
@@ -1726,10 +1675,10 @@ export const ClassesModule = () => {
               }}>
                 <div>
                   <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', textTransform: 'uppercase', fontWeight: 600 }}>
-                    Head of Department (HOD)
+                    Department Code
                   </div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: '4px' }}>
-                    {viewingDepartment.headOfDepartment ? `👤 ${viewingDepartment.headOfDepartment}` : 'Not Assigned'}
+                  <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0d9488', marginTop: '4px' }}>
+                    {viewingDepartment.code}
                   </div>
                 </div>
 
@@ -1758,23 +1707,6 @@ export const ClassesModule = () => {
                   <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '4px' }}>
                     {viewingDepartment.createdAt ? new Date(viewingDepartment.createdAt).toLocaleDateString() : 'N/A'}
                   </div>
-                </div>
-              </div>
-
-              <div>
-                <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>
-                  Department Description
-                </div>
-                <div style={{
-                  padding: '12px 14px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'var(--bg-app)',
-                  border: '1px solid var(--border-light)',
-                  fontSize: '0.875rem',
-                  lineHeight: '1.5',
-                  color: 'var(--text-primary)'
-                }}>
-                  {viewingDepartment.description || 'No detailed description provided for this academic department.'}
                 </div>
               </div>
             </div>

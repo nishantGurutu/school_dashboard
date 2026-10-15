@@ -7,6 +7,12 @@ export const designationService = {
     return Array.isArray(res) ? res : (res?.data || res?.content || []);
   },
 
+  byDepartment: async (departmentId) => {
+    if (!departmentId) return [];
+    const res = await NetworkService.get(API_ENDPOINTS.DESIGNATIONS.BY_DEPARTMENT(departmentId));
+    return Array.isArray(res) ? res : (res?.data || res?.content || []);
+  },
+
   get: async (id) => {
     const res = await NetworkService.get(API_ENDPOINTS.DESIGNATIONS.BY_ID(id));
     return res?.data || res;
