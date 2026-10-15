@@ -144,12 +144,13 @@ export const Sidebar = () => {
       icon: Bus,
       hasSub: true,
       subItems: [
-        { key: 'transport-overview', label: 'Overview' },
-        { key: 'transport-buses', label: 'Bus Management' },
-        { key: 'transport-drivers', label: 'Driver Management' },
+        { key: 'transport-overview', label: 'Transport Dashboard' },
+        { key: 'transport-buses', label: 'Bus List' },
+        { key: 'transport-drivers', label: 'Driver List' },
         { key: 'transport-routes', label: 'Route & Stops' },
-        { key: 'transport-assignments', label: 'Assignments' },
-        { key: 'transport-live', label: 'Live Tracking' },
+        { key: 'transport-assignments', label: 'Bus-Driver Assignment' },
+        { key: 'transport-students', label: 'Student Transport' },
+        { key: 'transport-fees', label: 'Transport Fees' },
         { key: 'transport-reports', label: 'Reports & Playback' },
         { key: 'transport-alerts', label: 'Alerts Center' }
       ]

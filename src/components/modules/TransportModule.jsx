@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { transportService } from '../../services/transportService';
-import { TransportLiveMap } from './transport/TransportLiveMap';
+import { BusTrackModal } from './transport/BusTrackModal';
 import { TransportPlaybackMap } from './transport/TransportPlaybackMap';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import {
@@ -40,7 +40,18 @@ import {
   Maximize2,
   Minimize2,
   Layout,
-  Columns
+  Columns,
+  GraduationCap,
+  CircleDollarSign,
+  DollarSign,
+  Edit2,
+  Trash2,
+  Printer,
+  Receipt,
+  CreditCard,
+  Check,
+  Fuel,
+  Info
 } from 'lucide-react';
 
 export const TransportModule = () => {
@@ -53,7 +64,8 @@ export const TransportModule = () => {
     if (activeTab === 'transport-drivers') return 'drivers';
     if (activeTab === 'transport-routes') return 'routes';
     if (activeTab === 'transport-assignments') return 'assignments';
-    if (activeTab === 'transport-live') return 'live';
+    if (activeTab === 'transport-students') return 'students';
+    if (activeTab === 'transport-fees') return 'fees';
     if (activeTab === 'transport-reports') return 'reports';
     if (activeTab === 'transport-alerts') return 'alerts';
     return 'overview';
@@ -86,6 +98,7 @@ export const TransportModule = () => {
   const [liveBuses, setLiveBuses] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [tripsHistory, setTripsHistory] = useState([]);
+  const [feeSummary, setFeeSummary] = useState(null);
 
   // Selected entities for modals / inspector
   const [selectedLiveBus, setSelectedLiveBus] = useState(null);
@@ -96,20 +109,25 @@ export const TransportModule = () => {
 
   // Modals
   const [showAddBusModal, setShowAddBusModal] = useState(false);
-  const [showAddDriverModal, setShowAddDriverModal] = useState(false);
+  const [editingBus, setEditingBus] = useState(null);
+  const [showEditDriverModal, setShowEditDriverModal] = useState(false);
+  const [editingDriver, setEditingDriver] = useState(null);
   const [showAddRouteModal, setShowAddRouteModal] = useState(false);
+  const [editingRoute, setEditingRoute] = useState(null);
   const [showAddAssignmentModal, setShowAddAssignmentModal] = useState(false);
   const [showAssignStudentModal, setShowAssignStudentModal] = useState(false);
+  const [editingStudentAssign, setEditingStudentAssign] = useState(null);
   const [showManageStopsModal, setShowManageStopsModal] = useState(false);
   const [selectedRouteForStops, setSelectedRouteForStops] = useState(null);
+  const [showCollectFeeModal, setShowCollectFeeModal] = useState(false);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [receiptData, setReceiptData] = useState(null);
   const [alertRemarksModal, setAlertRemarksModal] = useState(null); // { alertId, action }
   const [remarksInput, setRemarksInput] = useState('');
 
-  // Live Tracking Layout States (Full Body Map Canvas)
-  const [liveViewMode, setLiveViewMode] = useState('full'); // 'full' or 'split'
-  const [showFleetSidebar, setShowFleetSidebar] = useState(true);
-  const [showInspectorSidebar, setShowInspectorSidebar] = useState(true);
-  const [isLiveFullscreen, setIsLiveFullscreen] = useState(false);
+  // Bus Track on Map Modal
+  const [showBusTrackModal, setShowBusTrackModal] = useState(false);
+  const [selectedBusForMap, setSelectedBusForMap] = useState(null);
 
   // Map layer toggles
   const [showPlannedRoute, setShowPlannedRoute] = useState(true);
@@ -122,6 +140,9 @@ export const TransportModule = () => {
   const [driverSearch, setDriverSearch] = useState('');
   const [routeSearch, setRouteSearch] = useState('');
   const [alertFilter, setAlertFilter] = useState('ALL');
+  const [studentSearch, setStudentSearch] = useState('');
+  const [studentRouteFilter, setStudentRouteFilter] = useState('ALL');
+  const [feeFilter, setFeeFilter] = useState('ALL');
 
   // Form states
   const [busForm, setBusForm] = useState({
@@ -132,18 +153,22 @@ export const TransportModule = () => {
     manufacturer: '',
     fuelType: 'DIESEL',
     gpsDeviceId: '',
+    insuranceExpiryDate: '',
+    fitnessExpiryDate: '',
+    permitExpiryDate: '',
+    pollutionExpiryDate: '',
     status: 'ACTIVE'
   });
 
-  const [driverForm, setDriverForm] = useState({
+  const [driverEditForm, setDriverEditForm] = useState({
     name: '',
-    email: '',
     phone: '',
-    password: 'password',
+    address: '',
     licenseNumber: '',
-    licenseCategory: 'COMMERCIAL_HEAVY',
-    experienceYears: 5,
-    verificationStatus: 'VERIFIED'
+    licenseExpiryDate: '',
+    joiningDate: '',
+    emergencyContact: '',
+    status: 'ACTIVE'
   });
 
   const [routeForm, setRouteForm] = useState({
@@ -151,11 +176,14 @@ export const TransportModule = () => {
     routeCode: '',
     startLocation: '',
     endLocation: '',
+    areaLocality: '',
+    fare: 1500,
     plannedDurationMinutes: 45,
     totalDistanceKm: 18.0,
     morningStartTime: '07:15 AM',
     eveningStartTime: '02:45 PM',
-    speedLimitKmh: 50
+    speedLimitKmh: 50,
+    status: 'ACTIVE'
   });
 
   const [assignmentForm, setAssignmentForm] = useState({
@@ -175,14 +203,31 @@ export const TransportModule = () => {
     dropStopId: '',
     pickupTime: '07:30 AM',
     dropTime: '03:15 PM',
+    tripType: 'BOTH_WAY',
+    startDate: new Date().toISOString().split('T')[0],
+    endDate: '',
+    monthlyFee: 1500,
+    feeStatus: 'PENDING',
     guardianPhone: ''
+  });
+
+  const [feePaymentForm, setFeePaymentForm] = useState({
+    studentId: '',
+    assignmentId: '',
+    studentName: '',
+    admissionNo: '',
+    amountPaid: '',
+    paymentMode: 'CASH',
+    feeMonth: new Date().toLocaleString('default', { month: 'long' }),
+    remarks: '',
+    receivedBy: 'Admin Office'
   });
 
   // Load initial data
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ov, bList, dList, rList, asList, saList, liveList, alList, repList] = await Promise.all([
+      const [ov, bList, dList, rList, asList, saList, liveList, alList, repList, fSum] = await Promise.all([
         transportService.getOverview(),
         transportService.getBuses(),
         transportService.getDrivers(),
@@ -191,7 +236,8 @@ export const TransportModule = () => {
         transportService.getStudentAssignments(),
         transportService.getLiveTracking(),
         transportService.getAlerts(),
-        transportService.getTripReports()
+        transportService.getTripReports(),
+        transportService.getFeeSummary()
       ]);
 
       setOverview(ov);
@@ -203,6 +249,7 @@ export const TransportModule = () => {
       setLiveBuses(liveList);
       setAlerts(alList);
       setTripsHistory(repList);
+      setFeeSummary(fSum);
 
       if (liveList && liveList.length > 0 && !selectedLiveBus) {
         setSelectedLiveBus(liveList[0]);
@@ -232,75 +279,11 @@ export const TransportModule = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle Track Bus On Map (Direct navigation from Buses list or Overview to Map)
+  // Handle Track Bus On Map (Opens dedicated Map Modal for this specific bus)
   const handleTrackBusOnMap = (bus) => {
     if (!bus) return;
-
-    // 1. Check existing live tracking fleet
-    let target = liveBuses.find(
-      (lb) =>
-        String(lb.busId) === String(bus.id || bus.busId) ||
-        String(lb.busNumber).toLowerCase() === String(bus.busNumber).toLowerCase()
-    );
-
-    // 2. Resolve route assigned to this bus
-    const assignedRoute =
-      routes.find(
-        (r) =>
-          r.id === bus.routeId ||
-          r.routeName === bus.assignedRouteName ||
-          r.routeName === bus.routeName
-      ) || routes[0];
-
-    const stops = assignedRoute?.stops || [];
-    const originStop = stops[0];
-    const destStop = stops[stops.length - 1];
-
-    if (!target) {
-      const lat = originStop?.latitude || 25.6025;
-      const lon = originStop?.longitude || 85.1430;
-
-      target = {
-        busId: bus.id || bus.busId,
-        busNumber: bus.busNumber,
-        registrationNumber: bus.registrationNumber || 'MH-02-TR-1001',
-        tripId: bus.id || 1,
-        tripStatus: bus.status === 'ACTIVE' ? 'IN_PROGRESS' : 'SCHEDULED',
-        driverId: bus.assignedDriverId || 1,
-        driverName: bus.assignedDriverName || 'Assigned Driver',
-        driverPhone: bus.assignedDriverPhone || '+91 98765 43210',
-        routeId: assignedRoute?.id || 1,
-        routeName: assignedRoute?.routeName || bus.assignedRouteName || 'Main Campus Route',
-        shift: 'MORNING',
-        currentLatitude: lat,
-        currentLongitude: lon,
-        currentSpeedKmh: bus.status === 'ACTIVE' ? (bus.currentSpeed || 34.0) : 0.0,
-        heading: 120.0,
-        lastGpsUpdate: new Date().toISOString(),
-        isGpsOnline: true,
-        currentStopName: originStop?.stopName || 'Route Origin',
-        nextStopName: stops[1]?.stopName || destStop?.stopName || 'School Destination',
-        nextStopEtaMinutes: 8,
-        completedStops: 1,
-        totalStops: stops.length || 5,
-        traveledDistanceKm: assignedRoute?.totalDistanceKm
-          ? Number((assignedRoute.totalDistanceKm * 0.4).toFixed(1))
-          : 7.2,
-        totalRouteDistanceKm: assignedRoute?.totalDistanceKm || 18.5,
-        destinationName: destStop?.stopName || assignedRoute?.endLocation || 'School Main Gate',
-        originName: originStop?.stopName || assignedRoute?.startLocation || 'Route Origin',
-        openAlertsCount: 0,
-      };
-
-      setLiveBuses((prev) => {
-        const exists = prev.some((b) => String(b.busId) === String(target.busId));
-        return exists ? prev : [target, ...prev];
-      });
-    }
-
-    setSelectedLiveBus(target);
-    setShowInspectorSidebar(true);
-    handleTabChange('live');
+    setSelectedBusForMap(bus);
+    setShowBusTrackModal(true);
   };
 
   // Playback timer loop
@@ -336,43 +319,135 @@ export const TransportModule = () => {
   };
 
   // Form Submissions
-  const handleCreateBus = async (e) => {
+  const handleCreateOrUpdateBus = async (e) => {
     e.preventDefault();
     try {
-      await transportService.createBus(busForm);
-      showToast('Bus added successfully', 'success');
+      if (editingBus) {
+        await transportService.updateBus(editingBus.id, busForm);
+        showToast('Bus details updated successfully', 'success');
+      } else {
+        await transportService.createBus(busForm);
+        showToast('Bus added successfully', 'success');
+      }
       setShowAddBusModal(false);
-      setBusForm({ busNumber: '', registrationNumber: '', capacity: 40, model: '', manufacturer: '', fuelType: 'DIESEL', gpsDeviceId: '', status: 'ACTIVE' });
+      setEditingBus(null);
+      setBusForm({
+        busNumber: '',
+        registrationNumber: '',
+        capacity: 40,
+        model: '',
+        manufacturer: '',
+        fuelType: 'DIESEL',
+        gpsDeviceId: '',
+        insuranceExpiryDate: '',
+        fitnessExpiryDate: '',
+        permitExpiryDate: '',
+        pollutionExpiryDate: '',
+        status: 'ACTIVE'
+      });
       loadData();
     } catch {
-      showToast('Error creating bus', 'error');
+      showToast('Error saving bus', 'error');
     }
   };
 
-  const handleCreateDriver = async (e) => {
+  const handleOpenEditBus = (bus) => {
+    setEditingBus(bus);
+    setBusForm({
+      busNumber: bus.busNumber || '',
+      registrationNumber: bus.registrationNumber || '',
+      capacity: bus.capacity || 40,
+      model: bus.model || '',
+      manufacturer: bus.manufacturer || '',
+      fuelType: bus.fuelType || 'DIESEL',
+      gpsDeviceId: bus.gpsDeviceId || '',
+      insuranceExpiryDate: bus.insuranceExpiryDate || '',
+      fitnessExpiryDate: bus.fitnessExpiryDate || '',
+      permitExpiryDate: bus.permitExpiryDate || '',
+      pollutionExpiryDate: bus.pollutionExpiryDate || '',
+      status: bus.status || 'ACTIVE'
+    });
+    setShowAddBusModal(true);
+  };
+
+  const handleOpenEditDriver = (driver) => {
+    setEditingDriver(driver);
+    setDriverEditForm({
+      name: driver.name || '',
+      phone: driver.phone || '',
+      address: driver.address || '',
+      licenseNumber: driver.licenseNumber || '',
+      licenseExpiryDate: driver.licenseExpiryDate || '',
+      joiningDate: driver.joiningDate || '',
+      emergencyContact: driver.emergencyContact || '',
+      status: driver.status || 'ACTIVE'
+    });
+    setShowEditDriverModal(true);
+  };
+
+  const handleUpdateDriver = async (e) => {
     e.preventDefault();
+    if (!editingDriver) return;
     try {
-      await transportService.createDriver(driverForm);
-      showToast('Driver registered successfully', 'success');
-      setShowAddDriverModal(false);
-      setDriverForm({ name: '', email: '', phone: '', password: 'password', licenseNumber: '', licenseCategory: 'COMMERCIAL_HEAVY', experienceYears: 5, verificationStatus: 'VERIFIED' });
+      await transportService.updateDriver(editingDriver.id, driverEditForm);
+      showToast('Driver details updated successfully', 'success');
+      setShowEditDriverModal(false);
+      setEditingDriver(null);
       loadData();
     } catch {
-      showToast('Error creating driver', 'error');
+      showToast('Error updating driver', 'error');
     }
   };
 
-  const handleCreateRoute = async (e) => {
+  const handleCreateOrUpdateRoute = async (e) => {
     e.preventDefault();
     try {
-      await transportService.createRoute(routeForm);
-      showToast('Route created successfully', 'success');
+      if (editingRoute) {
+        await transportService.updateRoute(editingRoute.id, routeForm);
+        showToast('Route updated successfully', 'success');
+      } else {
+        await transportService.createRoute(routeForm);
+        showToast('Route created successfully', 'success');
+      }
       setShowAddRouteModal(false);
-      setRouteForm({ routeName: '', routeCode: '', startLocation: '', endLocation: '', plannedDurationMinutes: 45, totalDistanceKm: 18.0, morningStartTime: '07:15 AM', eveningStartTime: '02:45 PM', speedLimitKmh: 50 });
+      setEditingRoute(null);
+      setRouteForm({
+        routeName: '',
+        routeCode: '',
+        startLocation: '',
+        endLocation: '',
+        areaLocality: '',
+        fare: 1500,
+        plannedDurationMinutes: 45,
+        totalDistanceKm: 18.0,
+        morningStartTime: '07:15 AM',
+        eveningStartTime: '02:45 PM',
+        speedLimitKmh: 50,
+        status: 'ACTIVE'
+      });
       loadData();
     } catch {
-      showToast('Error creating route', 'error');
+      showToast('Error saving route', 'error');
     }
+  };
+
+  const handleOpenEditRoute = (route) => {
+    setEditingRoute(route);
+    setRouteForm({
+      routeName: route.routeName || '',
+      routeCode: route.routeCode || '',
+      startLocation: route.startLocation || '',
+      endLocation: route.endLocation || '',
+      areaLocality: route.areaLocality || '',
+      fare: route.fare || 1500,
+      plannedDurationMinutes: route.plannedDurationMinutes || 45,
+      totalDistanceKm: route.totalDistanceKm || 18.0,
+      morningStartTime: route.morningStartTime || '07:15 AM',
+      eveningStartTime: route.eveningStartTime || '02:45 PM',
+      speedLimitKmh: route.speedLimitKmh || 50,
+      status: route.status || 'ACTIVE'
+    });
+    setShowAddRouteModal(true);
   };
 
   const handleCreateAssignment = async (e) => {
@@ -393,11 +468,11 @@ export const TransportModule = () => {
     }
   };
 
-  const handleAssignStudent = async (e) => {
+  const handleAssignOrUpdateStudent = async (e) => {
     e.preventDefault();
     try {
-      await transportService.assignStudent({
-        studentId: Date.now() % 10000,
+      const payload = {
+        studentId: editingStudentAssign?.studentId || (Date.now() % 10000),
         studentName: studentAssignForm.studentName,
         admissionNo: studentAssignForm.admissionNo,
         className: studentAssignForm.className,
@@ -406,13 +481,111 @@ export const TransportModule = () => {
         dropStopId: studentAssignForm.dropStopId ? Number(studentAssignForm.dropStopId) : null,
         pickupTime: studentAssignForm.pickupTime,
         dropTime: studentAssignForm.dropTime,
-        guardianPhone: studentAssignForm.guardianPhone
-      });
-      showToast('Student assigned to route successfully', 'success');
+        tripType: studentAssignForm.tripType || 'BOTH_WAY',
+        startDate: studentAssignForm.startDate,
+        endDate: studentAssignForm.endDate || null,
+        monthlyFee: Number(studentAssignForm.monthlyFee) || 1500,
+        feeStatus: studentAssignForm.feeStatus || 'PENDING',
+        guardianPhone: studentAssignForm.guardianPhone,
+        status: studentAssignForm.status || 'ACTIVE'
+      };
+
+      if (editingStudentAssign) {
+        await transportService.updateStudentAssignment(editingStudentAssign.id, payload);
+        showToast('Student transport assignment updated', 'success');
+      } else {
+        await transportService.assignStudent(payload);
+        showToast('Student assigned to transport successfully', 'success');
+      }
       setShowAssignStudentModal(false);
+      setEditingStudentAssign(null);
+      setStudentAssignForm({
+        studentName: '',
+        admissionNo: '',
+        className: '',
+        routeId: '',
+        pickupStopId: '',
+        dropStopId: '',
+        pickupTime: '07:30 AM',
+        dropTime: '03:15 PM',
+        tripType: 'BOTH_WAY',
+        startDate: new Date().toISOString().split('T')[0],
+        endDate: '',
+        monthlyFee: 1500,
+        feeStatus: 'PENDING',
+        guardianPhone: '',
+        status: 'ACTIVE'
+      });
       loadData();
     } catch {
-      showToast('Error assigning student', 'error');
+      showToast('Error saving student assignment', 'error');
+    }
+  };
+
+  const handleOpenEditStudentAssign = (st) => {
+    setEditingStudentAssign(st);
+    setStudentAssignForm({
+      studentName: st.studentName || '',
+      admissionNo: st.admissionNo || '',
+      className: st.className || '',
+      routeId: st.routeId || '',
+      pickupStopId: st.pickupStopId || '',
+      dropStopId: st.dropStopId || '',
+      pickupTime: st.pickupTime || '07:30 AM',
+      dropTime: st.dropTime || '03:15 PM',
+      tripType: st.tripType || 'BOTH_WAY',
+      startDate: st.startDate || new Date().toISOString().split('T')[0],
+      endDate: st.endDate || '',
+      monthlyFee: st.monthlyFee || 1500,
+      feeStatus: st.feeStatus || 'PENDING',
+      guardianPhone: st.guardianPhone || '',
+      status: st.status || 'ACTIVE'
+    });
+    setShowAssignStudentModal(true);
+  };
+
+  const handleDeleteStudentAssign = async (id, name) => {
+    if (window.confirm(`Remove transport assignment for ${name}?`)) {
+      try {
+        await transportService.deleteStudentAssignment(id);
+        showToast('Transport assignment removed', 'success');
+        loadData();
+      } catch {
+        showToast('Error removing transport assignment', 'error');
+      }
+    }
+  };
+
+  const handleOpenCollectFee = (st) => {
+    const feeAmt = st.pendingAmount !== undefined ? st.pendingAmount : (st.monthlyFee || 1500);
+    setFeePaymentForm({
+      studentId: st.studentId || 1,
+      assignmentId: st.id,
+      studentName: st.studentName || '',
+      admissionNo: st.admissionNo || '',
+      amountPaid: feeAmt > 0 ? feeAmt : (st.monthlyFee || 1500),
+      paymentMode: 'CASH',
+      feeMonth: new Date().toLocaleString('default', { month: 'long' }),
+      remarks: `Transport fee collection for ${st.studentName}`,
+      receivedBy: 'Admin Office'
+    });
+    setShowCollectFeeModal(true);
+  };
+
+  const handleCollectFeeSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const savedReceipt = await transportService.collectFee({
+        ...feePaymentForm,
+        amountPaid: Number(feePaymentForm.amountPaid)
+      });
+      showToast('Transport fee collected successfully!', 'success');
+      setShowCollectFeeModal(false);
+      setReceiptData(savedReceipt);
+      setShowReceiptModal(true);
+      loadData();
+    } catch {
+      showToast('Error processing fee payment', 'error');
     }
   };
 
@@ -451,6 +624,23 @@ export const TransportModule = () => {
       d.licenseNumber?.toLowerCase().includes(driverSearch.toLowerCase())
     );
   }, [drivers, driverSearch]);
+
+  const filteredStudentAssignments = useMemo(() => {
+    return studentAssignments.filter((st) => {
+      const matchSearch =
+        st.studentName?.toLowerCase().includes(studentSearch.toLowerCase()) ||
+        st.admissionNo?.toLowerCase().includes(studentSearch.toLowerCase()) ||
+        st.className?.toLowerCase().includes(studentSearch.toLowerCase());
+      const matchRoute = studentRouteFilter === 'ALL' || String(st.routeId) === String(studentRouteFilter);
+      return matchSearch && matchRoute;
+    });
+  }, [studentAssignments, studentSearch, studentRouteFilter]);
+
+  const filteredFeeStudents = useMemo(() => {
+    const records = feeSummary?.studentRecords?.length ? feeSummary.studentRecords : studentAssignments;
+    if (feeFilter === 'ALL') return records;
+    return records.filter((st) => (st.feeStatus || 'PENDING').toUpperCase() === feeFilter.toUpperCase());
+  }, [feeSummary, studentAssignments, feeFilter]);
 
   const filteredAlerts = useMemo(() => {
     if (alertFilter === 'ALL') return alerts;
@@ -543,13 +733,14 @@ export const TransportModule = () => {
         }}
       >
         {[
-          { key: 'overview', label: 'Overview', icon: Activity },
-          { key: 'buses', label: 'Buses', icon: Bus, badge: buses.length },
-          { key: 'drivers', label: 'Drivers', icon: Users, badge: drivers.length },
-          { key: 'routes', label: 'Routes & Stops', icon: MapPin, badge: routes.length },
-          { key: 'assignments', label: 'Assignments', icon: ShieldCheck },
-          { key: 'live', label: 'Live Tracking', icon: Navigation, pulse: overview?.activeTrips > 0 },
-          { key: 'reports', label: 'Playback & Reports', icon: Play },
+          { key: 'overview', label: 'Transport Dashboard', icon: Activity },
+          { key: 'buses', label: 'Bus List', icon: Bus, badge: buses.length },
+          { key: 'drivers', label: 'Driver List', icon: Users, badge: drivers.length },
+          { key: 'routes', label: 'Route & Stops', icon: MapPin, badge: routes.length },
+          { key: 'assignments', label: 'Bus-Driver Assignment', icon: ShieldCheck, badge: assignments.length },
+          { key: 'students', label: 'Student Transport', icon: GraduationCap, badge: studentAssignments.length },
+          { key: 'fees', label: 'Transport Fees', icon: CircleDollarSign },
+          { key: 'reports', label: 'Reports & Playback', icon: Play },
           { key: 'alerts', label: 'Alerts Center', icon: AlertTriangle, badge: overview?.openAlertsCount, badgeColor: '#ef4444' }
         ].map((tab) => {
           const Icon = tab.icon;
@@ -782,7 +973,7 @@ export const TransportModule = () => {
                 </p>
               </div>
               <button
-                onClick={() => handleTabChange('live')}
+                onClick={() => handleTabChange('buses')}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
@@ -795,7 +986,7 @@ export const TransportModule = () => {
                   cursor: 'pointer'
                 }}
               >
-                Full Live Map <ChevronRight size={16} />
+                View Bus Fleet <ChevronRight size={16} />
               </button>
             </div>
 
@@ -910,7 +1101,7 @@ export const TransportModule = () => {
               <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }} />
               <input
                 type="text"
-                placeholder="Search bus number, registration..."
+                placeholder="Search bus number, registration, model..."
                 value={busSearch}
                 onChange={(e) => setBusSearch(e.target.value)}
                 style={{
@@ -925,7 +1116,24 @@ export const TransportModule = () => {
               />
             </div>
             <button
-              onClick={() => setShowAddBusModal(true)}
+              onClick={() => {
+                setEditingBus(null);
+                setBusForm({
+                  busNumber: '',
+                  registrationNumber: '',
+                  capacity: 40,
+                  model: '',
+                  manufacturer: '',
+                  fuelType: 'DIESEL',
+                  gpsDeviceId: '',
+                  insuranceExpiryDate: '',
+                  fitnessExpiryDate: '',
+                  permitExpiryDate: '',
+                  pollutionExpiryDate: '',
+                  status: 'ACTIVE'
+                });
+                setShowAddBusModal(true);
+              }}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -940,14 +1148,14 @@ export const TransportModule = () => {
                 cursor: 'pointer'
               }}
             >
-              <Plus size={16} /> Add Bus
+              <Plus size={16} /> Add New Bus
             </button>
           </div>
 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
               gap: '20px'
             }}
           >
@@ -995,11 +1203,21 @@ export const TransportModule = () => {
                       borderRadius: '8px',
                       fontSize: '0.72rem',
                       fontWeight: 700,
-                      backgroundColor: bus.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                      color: bus.status === 'ACTIVE' ? '#10b981' : '#ef4444'
+                      backgroundColor:
+                        bus.status === 'ACTIVE'
+                          ? 'rgba(16, 185, 129, 0.15)'
+                          : bus.status === 'MAINTENANCE'
+                          ? 'rgba(234, 179, 8, 0.15)'
+                          : 'rgba(239, 68, 68, 0.15)',
+                      color:
+                        bus.status === 'ACTIVE'
+                          ? '#10b981'
+                          : bus.status === 'MAINTENANCE'
+                          ? '#eab308'
+                          : '#ef4444'
                     }}
                   >
-                    {bus.status}
+                    {bus.status || 'ACTIVE'}
                   </span>
                 </div>
 
@@ -1016,19 +1234,50 @@ export const TransportModule = () => {
                 >
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>Capacity:</span>
-                    <div style={{ fontWeight: 700 }}>{bus.capacity} Seats</div>
+                    <div style={{ fontWeight: 700 }}>{bus.capacity || 40} Seats</div>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Fuel:</span>
-                    <div style={{ fontWeight: 700 }}>{bus.fuelType}</div>
+                    <span style={{ color: 'var(--text-muted)' }}>Fuel Type:</span>
+                    <div style={{ fontWeight: 700 }}>{bus.fuelType || 'DIESEL'}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Model / Make:</span>
+                    <div style={{ fontWeight: 700 }}>{bus.model || bus.manufacturer || 'Standard'}</div>
                   </div>
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>GPS ID:</span>
                     <div style={{ fontWeight: 700 }}>{bus.gpsDeviceId || 'N/A'}</div>
                   </div>
+                </div>
+
+                {/* Expiry Details */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '8px',
+                    fontSize: '0.75rem',
+                    padding: '8px 12px',
+                    backgroundColor: 'rgba(0,0,0,0.02)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-light)'
+                  }}
+                >
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Model:</span>
-                    <div style={{ fontWeight: 700 }}>{bus.model || 'Standard'}</div>
+                    <span style={{ color: 'var(--text-muted)' }}>Insurance:</span>{' '}
+                    <span style={{ fontWeight: 600 }}>{bus.insuranceExpiryDate || 'Active'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Fitness:</span>{' '}
+                    <span style={{ fontWeight: 600 }}>{bus.fitnessExpiryDate || 'Active'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Permit:</span>{' '}
+                    <span style={{ fontWeight: 600 }}>{bus.permitExpiryDate || 'Active'}</span>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>PUC / Pollution:</span>{' '}
+                    <span style={{ fontWeight: 600 }}>{bus.pollutionExpiryDate || 'Active'}</span>
                   </div>
                 </div>
 
@@ -1061,6 +1310,21 @@ export const TransportModule = () => {
                     Track On Map
                   </button>
                   <button
+                    onClick={() => handleOpenEditBus(bus)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: 'var(--bg-app)',
+                      border: '1px solid var(--border-color)',
+                      color: 'var(--text-primary)',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Edit
+                  </button>
+                  <button
                     onClick={async () => {
                       if (window.confirm(`Delete ${bus.busNumber}?`)) {
                         await transportService.deleteBus(bus.id);
@@ -1091,12 +1355,52 @@ export const TransportModule = () => {
       {/* TAB 3: DRIVER MANAGEMENT */}
       {currentTab === 'drivers' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Information Notice explaining Driver flow */}
+          <div
+            style={{
+              backgroundColor: 'rgba(13, 148, 136, 0.08)',
+              border: '1px solid rgba(13, 148, 136, 0.25)',
+              borderRadius: 'var(--radius-md)',
+              padding: '14px 18px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '12px',
+              flexWrap: 'wrap'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Info size={20} color="#0d9488" />
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
+                <strong>Driver Onboarding Policy:</strong> Drivers are added directly via the <strong>Staff / Teacher Directory</strong> screen (selecting Designation: <em>Driver</em> or Department: <em>Transport</em>). Their profiles automatically sync here to manage driving licences, contact details, status, and bus-route duties.
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (setActiveTab) setActiveTab('teachers');
+              }}
+              style={{
+                padding: '6px 14px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: '#0d9488',
+                color: '#ffffff',
+                border: 'none',
+                fontSize: '0.78rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              Go to Staff Directory →
+            </button>
+          </div>
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div style={{ position: 'relative', minWidth: '280px' }}>
               <Search size={16} style={{ position: 'absolute', left: '12px', top: '12px', color: 'var(--text-muted)' }} />
               <input
                 type="text"
-                placeholder="Search driver by name, license..."
+                placeholder="Search driver by name, phone, license..."
                 value={driverSearch}
                 onChange={(e) => setDriverSearch(e.target.value)}
                 style={{
@@ -1110,30 +1414,15 @@ export const TransportModule = () => {
                 }}
               />
             </div>
-            <button
-              onClick={() => setShowAddDriverModal(true)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '9px 18px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor: '#0d9488',
-                color: '#ffffff',
-                border: 'none',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                cursor: 'pointer'
-              }}
-            >
-              <Plus size={16} /> Register Driver
-            </button>
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Total Active Drivers: <strong>{drivers.length}</strong>
+            </div>
           </div>
 
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
               gap: '20px'
             }}
           >
@@ -1162,19 +1451,39 @@ export const TransportModule = () => {
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#0d9488', fontWeight: 600 }}>{driver.phone}</div>
                   </div>
-                  <span
-                    style={{
-                      marginLeft: 'auto',
-                      padding: '3px 8px',
-                      borderRadius: '8px',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      backgroundColor: driver.verificationStatus === 'VERIFIED' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                      color: driver.verificationStatus === 'VERIFIED' ? '#10b981' : '#eab308'
-                    }}
-                  >
-                    {driver.verificationStatus}
-                  </span>
+                  <div style={{ marginLeft: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+                    <span
+                      style={{
+                        padding: '3px 8px',
+                        borderRadius: '8px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        backgroundColor:
+                          driver.status === 'ACTIVE'
+                            ? 'rgba(16, 185, 129, 0.15)'
+                            : driver.status === 'ON_LEAVE'
+                            ? 'rgba(234, 179, 8, 0.15)'
+                            : 'rgba(239, 68, 68, 0.15)',
+                        color:
+                          driver.status === 'ACTIVE'
+                            ? '#10b981'
+                            : driver.status === 'ON_LEAVE'
+                            ? '#eab308'
+                            : '#ef4444'
+                      }}
+                    >
+                      {driver.status || 'ACTIVE'}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        color: driver.dutyStatus === 'IN_TRIP' ? '#0d9488' : 'var(--text-muted)'
+                      }}
+                    >
+                      {driver.dutyStatus || 'OFF_DUTY'}
+                    </span>
+                  </div>
                 </div>
 
                 <div
@@ -1189,20 +1498,34 @@ export const TransportModule = () => {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>License No:</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Driving Licence No:</span>
                     <span style={{ fontWeight: 700 }}>{driver.licenseNumber}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Expiry Date:</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Licence Expiry:</span>
                     <span style={{ fontWeight: 600 }}>{driver.licenseExpiryDate || '2028-12-31'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Experience:</span>
-                    <span style={{ fontWeight: 600 }}>{driver.experienceYears} Years</span>
+                    <span style={{ color: 'var(--text-muted)' }}>Joining Date:</span>
+                    <span style={{ fontWeight: 600 }}>{driver.joiningDate || '2024-01-15'}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Emergency Contact:</span>
+                    <span style={{ fontWeight: 600, color: '#ef4444' }}>{driver.emergencyContact || 'N/A'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Residential Address:</span>
+                    <span style={{ fontWeight: 600, maxWidth: '180px', textAlign: 'right', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {driver.address || 'Campus Staff Quarters'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--border-light)', paddingTop: '6px', marginTop: '2px' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Assigned Bus:</span>
                     <span style={{ fontWeight: 700, color: '#0d9488' }}>{driver.assignedBusNumber || 'None'}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Assigned Route:</span>
+                    <span style={{ fontWeight: 600 }}>{driver.assignedRouteName || 'None'}</span>
                   </div>
                 </div>
 
@@ -1216,7 +1539,7 @@ export const TransportModule = () => {
                     fontWeight: 600
                   }}
                 >
-                  Login ID: <strong>{driver.email}</strong> • Password: <strong>password</strong>
+                  App Login: <strong>{driver.email}</strong> • Password: <strong>password</strong>
                 </div>
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
@@ -1238,6 +1561,21 @@ export const TransportModule = () => {
                     }}
                   >
                     Assign Duty
+                  </button>
+                  <button
+                    onClick={() => handleOpenEditDriver(driver)}
+                    style={{
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      backgroundColor: 'var(--bg-app)',
+                      border: '1px solid var(--border-color)',
+                      color: '#0d9488',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Edit Details
                   </button>
                   <button
                     onClick={async () => {
@@ -1326,13 +1664,45 @@ export const TransportModule = () => {
                       <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                         {route.routeName}
                       </h3>
+                      {route.areaLocality && (
+                        <span
+                          style={{
+                            backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                            color: '#2563eb',
+                            padding: '2px 8px',
+                            borderRadius: '6px',
+                            fontSize: '0.75rem',
+                            fontWeight: 700
+                          }}
+                        >
+                          Locality: {route.areaLocality}
+                        </span>
+                      )}
                     </div>
                     <p style={{ margin: '4px 0 0 0', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      {route.description}
+                      {route.description || `Connects ${route.startLocation || 'Start'} to ${route.endLocation || 'School'}`}
                     </p>
                   </div>
 
                   <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => handleOpenEditRoute(route)}
+                      style={{
+                        padding: '7px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--bg-app)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <Edit2 size={13} /> Edit Route
+                    </button>
                     <button
                       onClick={() => {
                         setSelectedRouteForStops(route);
@@ -1379,7 +1749,7 @@ export const TransportModule = () => {
                 <div
                   style={{
                     display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))',
                     gap: '12px',
                     padding: '12px 16px',
                     backgroundColor: 'var(--bg-app)',
@@ -1387,6 +1757,14 @@ export const TransportModule = () => {
                     fontSize: '0.82rem'
                   }}
                 >
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Locality/Area:</span>
+                    <div style={{ fontWeight: 800 }}>{route.areaLocality || 'City Center'}</div>
+                  </div>
+                  <div>
+                    <span style={{ color: 'var(--text-muted)' }}>Monthly Fare:</span>
+                    <div style={{ fontWeight: 800, color: '#10b981' }}>₹{route.fare || 1500}/mo</div>
+                  </div>
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>Total Distance:</span>
                     <div style={{ fontWeight: 800 }}>{route.totalDistanceKm} km</div>
@@ -1400,12 +1778,12 @@ export const TransportModule = () => {
                     <div style={{ fontWeight: 800, color: '#2563eb' }}>{route.eveningStartTime}</div>
                   </div>
                   <div>
-                    <span style={{ color: 'var(--text-muted)' }}>Speed Limit:</span>
-                    <div style={{ fontWeight: 800 }}>{route.speedLimitKmh} km/h</div>
+                    <span style={{ color: 'var(--text-muted)' }}>Duration:</span>
+                    <div style={{ fontWeight: 800 }}>{route.plannedDurationMinutes || 45} mins</div>
                   </div>
                   <div>
                     <span style={{ color: 'var(--text-muted)' }}>Students:</span>
-                    <div style={{ fontWeight: 800 }}>{route.assignedStudentsCount} Assigned</div>
+                    <div style={{ fontWeight: 800 }}>{route.assignedStudentsCount || 0} Assigned</div>
                   </div>
                 </div>
 
@@ -1478,55 +1856,63 @@ export const TransportModule = () => {
         </div>
       )}
 
-      {/* TAB 5: ASSIGNMENT MANAGEMENT */}
+      {/* TAB 5: BUS-DRIVER-ROUTE DUTY ASSIGNMENTS */}
       {currentTab === 'assignments' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
               <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                Duty Assignments (Driver + Bus + Route)
+                Bus, Driver & Route Duty Assignments
               </h3>
-              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                Active shifts and student stop mapping
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Decoupled architecture: Bus is assigned to Route; Driver is assigned to Bus & Route shift.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: '10px' }}>
-              <button
-                onClick={() => setShowAssignStudentModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '9px 16px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'var(--bg-app)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer'
-                }}
-              >
-                Assign Student
-              </button>
-              <button
-                onClick={() => setShowAddAssignmentModal(true)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  padding: '9px 18px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: '#0d9488',
-                  color: '#ffffff',
-                  border: 'none',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  cursor: 'pointer'
-                }}
-              >
-                <Plus size={16} /> New Assignment
-              </button>
+            <button
+              onClick={() => setShowAddAssignmentModal(true)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 18px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: '#0d9488',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer'
+              }}
+            >
+              <Plus size={16} /> New Duty Assignment
+            </button>
+          </div>
+
+          {/* Quick Metrics */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>ACTIVE DUTIES</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#0d9488', marginTop: '4px' }}>{assignments.length}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Operational bus-driver pairs</div>
+            </div>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>MORNING SHIFTS</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#2563eb', marginTop: '4px' }}>
+                {assignments.filter(a => a.shift === 'MORNING' || a.shift === 'BOTH').length}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Pickup schedule active</div>
+            </div>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>EVENING SHIFTS</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#f59e0b', marginTop: '4px' }}>
+                {assignments.filter(a => a.shift === 'EVENING' || a.shift === 'BOTH').length}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Drop-off schedule active</div>
+            </div>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL FLEET BUSES</div>
+              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>{buses.length}</div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Registered transport vehicles</div>
             </div>
           </div>
 
@@ -1545,10 +1931,10 @@ export const TransportModule = () => {
                 <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
                   <th style={{ padding: '10px' }}>Driver</th>
                   <th style={{ padding: '10px' }}>Assigned Bus</th>
-                  <th style={{ padding: '10px' }}>Route</th>
+                  <th style={{ padding: '10px' }}>Assigned Route & Locality</th>
                   <th style={{ padding: '10px' }}>Shift</th>
-                  <th style={{ padding: '10px' }}>Effective Date</th>
-                  <th style={{ padding: '10px' }}>Status</th>
+                  <th style={{ padding: '10px' }}>Effective Dates</th>
+                  <th style={{ padding: '10px' }}>Duty Status</th>
                   <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
@@ -1564,13 +1950,13 @@ export const TransportModule = () => {
                       <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{as.registrationNumber}</div>
                     </td>
                     <td style={{ padding: '12px' }}>
-                      <div style={{ fontWeight: 600 }}>{as.routeName}</div>
+                      <div style={{ fontWeight: 700 }}>{as.routeName}</div>
                       <div style={{ fontSize: '0.75rem', color: '#0d9488' }}>{as.routeCode}</div>
                     </td>
                     <td style={{ padding: '12px' }}>
                       <span
                         style={{
-                          padding: '2px 8px',
+                          padding: '3px 8px',
                           borderRadius: '6px',
                           backgroundColor: 'rgba(13, 148, 136, 0.1)',
                           color: '#0d9488',
@@ -1581,16 +1967,30 @@ export const TransportModule = () => {
                         {as.shift}
                       </span>
                     </td>
-                    <td style={{ padding: '12px' }}>{as.effectiveStartDate || 'Immediate'}</td>
                     <td style={{ padding: '12px' }}>
-                      <span style={{ color: '#10b981', fontWeight: 700 }}>{as.status}</span>
+                      <div>{as.effectiveStartDate || 'Immediate'}</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Ongoing duty</div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <span
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '10px',
+                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10b981',
+                          fontWeight: 700,
+                          fontSize: '0.75rem'
+                        }}
+                      >
+                        {as.status || 'ACTIVE'}
+                      </span>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right' }}>
                       <button
                         onClick={async () => {
                           if (window.confirm('Remove this duty assignment?')) {
                             await transportService.deleteAssignment(as.id);
-                            showToast('Assignment removed', 'success');
+                            showToast('Duty assignment removed', 'success');
                             loadData();
                           }
                         }}
@@ -1599,7 +1999,8 @@ export const TransportModule = () => {
                           border: 'none',
                           color: '#ef4444',
                           fontWeight: 600,
-                          cursor: 'pointer'
+                          cursor: 'pointer',
+                          fontSize: '0.82rem'
                         }}
                       >
                         Remove
@@ -1607,11 +2008,468 @@ export const TransportModule = () => {
                     </td>
                   </tr>
                 ))}
+                {assignments.length === 0 && (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                      No duty assignments created yet. Click "New Duty Assignment" to assign a bus and route to a driver.
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* TAB 6: STUDENT TRANSPORT MANAGEMENT */}
+      {currentTab === 'students' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Header & Primary Actions */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Student Transport & Stop Allocations
+              </h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Assign routes, pickup and drop stops, travel validity, trip type, and transport fees to students
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                setEditingStudentAssign(null);
+                setStudentAssignForm({
+                  studentName: '',
+                  admissionNo: '',
+                  className: '',
+                  routeId: routes[0]?.id || '',
+                  pickupStopId: '',
+                  dropStopId: '',
+                  pickupTime: '07:30 AM',
+                  dropTime: '03:15 PM',
+                  tripType: 'BOTH_WAY',
+                  startDate: new Date().toISOString().split('T')[0],
+                  endDate: '',
+                  monthlyFee: 1500,
+                  feeStatus: 'PENDING',
+                  guardianPhone: '',
+                  status: 'ACTIVE'
+                });
+                setShowAssignStudentModal(true);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 18px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: '#0d9488',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer'
+              }}
+            >
+              <Plus size={16} /> Assign Student Transport
+            </button>
+          </div>
+
+          {/* Student Transport KPI Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '14px' }}>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>ENROLLED STUDENTS</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0d9488', marginTop: '4px' }}>
+                {studentAssignments.length}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Using school bus network</div>
+            </div>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>TRIP TYPES</div>
+              <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#2563eb', marginTop: '4px' }}>
+                {studentAssignments.filter(s => s.tripType === 'BOTH_WAY' || !s.tripType).length}{' '}
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>Both</span> /{' '}
+                {studentAssignments.filter(s => s.tripType === 'ONE_WAY').length}{' '}
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-muted)' }}>One-way</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Commute patterns</div>
+            </div>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>BOARDING ATTENDANCE</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#10b981', marginTop: '4px' }}>
+                {studentAssignments.filter(s => s.pickupStatus === 'PICKED_UP').length}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Boarded on morning routes</div>
+            </div>
+            <div style={{ padding: '16px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>FEE DUES PENDING</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ef4444', marginTop: '4px' }}>
+                {studentAssignments.filter(s => s.feeStatus === 'PENDING' || s.feeStatus === 'OVERDUE' || (s.pendingAmount && s.pendingAmount > 0)).length}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>Students with outstanding dues</div>
+            </div>
+          </div>
+
+          {/* Search & Filter Toolbar */}
+          <div
+            style={{
+              display: 'flex',
+              gap: '12px',
+              flexWrap: 'wrap',
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
+              padding: '12px 16px',
+              alignItems: 'center'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '220px' }}>
+              <Search size={16} color="var(--text-muted)" />
+              <input
+                type="text"
+                placeholder="Search by student name, admission no, class..."
+                value={studentSearch}
+                onChange={(e) => setStudentSearch(e.target.value)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  outline: 'none',
+                  width: '100%',
+                  fontSize: '0.85rem',
+                  color: 'var(--text-primary)'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+              <select
+                value={studentRouteFilter}
+                onChange={(e) => setStudentRouteFilter(e.target.value)}
+                style={{
+                  padding: '7px 12px',
+                  borderRadius: 'var(--radius-md)',
+                  border: '1px solid var(--border-color)',
+                  backgroundColor: 'var(--bg-app)',
+                  fontSize: '0.82rem',
+                  color: 'var(--text-primary)'
+                }}
+              >
+                <option value="ALL">All Routes</option>
+                {routes.map(r => (
+                  <option key={r.id} value={r.id}>{r.routeCode} - {r.routeName}</option>
+                ))}
+              </select>
+            </div>
+          </div>
 
           {/* Student Assignments Table */}
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '20px',
+              overflowX: 'auto'
+            }}
+          >
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                  <th style={{ padding: '10px' }}>Student</th>
+                  <th style={{ padding: '10px' }}>Class</th>
+                  <th style={{ padding: '10px' }}>Route & Area</th>
+                  <th style={{ padding: '10px' }}>Pickup Stop & Time</th>
+                  <th style={{ padding: '10px' }}>Drop Stop & Time</th>
+                  <th style={{ padding: '10px' }}>Type & Validity</th>
+                  <th style={{ padding: '10px' }}>Fee Status</th>
+                  <th style={{ padding: '10px' }}>Boarding</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredStudentAssignments.map((st) => (
+                  <tr key={st.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{st.studentName}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Adm: {st.admissionNo} • {st.guardianPhone}</div>
+                    </td>
+                    <td style={{ padding: '12px', fontWeight: 600 }}>{st.className}</td>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ fontWeight: 700 }}>{st.routeName}</div>
+                      <div style={{ fontSize: '0.72rem', color: '#0d9488' }}>{st.areaLocality || 'Campus Route'}</div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <div>{st.pickupStopName || 'Default Stop'}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#0d9488', fontWeight: 600 }}>{st.pickupTime || '07:30 AM'}</div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <div>{st.dropStopName || 'Default Stop'}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#2563eb', fontWeight: 600 }}>{st.dropTime || '03:15 PM'}</div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <span
+                        style={{
+                          padding: '2px 7px',
+                          borderRadius: '6px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          backgroundColor: st.tripType === 'ONE_WAY' ? 'rgba(234, 179, 8, 0.15)' : 'rgba(37, 99, 235, 0.12)',
+                          color: st.tripType === 'ONE_WAY' ? '#b45309' : '#2563eb'
+                        }}
+                      >
+                        {st.tripType === 'ONE_WAY' ? 'One-Way' : 'Both-Way'}
+                      </span>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+                        {st.startDate ? new Date(st.startDate).toLocaleDateString() : 'Active'}
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <span
+                          style={{
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            backgroundColor:
+                              st.feeStatus === 'PAID'
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : st.feeStatus === 'PARTIAL'
+                                ? 'rgba(234, 179, 8, 0.15)'
+                                : 'rgba(239, 68, 68, 0.15)',
+                            color:
+                              st.feeStatus === 'PAID'
+                                ? '#10b981'
+                                : st.feeStatus === 'PARTIAL'
+                                ? '#eab308'
+                                : '#ef4444'
+                          }}
+                        >
+                          {st.feeStatus || 'PENDING'}
+                        </span>
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                        ₹{st.monthlyFee || 1500}/mo
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px' }}>
+                      <span
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '10px',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          backgroundColor: st.pickupStatus === 'PICKED_UP' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                          color: st.pickupStatus === 'PICKED_UP' ? '#10b981' : '#eab308'
+                        }}
+                      >
+                        {st.pickupStatus || 'PENDING'}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => handleOpenCollectFee(st)}
+                          title="Collect Fee & Issue Receipt"
+                          style={{
+                            padding: '6px 10px',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                            border: '1px solid #0d9488',
+                            color: '#0d9488',
+                            fontSize: '0.75rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          <CreditCard size={13} /> Fee
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditStudentAssign(st)}
+                          title="Edit Assignment"
+                          style={{
+                            padding: '6px 9px',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: 'var(--bg-app)',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--text-primary)',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteStudentAssign(st.id, st.studentName)}
+                          title="Delete Assignment"
+                          style={{
+                            padding: '6px 9px',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: 'transparent',
+                            border: '1px solid rgba(239, 68, 68, 0.3)',
+                            color: '#ef4444',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            cursor: 'pointer'
+                          }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredStudentAssignments.length === 0 && (
+                  <tr>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: '36px', color: 'var(--text-muted)' }}>
+                      No student transport allocations found. Click "Assign Student Transport" to connect a student to a route and stop.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 7: TRANSPORT FEES & BILLING */}
+      {currentTab === 'fees' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+          {/* Header & Quick Collect Action */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Transport Fees & Revenue Management
+              </h3>
+              <p style={{ margin: '4px 0 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                Area-wise & route-wise fees, student payment ledger, pending dues collection and receipts
+              </p>
+            </div>
+            <button
+              onClick={() => {
+                const target = studentAssignments[0] || {};
+                handleOpenCollectFee(target);
+              }}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '9px 18px',
+                borderRadius: 'var(--radius-md)',
+                backgroundColor: '#10b981',
+                color: '#ffffff',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: 'pointer'
+              }}
+            >
+              <CreditCard size={16} /> Collect Transport Fee
+            </button>
+          </div>
+
+          {/* Financial KPI Summary Cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '16px' }}>
+            <div style={{ padding: '18px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>TOTAL ASSESSED FEES</span>
+                <CircleDollarSign size={20} color="#0d9488" />
+              </div>
+              <div style={{ fontSize: '1.7rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '8px' }}>
+                ₹{Number(feeSummary?.totalAssessed || 0).toLocaleString()}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Annual / Monthly billing schedule</div>
+            </div>
+
+            <div style={{ padding: '18px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>FEES COLLECTED</span>
+                <CheckCircle2 size={20} color="#10b981" />
+              </div>
+              <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#10b981', marginTop: '8px' }}>
+                ₹{Number(feeSummary?.totalCollected || 0).toLocaleString()}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                {Math.round(((feeSummary?.totalCollected || 0) / Math.max(feeSummary?.totalAssessed || 1, 1)) * 100)}% collection efficiency
+              </div>
+            </div>
+
+            <div style={{ padding: '18px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>PENDING DUES</span>
+                <Clock size={20} color="#f59e0b" />
+              </div>
+              <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#f59e0b', marginTop: '8px' }}>
+                ₹{Number(feeSummary?.totalPending || 0).toLocaleString()}
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Awaiting clearance</div>
+            </div>
+
+            <div style={{ padding: '18px', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--bg-card)', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>OVERDUE ACCOUNTS</span>
+                <AlertTriangle size={20} color="#ef4444" />
+              </div>
+              <div style={{ fontSize: '1.7rem', fontWeight: 800, color: '#ef4444', marginTop: '8px' }}>
+                {feeSummary?.overdueCount || 0} Students
+              </div>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Requires immediate follow-up</div>
+            </div>
+          </div>
+
+          {/* Area-Wise & Route-Wise Fee Structure */}
+          <div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '10px' }}>
+              Area-Wise / Route-Wise Fee Rates
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
+              {routes.map((rt) => {
+                const assignedCount = studentAssignments.filter(s => s.routeId === rt.id).length;
+                const monthlyProjection = (rt.fare || 1500) * assignedCount;
+                return (
+                  <div
+                    key={rt.id}
+                    style={{
+                      padding: '16px',
+                      borderRadius: 'var(--radius-lg)',
+                      backgroundColor: 'var(--bg-card)',
+                      border: '1px solid var(--border-color)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--text-primary)' }}>{rt.routeName}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{rt.areaLocality || 'Campus Route'} • {rt.routeCode}</div>
+                      </div>
+                      <span
+                        style={{
+                          padding: '3px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                          color: '#0d9488',
+                          fontWeight: 800,
+                          fontSize: '0.8rem'
+                        }}
+                      >
+                        ₹{rt.fare || 1500}/mo
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: 'var(--text-muted)', paddingTop: '6px', borderTop: '1px solid var(--border-light)' }}>
+                      <span>Enrolled Students: <strong>{assignedCount}</strong></span>
+                      <span>Monthly Revenue: <strong>₹{monthlyProjection.toLocaleString()}</strong></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Student Transport Fee Ledger Table */}
           <div
             style={{
               backgroundColor: 'var(--bg-card)',
@@ -1623,10 +2481,30 @@ export const TransportModule = () => {
               gap: '14px'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                Student Stop Assignments ({studentAssignments.length})
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Student Fee Ledger & Payment Tracking
               </h4>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                {['ALL', 'PAID', 'PARTIAL', 'PENDING', 'OVERDUE'].map((status) => (
+                  <button
+                    key={status}
+                    onClick={() => setFeeFilter(status)}
+                    style={{
+                      padding: '5px 12px',
+                      borderRadius: 'var(--radius-md)',
+                      border: '1px solid var(--border-color)',
+                      backgroundColor: feeFilter === status ? '#0d9488' : 'var(--bg-app)',
+                      color: feeFilter === status ? '#ffffff' : 'var(--text-secondary)',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {status}
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div style={{ overflowX: 'auto' }}>
@@ -1635,31 +2513,33 @@ export const TransportModule = () => {
                   <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
                     <th style={{ padding: '10px' }}>Student</th>
                     <th style={{ padding: '10px' }}>Class</th>
-                    <th style={{ padding: '10px' }}>Assigned Route</th>
-                    <th style={{ padding: '10px' }}>Pickup Stop & Time</th>
-                    <th style={{ padding: '10px' }}>Drop Stop & Time</th>
-                    <th style={{ padding: '10px' }}>Guardian Contact</th>
-                    <th style={{ padding: '10px' }}>Pickup Status</th>
+                    <th style={{ padding: '10px' }}>Route & Locality</th>
+                    <th style={{ padding: '10px' }}>Monthly Rate</th>
+                    <th style={{ padding: '10px' }}>Paid Amount</th>
+                    <th style={{ padding: '10px' }}>Pending Due</th>
+                    <th style={{ padding: '10px' }}>Payment Status</th>
+                    <th style={{ padding: '10px', textAlign: 'right' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {studentAssignments.map((st) => (
-                    <tr key={st.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                  {filteredFeeStudents.map((st) => (
+                    <tr key={st.id || st.studentId} style={{ borderBottom: '1px solid var(--border-light)' }}>
                       <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: 700 }}>{st.studentName}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{st.admissionNo}</div>
+                        <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{st.studentName}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Adm: {st.admissionNo} • {st.guardianPhone}</div>
                       </td>
-                      <td style={{ padding: '12px' }}>{st.className}</td>
-                      <td style={{ padding: '12px' }}>{st.routeName}</td>
+                      <td style={{ padding: '12px', fontWeight: 600 }}>{st.className}</td>
                       <td style={{ padding: '12px' }}>
-                        <div>{st.pickupStopName}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#0d9488' }}>{st.pickupTime}</div>
+                        <div>{st.routeName}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Pickup: {st.pickupStopName}</div>
                       </td>
-                      <td style={{ padding: '12px' }}>
-                        <div>{st.dropStopName}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#2563eb' }}>{st.dropTime}</div>
+                      <td style={{ padding: '12px', fontWeight: 700 }}>₹{st.monthlyFee || 1500}</td>
+                      <td style={{ padding: '12px', color: '#10b981', fontWeight: 700 }}>
+                        ₹{st.paidAmount !== undefined ? st.paidAmount : (st.feeStatus === 'PAID' ? (st.monthlyFee || 1500) : 0)}
                       </td>
-                      <td style={{ padding: '12px' }}>{st.guardianPhone}</td>
+                      <td style={{ padding: '12px', color: '#ef4444', fontWeight: 700 }}>
+                        ₹{st.pendingAmount !== undefined ? st.pendingAmount : (st.feeStatus === 'PAID' ? 0 : (st.monthlyFee || 1500))}
+                      </td>
                       <td style={{ padding: '12px' }}>
                         <span
                           style={{
@@ -1667,909 +2547,163 @@ export const TransportModule = () => {
                             borderRadius: '10px',
                             fontSize: '0.72rem',
                             fontWeight: 700,
-                            backgroundColor: st.pickupStatus === 'PICKED_UP' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
-                            color: st.pickupStatus === 'PICKED_UP' ? '#10b981' : '#eab308'
+                            backgroundColor:
+                              st.feeStatus === 'PAID'
+                                ? 'rgba(16, 185, 129, 0.15)'
+                                : st.feeStatus === 'PARTIAL'
+                                ? 'rgba(234, 179, 8, 0.15)'
+                                : 'rgba(239, 68, 68, 0.15)',
+                            color:
+                              st.feeStatus === 'PAID'
+                                ? '#10b981'
+                                : st.feeStatus === 'PARTIAL'
+                                ? '#eab308'
+                                : '#ef4444'
                           }}
                         >
-                          {st.pickupStatus}
+                          {st.feeStatus || 'PENDING'}
                         </span>
+                      </td>
+                      <td style={{ padding: '12px', textAlign: 'right' }}>
+                        <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                          <button
+                            onClick={() => handleOpenCollectFee(st)}
+                            style={{
+                              padding: '6px 12px',
+                              borderRadius: 'var(--radius-md)',
+                              backgroundColor: '#0d9488',
+                              color: '#ffffff',
+                              border: 'none',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <CreditCard size={13} /> Collect
+                          </button>
+                          {(st.paidAmount > 0 || st.feeStatus === 'PAID') && (
+                            <button
+                              onClick={() => {
+                                setReceiptData({
+                                  receiptNo: `TRP-REC-${st.id ? String(st.id).padStart(4, '0') : '1001'}`,
+                                  studentName: st.studentName,
+                                  admissionNo: st.admissionNo,
+                                  className: st.className,
+                                  routeName: st.routeName,
+                                  amountPaid: st.paidAmount || st.monthlyFee || 1500,
+                                  feeMonth: new Date().toLocaleString('default', { month: 'long' }),
+                                  paymentMode: 'CASH',
+                                  paymentDate: new Date().toISOString().split('T')[0],
+                                  collectedBy: 'Admin Office'
+                                });
+                                setShowReceiptModal(true);
+                              }}
+                              style={{
+                                padding: '6px 10px',
+                                borderRadius: 'var(--radius-md)',
+                                backgroundColor: 'var(--bg-app)',
+                                border: '1px solid var(--border-color)',
+                                color: 'var(--text-primary)',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <Printer size={13} /> Receipt
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
+                  {filteredFeeStudents.length === 0 && (
+                    <tr>
+                      <td colSpan={8} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                        No records found for the selected fee filter.
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* TAB 6: LIVE TRACKING SCREEN */}
-      {currentTab === 'live' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-          {/* Live Tracking Header Toolbar */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: '12px',
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              padding: '10px 16px'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
-                <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  Live Fleet Radar
-                </span>
-              </div>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                {liveBuses.length} Vehicles • {liveBuses.filter(b => b.tripStatus === 'IN_PROGRESS').length} In Transit • Powered by Google Maps
-              </span>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {/* Layout Mode Switcher */}
-              <div
-                style={{
-                  display: 'flex',
-                  backgroundColor: 'var(--bg-app)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '3px',
-                  border: '1px solid var(--border-color)',
-                  gap: '2px'
-                }}
-              >
-                <button
-                  onClick={() => setLiveViewMode('full')}
-                  title="Full Body Canvas with Floating Panels"
-                  style={{
-                    border: 'none',
-                    background: liveViewMode === 'full' ? '#0d9488' : 'transparent',
-                    color: liveViewMode === 'full' ? '#ffffff' : 'var(--text-secondary)',
-                    padding: '5px 12px',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <Layout size={13} />
-                  <span>Full Body Map</span>
-                </button>
-
-                <button
-                  onClick={() => setLiveViewMode('split')}
-                  title="3-Column Split Layout"
-                  style={{
-                    border: 'none',
-                    background: liveViewMode === 'split' ? '#0d9488' : 'transparent',
-                    color: liveViewMode === 'split' ? '#ffffff' : 'var(--text-secondary)',
-                    padding: '5px 12px',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '5px',
-                    transition: 'all 0.15s ease'
-                  }}
-                >
-                  <Columns size={13} />
-                  <span>3-Column Split</span>
-                </button>
-              </div>
-
-              {liveViewMode === 'full' && (
-                <button
-                  onClick={() => {
-                    const anyOpen = showFleetSidebar || showInspectorSidebar;
-                    setShowFleetSidebar(!anyOpen);
-                    setShowInspectorSidebar(!anyOpen);
-                  }}
-                  title="Toggle All Panels"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    padding: '6px 12px',
-                    borderRadius: 'var(--radius-sm)',
-                    border: '1px solid var(--border-color)',
-                    background: 'var(--bg-app)',
-                    color: 'var(--text-secondary)',
-                    fontSize: '0.76rem',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Eye size={13} />
-                  <span>{(showFleetSidebar || showInspectorSidebar) ? 'Maximize Map' : 'Show Panels'}</span>
-                </button>
-              )}
-
-              <button
-                onClick={() => setIsLiveFullscreen(!isLiveFullscreen)}
-                title={isLiveFullscreen ? 'Exit Full Screen' : 'Expand to Viewport Fullscreen'}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '5px',
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  border: '1px solid var(--border-color)',
-                  background: isLiveFullscreen ? '#0f172a' : 'var(--bg-app)',
-                  color: isLiveFullscreen ? '#38bdf8' : 'var(--text-secondary)',
-                  fontSize: '0.76rem',
-                  fontWeight: 700,
-                  cursor: 'pointer'
-                }}
-              >
-                {isLiveFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
-                <span>{isLiveFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
-              </button>
-            </div>
-          </div>
-
-          {/* MODE 1: FULL BODY MAP CANVAS */}
-          {liveViewMode === 'full' ? (
+          {/* Recent Payments Transaction Log */}
+          {feeSummary?.recentPayments && feeSummary.recentPayments.length > 0 && (
             <div
               style={{
-                position: isLiveFullscreen ? 'fixed' : 'relative',
-                inset: isLiveFullscreen ? 0 : 'auto',
-                zIndex: isLiveFullscreen ? 99999 : 10,
-                width: '100%',
-                height: isLiveFullscreen ? '100vh' : 'calc(100vh - 230px)',
-                minHeight: isLiveFullscreen ? '100vh' : '680px',
                 backgroundColor: 'var(--bg-card)',
-                borderRadius: isLiveFullscreen ? 0 : 'var(--radius-lg)',
-                overflow: 'hidden',
-                border: isLiveFullscreen ? 'none' : '1px solid var(--border-color)',
-                boxShadow: isLiveFullscreen ? 'none' : 'var(--shadow-md)',
+                border: '1px solid var(--border-color)',
+                borderRadius: 'var(--radius-lg)',
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px'
               }}
             >
-              {/* Full Body Interactive Google Map */}
-              <ErrorBoundary title="Live Fleet Radar Map">
-                <TransportLiveMap
-                  selectedBus={selectedLiveBus}
-                  allBuses={liveBuses}
-                  routes={routes}
-                  alerts={alerts}
-                  onSelectBus={(bus) => {
-                    setSelectedLiveBus(bus);
-                    setShowInspectorSidebar(true);
-                  }}
-                  isFullscreen={isLiveFullscreen}
-                  onToggleFullscreen={() => setIsLiveFullscreen(!isLiveFullscreen)}
-                />
-              </ErrorBoundary>
-
-              {/* Floating Overlay Left: Active Fleet List */}
-              {showFleetSidebar ? (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '16px',
-                    left: '16px',
-                    bottom: '16px',
-                    width: '320px',
-                    maxWidth: 'calc(100% - 32px)',
-                    zIndex: 500,
-                    backgroundColor: 'var(--bg-card)',
-                    backdropFilter: 'blur(16px)',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--border-color)',
-                    boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: '16px',
-                    gap: '12px',
-                    overflowY: 'auto',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <Bus size={18} color="#0d9488" />
-                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        Active Fleet ({liveBuses.length})
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700 }}>● Live Sync</span>
-                      <button
-                        onClick={() => setShowFleetSidebar(false)}
-                        title="Collapse Fleet Panel"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--text-muted)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '4px',
-                          borderRadius: '6px',
-                        }}
-                      >
-                        <ChevronLeft size={18} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    {liveBuses.map((bus) => {
-                      const isSelected = selectedLiveBus?.busId === bus.busId;
-                      return (
-                        <div
-                          key={bus.busId}
-                          onClick={() => {
-                            setSelectedLiveBus(bus);
-                            setShowInspectorSidebar(true);
-                          }}
-                          style={{
-                            padding: '14px',
-                            borderRadius: 'var(--radius-md)',
-                            backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.12)' : 'var(--bg-app)',
-                            border: isSelected ? '2px solid #0d9488' : '1px solid var(--border-color)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '8px',
-                            transition: 'all 0.2s ease',
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                              {bus.busNumber}
-                            </span>
-                            <span
-                              style={{
-                                fontSize: '0.7rem',
-                                fontWeight: 700,
-                                padding: '2px 6px',
-                                borderRadius: '6px',
-                                backgroundColor: bus.tripStatus === 'IN_PROGRESS' ? '#10b981' : '#64748b',
-                                color: '#ffffff',
-                              }}
-                            >
-                              {bus.tripStatus}
-                            </span>
-                          </div>
-
-                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                            {bus.routeName} • {bus.driverName}
-                          </div>
-
-                          <div
+              <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Recent Payment Receipts Issued
+              </h4>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.82rem' }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border-color)', color: 'var(--text-muted)' }}>
+                      <th style={{ padding: '8px' }}>Receipt No</th>
+                      <th style={{ padding: '8px' }}>Student</th>
+                      <th style={{ padding: '8px' }}>Month</th>
+                      <th style={{ padding: '8px' }}>Amount</th>
+                      <th style={{ padding: '8px' }}>Mode</th>
+                      <th style={{ padding: '8px' }}>Date</th>
+                      <th style={{ padding: '8px', textAlign: 'right' }}>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {feeSummary.recentPayments.map((pm, idx) => (
+                      <tr key={pm.id || idx} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '10px', fontWeight: 700, color: '#0d9488' }}>{pm.receiptNumber}</td>
+                        <td style={{ padding: '10px', fontWeight: 600 }}>{pm.studentName}</td>
+                        <td style={{ padding: '10px' }}>{pm.feeMonth}</td>
+                        <td style={{ padding: '10px', color: '#10b981', fontWeight: 800 }}>₹{pm.amountPaid}</td>
+                        <td style={{ padding: '10px' }}>{pm.paymentMode}</td>
+                        <td style={{ padding: '10px', color: 'var(--text-muted)' }}>{pm.paymentDate}</td>
+                        <td style={{ padding: '10px', textAlign: 'right' }}>
+                          <button
+                            onClick={() => {
+                              setReceiptData({
+                                receiptNo: pm.receiptNumber,
+                                studentName: pm.studentName,
+                                admissionNo: 'AD-2024',
+                                amountPaid: pm.amountPaid,
+                                feeMonth: pm.feeMonth,
+                                paymentMode: pm.paymentMode,
+                                paymentDate: pm.paymentDate,
+                                collectedBy: pm.collectedBy || 'Admin Office'
+                              });
+                              setShowReceiptModal(true);
+                            }}
                             style={{
-                              display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              fontSize: '0.8rem',
-                              marginTop: '4px',
+                              padding: '4px 8px',
+                              borderRadius: 'var(--radius-sm)',
+                              backgroundColor: 'transparent',
+                              border: '1px solid var(--border-color)',
+                              cursor: 'pointer',
+                              fontSize: '0.72rem',
+                              fontWeight: 600
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, color: '#0d9488' }}>
-                              <Gauge size={14} />
-                              {Math.round(bus.currentSpeedKmh)} km/h
-                            </div>
-                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                              ETA: {bus.nextStopEtaMinutes} mins
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowFleetSidebar(true)}
-                  style={{
-                    position: 'absolute',
-                    top: '16px',
-                    left: '16px',
-                    zIndex: 500,
-                    backgroundColor: '#0d9488',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '30px',
-                    padding: '9px 15px',
-                    boxShadow: '0 6px 20px rgba(13, 148, 136, 0.4)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  <Bus size={16} />
-                  <span>Active Fleet ({liveBuses.length})</span>
-                  <ChevronRight size={16} />
-                </button>
-              )}
-
-              {/* Floating Overlay Right: Trip Inspector */}
-              {showInspectorSidebar ? (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '16px',
-                    right: '16px',
-                    bottom: '16px',
-                    width: '340px',
-                    maxWidth: 'calc(100% - 32px)',
-                    zIndex: 500,
-                    backgroundColor: 'var(--bg-card)',
-                    backdropFilter: 'blur(16px)',
-                    borderRadius: 'var(--radius-lg)',
-                    border: '1px solid var(--border-color)',
-                    boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    padding: '20px',
-                    gap: '16px',
-                    overflowY: 'auto',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                      Trip Inspector
-                    </h3>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span
-                        style={{
-                          fontSize: '0.7rem',
-                          fontWeight: 700,
-                          padding: '3px 8px',
-                          borderRadius: '10px',
-                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                          color: '#10b981',
-                        }}
-                      >
-                        ● GPS ONLINE
-                      </span>
-                      <button
-                        onClick={() => setShowInspectorSidebar(false)}
-                        title="Collapse Inspector"
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          cursor: 'pointer',
-                          color: 'var(--text-muted)',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          padding: '4px',
-                          borderRadius: '6px',
-                        }}
-                      >
-                        <X size={18} />
-                      </button>
-                    </div>
-                  </div>
-
-                  {selectedLiveBus ? (
-                    <>
-                      <div
-                        style={{
-                          backgroundColor: 'var(--bg-app)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '14px',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          fontSize: '0.82rem',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Bus Reg:</span>
-                          <span style={{ fontWeight: 700 }}>{selectedLiveBus.registrationNumber}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Driver Name:</span>
-                          <span style={{ fontWeight: 700 }}>{selectedLiveBus.driverName}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Driver Phone:</span>
-                          <span style={{ fontWeight: 600, color: '#0d9488' }}>{selectedLiveBus.driverPhone}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Route:</span>
-                          <span style={{ fontWeight: 600 }}>{selectedLiveBus.routeName}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Destination:</span>
-                          <span style={{ fontWeight: 700, color: '#ef4444' }}>
-                            {selectedLiveBus.destinationName || 'School Main Gate'}
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Traveled:</span>
-                          <span style={{ fontWeight: 700, color: '#0d9488' }}>
-                            {selectedLiveBus.traveledDistanceKm || 7.8} / {selectedLiveBus.totalRouteDistanceKm || 18.5} km
-                          </span>
-                        </div>
-                        <div style={{ marginTop: '4px' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', marginBottom: '4px' }}>
-                            <span style={{ color: 'var(--text-muted)' }}>Route Completion</span>
-                            <span style={{ fontWeight: 700, color: '#0d9488' }}>
-                              {Math.round(
-                                ((selectedLiveBus.traveledDistanceKm || 7.8) /
-                                  (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
-                                  100
-                              )}
-                              %
-                            </span>
-                          </div>
-                          <div
-                            style={{
-                              height: '6px',
-                              borderRadius: '3px',
-                              backgroundColor: 'rgba(0,0,0,0.08)',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${Math.min(
-                                  100,
-                                  Math.round(
-                                    ((selectedLiveBus.traveledDistanceKm || 7.8) /
-                                      (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
-                                      100
-                                  )
-                                )}%`,
-                                height: '100%',
-                                backgroundColor: '#0d9488',
-                                borderRadius: '3px',
-                                transition: 'width 0.4s ease',
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Speedometer telemetry card */}
-                      <div
-                        style={{
-                          backgroundColor: 'var(--bg-app)',
-                          borderRadius: 'var(--radius-md)',
-                          padding: '16px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TELEMETRY SPEED</div>
-                          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0d9488' }}>
-                            {Math.round(selectedLiveBus.currentSpeedKmh)} <span style={{ fontSize: '0.9rem' }}>km/h</span>
-                          </div>
-                        </div>
-                        <Gauge size={38} color="#0d9488" />
-                      </div>
-
-                      {/* Trip Timeline (Arrival, Departure, Dwell) */}
-                      <div>
-                        <div
-                          style={{
-                            fontSize: '0.85rem',
-                            fontWeight: 700,
-                            marginBottom: '12px',
-                            color: 'var(--text-secondary)',
-                          }}
-                        >
-                          Trip Timeline & Dwell Log
-                        </div>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.8rem' }}>
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
-                            <div>
-                              <div style={{ fontWeight: 700 }}>Trip Started</div>
-                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>07:15 AM • North City Square</div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
-                            <div>
-                              <div style={{ fontWeight: 700 }}>Stop 1: Metro Pillar 42</div>
-                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Departed • Dwell: 2m 10s • 12 Boarded</div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#06b6d4', marginTop: '4px' }} />
-                            <div>
-                              <div style={{ fontWeight: 700 }}>Stop 2: Central Mall (Current)</div>
-                              <div style={{ fontSize: '0.72rem', color: '#06b6d4', fontWeight: 600 }}>Bus at Stop • Boarding in progress</div>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', gap: '10px' }}>
-                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#64748b', marginTop: '4px' }} />
-                            <div>
-                              <div style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Stop 3: Kankarbagh Park</div>
-                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Scheduled Arrival: 07:45 AM</div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => handleOpenPlayback(selectedLiveBus.tripId || 1)}
-                        style={{
-                          marginTop: 'auto',
-                          padding: '10px 14px',
-                          borderRadius: 'var(--radius-md)',
-                          backgroundColor: 'rgba(13, 148, 136, 0.1)',
-                          color: '#0d9488',
-                          border: '1px solid #0d9488',
-                          fontWeight: 700,
-                          fontSize: '0.82rem',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '6px',
-                        }}
-                      >
-                        <Play size={15} /> Open Journey Replay
-                      </button>
-                    </>
-                  ) : (
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Select a bus to inspect</div>
-                  )}
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowInspectorSidebar(true)}
-                  style={{
-                    position: 'absolute',
-                    top: '16px',
-                    right: '16px',
-                    zIndex: 500,
-                    backgroundColor: 'var(--bg-card)',
-                    color: 'var(--text-primary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '30px',
-                    padding: '9px 15px',
-                    boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '0.82rem',
-                    fontWeight: 700,
-                  }}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Trip Inspector</span>
-                  <Activity size={16} color="#0d9488" />
-                </button>
-              )}
-            </div>
-          ) : (
-            /* MODE 2: CLASSIC 3-COLUMN SPLIT */
-            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 340px', gap: '20px', minHeight: '680px' }}>
-              {/* Column 1: Fleet Bus List */}
-              <div
-                style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '16px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '12px',
-                  overflowY: 'auto',
-                  maxHeight: '750px',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    Active Fleet ({liveBuses.length})
-                  </span>
-                  <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700 }}>● Live Sync</span>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                  {liveBuses.map((bus) => {
-                    const isSelected = selectedLiveBus?.busId === bus.busId;
-                    return (
-                      <div
-                        key={bus.busId}
-                        onClick={() => setSelectedLiveBus(bus)}
-                        style={{
-                          padding: '14px',
-                          borderRadius: 'var(--radius-md)',
-                          backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.12)' : 'var(--bg-app)',
-                          border: isSelected ? '2px solid #0d9488' : '1px solid var(--border-color)',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          flexDirection: 'column',
-                          gap: '8px',
-                          transition: 'all 0.2s ease',
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                            {bus.busNumber}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: '0.7rem',
-                              fontWeight: 700,
-                              padding: '2px 6px',
-                              borderRadius: '6px',
-                              backgroundColor: bus.tripStatus === 'IN_PROGRESS' ? '#10b981' : '#64748b',
-                              color: '#ffffff',
-                            }}
-                          >
-                            {bus.tripStatus}
-                          </span>
-                        </div>
-
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          {bus.routeName} • {bus.driverName}
-                        </div>
-
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            fontSize: '0.8rem',
-                            marginTop: '4px',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, color: '#0d9488' }}>
-                            <Gauge size={14} />
-                            {Math.round(bus.currentSpeedKmh)} km/h
-                          </div>
-                          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                            ETA: {bus.nextStopEtaMinutes} mins
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Column 2: Interactive Real Live Map Canvas */}
-              <div
-                style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '8px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  position: 'relative',
-                  overflow: 'hidden',
-                  height: '680px',
-                  minHeight: '680px',
-                }}
-              >
-                <ErrorBoundary title="Live Fleet Radar Map">
-                  <TransportLiveMap
-                    selectedBus={selectedLiveBus}
-                    allBuses={liveBuses}
-                    routes={routes}
-                    alerts={alerts}
-                    onSelectBus={(bus) => setSelectedLiveBus(bus)}
-                    isFullscreen={isLiveFullscreen}
-                    onToggleFullscreen={() => setIsLiveFullscreen(!isLiveFullscreen)}
-                  />
-                </ErrorBoundary>
-              </div>
-
-              {/* Column 3: Detailed Bus & Trip Timeline Inspector */}
-              <div
-                style={{
-                  backgroundColor: 'var(--bg-card)',
-                  border: '1px solid var(--border-color)',
-                  borderRadius: 'var(--radius-lg)',
-                  padding: '20px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                  overflowY: 'auto',
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    Trip Inspector
-                  </h3>
-                  <span
-                    style={{
-                      fontSize: '0.7rem',
-                      fontWeight: 700,
-                      padding: '3px 8px',
-                      borderRadius: '10px',
-                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                      color: '#10b981',
-                    }}
-                  >
-                    ● GPS ONLINE
-                  </span>
-                </div>
-
-                {selectedLiveBus ? (
-                  <>
-                    <div
-                      style={{
-                        backgroundColor: 'var(--bg-app)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '14px',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        fontSize: '0.82rem',
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Bus Reg:</span>
-                        <span style={{ fontWeight: 700 }}>{selectedLiveBus.registrationNumber}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Driver Name:</span>
-                        <span style={{ fontWeight: 700 }}>{selectedLiveBus.driverName}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Driver Phone:</span>
-                        <span style={{ fontWeight: 600, color: '#0d9488' }}>{selectedLiveBus.driverPhone}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Route:</span>
-                        <span style={{ fontWeight: 600 }}>{selectedLiveBus.routeName}</span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Destination:</span>
-                        <span style={{ fontWeight: 700, color: '#ef4444' }}>
-                          {selectedLiveBus.destinationName || 'School Main Gate'}
-                        </span>
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <span style={{ color: 'var(--text-muted)' }}>Traveled:</span>
-                        <span style={{ fontWeight: 700, color: '#0d9488' }}>
-                          {selectedLiveBus.traveledDistanceKm || 7.8} / {selectedLiveBus.totalRouteDistanceKm || 18.5} km
-                        </span>
-                      </div>
-                      <div style={{ marginTop: '4px' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', marginBottom: '4px' }}>
-                          <span style={{ color: 'var(--text-muted)' }}>Route Completion</span>
-                          <span style={{ fontWeight: 700, color: '#0d9488' }}>
-                            {Math.round(
-                              ((selectedLiveBus.traveledDistanceKm || 7.8) /
-                                (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
-                                100
-                            )}
-                            %
-                          </span>
-                        </div>
-                        <div
-                          style={{
-                            height: '6px',
-                            borderRadius: '3px',
-                            backgroundColor: 'rgba(0,0,0,0.08)',
-                            overflow: 'hidden',
-                          }}
-                        >
-                          <div
-                            style={{
-                              width: `${Math.min(
-                                100,
-                                Math.round(
-                                  ((selectedLiveBus.traveledDistanceKm || 7.8) /
-                                    (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
-                                    100
-                                )
-                              )}%`,
-                              height: '100%',
-                              backgroundColor: '#0d9488',
-                              borderRadius: '3px',
-                              transition: 'width 0.4s ease',
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        backgroundColor: 'var(--bg-app)',
-                        borderRadius: 'var(--radius-md)',
-                        padding: '16px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TELEMETRY SPEED</div>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0d9488' }}>
-                          {Math.round(selectedLiveBus.currentSpeedKmh)} <span style={{ fontSize: '0.9rem' }}>km/h</span>
-                        </div>
-                      </div>
-                      <Gauge size={38} color="#0d9488" />
-                    </div>
-
-                    <div>
-                      <div
-                        style={{
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          marginBottom: '12px',
-                          color: 'var(--text-secondary)',
-                        }}
-                      >
-                        Trip Timeline & Dwell Log
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.8rem' }}>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
-                          <div>
-                            <div style={{ fontWeight: 700 }}>Trip Started</div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>07:15 AM • North City Square</div>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
-                          <div>
-                            <div style={{ fontWeight: 700 }}>Stop 1: Metro Pillar 42</div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Departed • Dwell: 2m 10s • 12 Boarded</div>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#06b6d4', marginTop: '4px' }} />
-                          <div>
-                            <div style={{ fontWeight: 700 }}>Stop 2: Central Mall (Current)</div>
-                            <div style={{ fontSize: '0.72rem', color: '#06b6d4', fontWeight: 600 }}>Bus at Stop • Boarding in progress</div>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', gap: '10px' }}>
-                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#64748b', marginTop: '4px' }} />
-                          <div>
-                            <div style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Stop 3: Kankarbagh Park</div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Scheduled Arrival: 07:45 AM</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleOpenPlayback(selectedLiveBus.tripId || 1)}
-                      style={{
-                        marginTop: 'auto',
-                        padding: '10px 14px',
-                        borderRadius: 'var(--radius-md)',
-                        backgroundColor: 'rgba(13, 148, 136, 0.1)',
-                        color: '#0d9488',
-                        border: '1px solid #0d9488',
-                        fontWeight: 700,
-                        fontSize: '0.82rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '6px',
-                      }}
-                    >
-                      <Play size={15} /> Open Journey Replay
-                    </button>
-                  </>
-                ) : (
-                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Select a bus to inspect</div>
-                )}
+                            Print Receipt
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
           )}
@@ -2805,18 +2939,19 @@ export const TransportModule = () => {
       )}
 
       {/* ============================================================== */}
-      {/* MODAL 1: ADD BUS MODAL */}
+      {/* MODAL 1: ADD / EDIT BUS MODAL */}
       {/* ============================================================== */}
       {showAddBusModal && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(0,0,0,0.6)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000
+            zIndex: 1000,
+            padding: '20px'
           }}
         >
           <div
@@ -2824,50 +2959,82 @@ export const TransportModule = () => {
               backgroundColor: 'var(--bg-card)',
               borderRadius: 'var(--radius-lg)',
               padding: '24px',
-              width: '90%',
-              maxWidth: '520px',
-              border: '1px solid var(--border-color)'
+              width: '100%',
+              maxWidth: '580px',
+              border: '1px solid var(--border-color)',
+              maxHeight: '90vh',
+              overflowY: 'auto'
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Add New Vehicle to Fleet</h3>
-              <button onClick={() => setShowAddBusModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                  {editingBus ? 'Edit Bus Details' : 'Add New Bus to Fleet'}
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Vehicle specifications, seating, compliance and expiry dates
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddBusModal(false);
+                  setEditingBus(null);
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleCreateBus} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
-              <div>
-                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Bus Identifier (e.g. Bus 05)</label>
-                <input
-                  required
-                  type="text"
-                  value={busForm.busNumber}
-                  onChange={(e) => setBusForm({ ...busForm, busNumber: e.target.value })}
-                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-                />
-              </div>
+            <form onSubmit={handleCreateOrUpdateBus} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Registration Plate</label>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Bus Number / Identifier *</label>
                   <input
                     required
                     type="text"
-                    placeholder="MH-02-XY-9999"
+                    placeholder="e.g. Bus 01"
+                    value={busForm.busNumber}
+                    onChange={(e) => setBusForm({ ...busForm, busNumber: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Registration Number *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. DL 1PC 1234"
                     value={busForm.registrationNumber}
                     onChange={(e) => setBusForm({ ...busForm, registrationNumber: e.target.value })}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
                   />
                 </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
-                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Seating Capacity</label>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Bus Model / Make</label>
                   <input
+                    type="text"
+                    placeholder="e.g. Tata Starbus 40"
+                    value={busForm.model}
+                    onChange={(e) => setBusForm({ ...busForm, model: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Seating Capacity *</label>
+                  <input
+                    required
                     type="number"
+                    min="1"
                     value={busForm.capacity}
                     onChange={(e) => setBusForm({ ...busForm, capacity: Number(e.target.value) })}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
                   />
                 </div>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Fuel Type</label>
@@ -2879,23 +3046,85 @@ export const TransportModule = () => {
                     <option value="DIESEL">Diesel</option>
                     <option value="CNG">CNG</option>
                     <option value="ELECTRIC">Electric</option>
+                    <option value="PETROL">Petrol</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>GPS Device IMEI / ID</label>
-                  <input
-                    type="text"
-                    placeholder="GPS-DEV-889"
-                    value={busForm.gpsDeviceId}
-                    onChange={(e) => setBusForm({ ...busForm, gpsDeviceId: e.target.value })}
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Vehicle Status</label>
+                  <select
+                    value={busForm.status}
+                    onChange={(e) => setBusForm({ ...busForm, status: e.target.value })}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-                  />
+                  >
+                    <option value="ACTIVE">Active</option>
+                    <option value="MAINTENANCE">Maintenance</option>
+                    <option value="INACTIVE">Inactive</option>
+                  </select>
                 </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>GPS Device IMEI / ID</label>
+                <input
+                  type="text"
+                  placeholder="e.g. GPS-DEV-889"
+                  value={busForm.gpsDeviceId}
+                  onChange={(e) => setBusForm({ ...busForm, gpsDeviceId: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                />
+              </div>
+
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '10px' }}>
+                <div style={{ fontSize: '0.8rem', fontWeight: 700, marginBottom: '8px', color: 'var(--text-secondary)' }}>
+                  Compliance & Certificate Expiry Dates
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Insurance Expiry</label>
+                    <input
+                      type="date"
+                      value={busForm.insuranceExpiryDate || ''}
+                      onChange={(e) => setBusForm({ ...busForm, insuranceExpiryDate: e.target.value })}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Fitness Certificate Expiry</label>
+                    <input
+                      type="date"
+                      value={busForm.fitnessExpiryDate || ''}
+                      onChange={(e) => setBusForm({ ...busForm, fitnessExpiryDate: e.target.value })}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>Permit Expiry</label>
+                    <input
+                      type="date"
+                      value={busForm.permitExpiryDate || ''}
+                      onChange={(e) => setBusForm({ ...busForm, permitExpiryDate: e.target.value })}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, display: 'block', marginBottom: '3px' }}>PUC / Pollution Expiry</label>
+                    <input
+                      type="date"
+                      value={busForm.pollutionExpiryDate || ''}
+                      onChange={(e) => setBusForm({ ...busForm, pollutionExpiryDate: e.target.value })}
+                      style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowAddBusModal(false)}
+                  onClick={() => {
+                    setShowAddBusModal(false);
+                    setEditingBus(null);
+                  }}
                   style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer' }}
                 >
                   Cancel
@@ -2904,7 +3133,7 @@ export const TransportModule = () => {
                   type="submit"
                   style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
                 >
-                  Save Bus
+                  {editingBus ? 'Update Bus' : 'Save Bus'}
                 </button>
               </div>
             </form>
@@ -2913,18 +3142,19 @@ export const TransportModule = () => {
       )}
 
       {/* ============================================================== */}
-      {/* MODAL 2: ADD DRIVER MODAL (NO OTP: direct ID/pass) */}
+      {/* MODAL 2: EDIT DRIVER DETAILS MODAL (Driver added via Staff Screen) */}
       {/* ============================================================== */}
-      {showAddDriverModal && (
+      {showEditDriverModal && (
         <div
           style={{
             position: 'fixed',
             inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
+            backgroundColor: 'rgba(0,0,0,0.6)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000
+            zIndex: 1000,
+            padding: '20px'
           }}
         >
           <div
@@ -2932,91 +3162,126 @@ export const TransportModule = () => {
               backgroundColor: 'var(--bg-card)',
               borderRadius: 'var(--radius-lg)',
               padding: '24px',
-              width: '90%',
-              maxWidth: '520px',
+              width: '100%',
+              maxWidth: '540px',
               border: '1px solid var(--border-color)'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Register Transport Driver</h3>
-              <button onClick={() => setShowAddDriverModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Edit Driver Profile & Licence</h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Driver details and operational availability status
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowEditDriverModal(false);
+                  setEditingDriver(null);
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleCreateDriver} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
+            <form onSubmit={handleUpdateDriver} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Driver Full Name *</label>
+                  <input
+                    required
+                    type="text"
+                    value={driverEditForm.name}
+                    onChange={(e) => setDriverEditForm({ ...driverEditForm, name: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Mobile Number *</label>
+                  <input
+                    required
+                    type="text"
+                    value={driverEditForm.phone}
+                    onChange={(e) => setDriverEditForm({ ...driverEditForm, phone: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Driving Licence Number</label>
+                  <input
+                    type="text"
+                    value={driverEditForm.licenseNumber}
+                    onChange={(e) => setDriverEditForm({ ...driverEditForm, licenseNumber: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Licence Expiry Date</label>
+                  <input
+                    type="date"
+                    value={driverEditForm.licenseExpiryDate || ''}
+                    onChange={(e) => setDriverEditForm({ ...driverEditForm, licenseExpiryDate: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Joining Date</label>
+                  <input
+                    type="date"
+                    value={driverEditForm.joiningDate || ''}
+                    onChange={(e) => setDriverEditForm({ ...driverEditForm, joiningDate: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Emergency Contact</label>
+                  <input
+                    type="text"
+                    placeholder="Relation & Phone"
+                    value={driverEditForm.emergencyContact}
+                    onChange={(e) => setDriverEditForm({ ...driverEditForm, emergencyContact: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
               <div>
-                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Full Name</label>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Address</label>
                 <input
-                  required
                   type="text"
-                  placeholder="e.g. Ramesh Kumar"
-                  value={driverForm.name}
-                  onChange={(e) => setDriverForm({ ...driverForm, name: e.target.value })}
+                  placeholder="Residential Address"
+                  value={driverEditForm.address}
+                  onChange={(e) => setDriverEditForm({ ...driverEditForm, address: e.target.value })}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
                 />
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Login Email / ID</label>
-                  <input
-                    required
-                    type="email"
-                    placeholder="driver@school.com"
-                    value={driverForm.email}
-                    onChange={(e) => setDriverForm({ ...driverForm, email: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Phone Number</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="+91 98765 43210"
-                    value={driverForm.phone}
-                    onChange={(e) => setDriverForm({ ...driverForm, phone: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-                  />
-                </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Availability Status</label>
+                <select
+                  value={driverEditForm.status}
+                  onChange={(e) => setDriverEditForm({ ...driverEditForm, status: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                >
+                  <option value="ACTIVE">Active (On Duty)</option>
+                  <option value="ON_LEAVE">On Leave</option>
+                  <option value="INACTIVE">Inactive</option>
+                </select>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>License Number</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="DL-0420110056789"
-                    value={driverForm.licenseNumber}
-                    onChange={(e) => setDriverForm({ ...driverForm, licenseNumber: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-                  />
-                </div>
-                <div>
-                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>App Password</label>
-                  <input
-                    type="password"
-                    placeholder="password"
-                    value={driverForm.password}
-                    onChange={(e) => setDriverForm({ ...driverForm, password: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-                  />
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: 'var(--radius-md)',
-                  backgroundColor: 'rgba(13, 148, 136, 0.08)',
-                  fontSize: '0.78rem',
-                  color: '#0d9488'
-                }}
-              >
-                ✓ Driver can directly log in using email/phone and password on the Driver App (No OTP required).
-              </div>
+
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowAddDriverModal(false)}
+                  onClick={() => {
+                    setShowEditDriverModal(false);
+                    setEditingDriver(null);
+                  }}
                   style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer' }}
                 >
                   Cancel
@@ -3025,10 +3290,862 @@ export const TransportModule = () => {
                   type="submit"
                   style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
                 >
-                  Register Driver
+                  Save Changes
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 3: ADD / EDIT ROUTE MODAL */}
+      {/* ============================================================== */}
+      {showAddRouteModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '560px',
+              border: '1px solid var(--border-color)',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                  {editingRoute ? 'Edit Route Details' : 'Plan New Route'}
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Route name, area/locality, schedule timings and monthly fare
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAddRouteModal(false);
+                  setEditingRoute(null);
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateOrUpdateRoute} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Route Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Rohini to School"
+                    value={routeForm.routeName}
+                    onChange={(e) => setRouteForm({ ...routeForm, routeName: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Route Code *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="RT-ROH-01"
+                    value={routeForm.routeCode}
+                    onChange={(e) => setRouteForm({ ...routeForm, routeCode: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Area / Locality *</label>
+                <input
+                  required
+                  type="text"
+                  placeholder="e.g. Rohini Sector 7 → Sector 11 → Rithala"
+                  value={routeForm.areaLocality}
+                  onChange={(e) => setRouteForm({ ...routeForm, areaLocality: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Starting Point</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Rohini Sector 7"
+                    value={routeForm.startLocation}
+                    onChange={(e) => setRouteForm({ ...routeForm, startLocation: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Destination</label>
+                  <input
+                    type="text"
+                    placeholder="School Main Campus"
+                    value={routeForm.endLocation}
+                    onChange={(e) => setRouteForm({ ...routeForm, endLocation: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Monthly Fare (₹) *</label>
+                  <input
+                    required
+                    type="number"
+                    value={routeForm.fare}
+                    onChange={(e) => setRouteForm({ ...routeForm, fare: Number(e.target.value) })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Distance (km)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={routeForm.totalDistanceKm}
+                    onChange={(e) => setRouteForm({ ...routeForm, totalDistanceKm: Number(e.target.value) })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Duration (mins)</label>
+                  <input
+                    type="number"
+                    value={routeForm.plannedDurationMinutes}
+                    onChange={(e) => setRouteForm({ ...routeForm, plannedDurationMinutes: Number(e.target.value) })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Morning Start Time</label>
+                  <input
+                    type="text"
+                    placeholder="07:15 AM"
+                    value={routeForm.morningStartTime}
+                    onChange={(e) => setRouteForm({ ...routeForm, morningStartTime: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Evening Start Time</label>
+                  <input
+                    type="text"
+                    placeholder="02:45 PM"
+                    value={routeForm.eveningStartTime}
+                    onChange={(e) => setRouteForm({ ...routeForm, eveningStartTime: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddRouteModal(false);
+                    setEditingRoute(null);
+                  }}
+                  style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {editingRoute ? 'Update Route' : 'Save Route'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 4: MANAGE ROUTE STOPS MODAL */}
+      {/* ============================================================== */}
+      {showManageStopsModal && selectedRouteForStops && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '680px',
+              border: '1px solid var(--border-color)',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                  Stops for {selectedRouteForStops.routeName}
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Ordered sequence of pickup/drop points and arrival times
+                </p>
+              </div>
+              <button onClick={() => setShowManageStopsModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginBottom: '20px' }}>
+              {(selectedRouteForStops.stops || []).map((stop, sIdx) => (
+                <div
+                  key={stop.id || sIdx}
+                  style={{
+                    padding: '12px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: 'var(--bg-app)',
+                    border: '1px solid var(--border-color)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '12px'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <span
+                      style={{
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: '50%',
+                        backgroundColor: '#0d9488',
+                        color: '#ffffff',
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}
+                    >
+                      {stop.stopOrder || sIdx + 1}
+                    </span>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.9rem' }}>{stop.stopName}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{stop.landmark || 'No landmark specified'}</div>
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right', fontSize: '0.8rem' }}>
+                    <div style={{ color: '#0d9488', fontWeight: 700 }}>Pickup: {stop.plannedMorningPickupTime || 'N/A'}</div>
+                    <div style={{ color: '#2563eb', fontWeight: 600, fontSize: '0.75rem' }}>Drop: {stop.plannedEveningDropTime || 'N/A'}</div>
+                  </div>
+                </div>
+              ))}
+              {(!selectedRouteForStops.stops || selectedRouteForStops.stops.length === 0) && (
+                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  No stops configured yet for this route.
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowManageStopsModal(false)}
+                style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 5: BUS-DRIVER-ROUTE DUTY ASSIGNMENT MODAL */}
+      {/* ============================================================== */}
+      {showAddAssignmentModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '520px',
+              border: '1px solid var(--border-color)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>New Duty Assignment</h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Map Driver to Bus and Route for operational shifts
+                </p>
+              </div>
+              <button onClick={() => setShowAddAssignmentModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCreateAssignment} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Select Driver *</label>
+                <select
+                  required
+                  value={assignmentForm.driverId}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, driverId: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                >
+                  <option value="">-- Choose Driver --</option>
+                  {drivers.map(d => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.phone})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Select Bus *</label>
+                <select
+                  required
+                  value={assignmentForm.busId}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, busId: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                >
+                  <option value="">-- Choose Bus --</option>
+                  {buses.map(b => (
+                    <option key={b.id} value={b.id}>{b.busNumber} ({b.registrationNumber}) - {b.capacity} Seats</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Select Route *</label>
+                <select
+                  required
+                  value={assignmentForm.routeId}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, routeId: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                >
+                  <option value="">-- Choose Route --</option>
+                  {routes.map(r => (
+                    <option key={r.id} value={r.id}>{r.routeCode} - {r.routeName} ({r.areaLocality || 'Campus'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Shift *</label>
+                <select
+                  value={assignmentForm.shift}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, shift: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                >
+                  <option value="BOTH">Both (Morning Pickup & Evening Drop)</option>
+                  <option value="MORNING">Morning Shift Only</option>
+                  <option value="EVENING">Evening Shift Only</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Notes / Remarks</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Regular driver replacement assignment"
+                  value={assignmentForm.notes}
+                  onChange={(e) => setAssignmentForm({ ...assignmentForm, notes: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddAssignmentModal(false)}
+                  style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Save Duty Assignment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 6: ASSIGN / EDIT STUDENT TRANSPORT MODAL */}
+      {/* ============================================================== */}
+      {showAssignStudentModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '580px',
+              border: '1px solid var(--border-color)',
+              maxHeight: '90vh',
+              overflowY: 'auto'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>
+                  {editingStudentAssign ? 'Edit Student Transport' : 'Assign Student to Transport'}
+                </h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Connect student to route, pickup/drop stop and set transport validity
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  setShowAssignStudentModal(false);
+                  setEditingStudentAssign(null);
+                }}
+                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleAssignOrUpdateStudent} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Student Name *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Aarav Sharma"
+                    value={studentAssignForm.studentName}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, studentName: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Admission No *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="ADM-2024-001"
+                    value={studentAssignForm.admissionNo}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, admissionNo: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Class & Section *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="e.g. Class 7-A"
+                    value={studentAssignForm.className}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, className: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Guardian Mobile No *</label>
+                  <input
+                    required
+                    type="text"
+                    placeholder="+91 98765 43210"
+                    value={studentAssignForm.guardianPhone}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, guardianPhone: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Assigned Route *</label>
+                <select
+                  required
+                  value={studentAssignForm.routeId}
+                  onChange={(e) => {
+                    const rId = e.target.value;
+                    const selectedRoute = routes.find(r => String(r.id) === String(rId));
+                    setStudentAssignForm({
+                      ...studentAssignForm,
+                      routeId: rId,
+                      monthlyFee: selectedRoute?.fare || 1500,
+                      pickupStopId: selectedRoute?.stops?.[0]?.id || '',
+                      dropStopId: selectedRoute?.stops?.[selectedRoute.stops.length - 1]?.id || ''
+                    });
+                  }}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                >
+                  <option value="">-- Choose Route --</option>
+                  {routes.map(r => (
+                    <option key={r.id} value={r.id}>{r.routeCode} - {r.routeName} ({r.areaLocality || 'Campus'})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Pickup Stop</label>
+                  <select
+                    value={studentAssignForm.pickupStopId}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, pickupStopId: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  >
+                    <option value="">-- Choose Pickup Stop --</option>
+                    {(routes.find(r => String(r.id) === String(studentAssignForm.routeId))?.stops || []).map(s => (
+                      <option key={s.id} value={s.id}>{s.stopOrder}. {s.stopName} ({s.plannedMorningPickupTime || 'Morning'})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Drop Stop</label>
+                  <select
+                    value={studentAssignForm.dropStopId}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, dropStopId: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  >
+                    <option value="">-- Choose Drop Stop --</option>
+                    {(routes.find(r => String(r.id) === String(studentAssignForm.routeId))?.stops || []).map(s => (
+                      <option key={s.id} value={s.id}>{s.stopOrder}. {s.stopName} ({s.plannedEveningDropTime || 'Evening'})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Trip Type</label>
+                  <select
+                    value={studentAssignForm.tripType}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, tripType: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  >
+                    <option value="BOTH_WAY">Both-Way (Two Way)</option>
+                    <option value="ONE_WAY">One-Way (Single Trip)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Monthly Fee (₹) *</label>
+                  <input
+                    required
+                    type="number"
+                    value={studentAssignForm.monthlyFee}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, monthlyFee: Number(e.target.value) })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Fee Status</label>
+                  <select
+                    value={studentAssignForm.feeStatus}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, feeStatus: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  >
+                    <option value="PENDING">Pending</option>
+                    <option value="PAID">Paid</option>
+                    <option value="PARTIAL">Partial</option>
+                    <option value="OVERDUE">Overdue</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Transport Start Date</label>
+                  <input
+                    type="date"
+                    value={studentAssignForm.startDate}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, startDate: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Transport End Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={studentAssignForm.endDate || ''}
+                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, endDate: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAssignStudentModal(false);
+                    setEditingStudentAssign(null);
+                  }}
+                  style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  {editingStudentAssign ? 'Update Assignment' : 'Assign Student'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 7: COLLECT TRANSPORT FEE MODAL */}
+      {/* ============================================================== */}
+      {showCollectFeeModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: 'var(--radius-lg)',
+              padding: '24px',
+              width: '100%',
+              maxWidth: '480px',
+              border: '1px solid var(--border-color)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>Collect Transport Fee</h3>
+                <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Record student transport payment and print instant receipt
+                </p>
+              </div>
+              <button onClick={() => setShowCollectFeeModal(false)} style={{ background: 'none', border: 'none', cursor: 'pointer' }}>
+                <X size={20} />
+              </button>
+            </div>
+            <form onSubmit={handleCollectFeeSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px', fontSize: '0.85rem' }}>
+              <div
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: 'rgba(13, 148, 136, 0.08)',
+                  border: '1px solid rgba(13, 148, 136, 0.2)'
+                }}
+              >
+                <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0d9488' }}>{feePaymentForm.studentName}</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Admission No: {feePaymentForm.admissionNo}</div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Amount to Collect (₹) *</label>
+                  <input
+                    required
+                    type="number"
+                    value={feePaymentForm.amountPaid}
+                    onChange={(e) => setFeePaymentForm({ ...feePaymentForm, amountPaid: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)', fontWeight: 700 }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Billing Month *</label>
+                  <input
+                    required
+                    type="text"
+                    value={feePaymentForm.feeMonth}
+                    onChange={(e) => setFeePaymentForm({ ...feePaymentForm, feeMonth: e.target.value })}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Payment Mode *</label>
+                <select
+                  value={feePaymentForm.paymentMode}
+                  onChange={(e) => setFeePaymentForm({ ...feePaymentForm, paymentMode: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                >
+                  <option value="CASH">Cash Payment</option>
+                  <option value="UPI">UPI / QR Code</option>
+                  <option value="ONLINE">Online Net Banking / Card</option>
+                  <option value="CHEQUE">Cheque / DD</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Remarks / Note</label>
+                <input
+                  type="text"
+                  placeholder="e.g. October month transport fee received"
+                  value={feePaymentForm.remarks}
+                  onChange={(e) => setFeePaymentForm({ ...feePaymentForm, remarks: e.target.value })}
+                  style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowCollectFeeModal(false)}
+                  style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#10b981', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Confirm Payment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* MODAL 8: PRINTABLE TRANSPORT FEE RECEIPT MODAL */}
+      {/* ============================================================== */}
+      {showReceiptModal && receiptData && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.7)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+            padding: '20px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: '#ffffff',
+              color: '#0f172a',
+              borderRadius: 'var(--radius-lg)',
+              padding: '30px',
+              width: '100%',
+              maxWidth: '480px',
+              border: '2px dashed #0d9488',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              position: 'relative'
+            }}
+          >
+            <div style={{ textAlign: 'center', borderBottom: '2px solid #e2e8f0', paddingBottom: '16px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0d9488', letterSpacing: '1px' }}>SCHOOL TRANSPORT DIVISION</div>
+              <h2 style={{ margin: '4px 0', fontSize: '1.4rem', fontWeight: 900 }}>OFFICIAL FEE RECEIPT</h2>
+              <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Receipt No: <strong>{receiptData.receiptNumber || receiptData.receiptNo}</strong></div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Student Name:</span>
+                <span style={{ fontWeight: 800 }}>{receiptData.studentName}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Admission Number:</span>
+                <span style={{ fontWeight: 700 }}>{receiptData.admissionNo || 'N/A'}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Billing Month:</span>
+                <span style={{ fontWeight: 700 }}>{receiptData.feeMonth}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Payment Mode:</span>
+                <span style={{ fontWeight: 700 }}>{receiptData.paymentMode}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid #f1f5f9', paddingBottom: '6px' }}>
+                <span style={{ color: '#64748b' }}>Payment Date:</span>
+                <span>{receiptData.paymentDate || new Date().toISOString().split('T')[0]}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '8px', marginTop: '6px' }}>
+                <span style={{ fontWeight: 800, fontSize: '1rem', color: '#0f172a' }}>Amount Paid:</span>
+                <span style={{ fontWeight: 900, fontSize: '1.2rem', color: '#10b981' }}>₹{receiptData.amountPaid}</span>
+              </div>
+            </div>
+
+            <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center', marginBottom: '20px' }}>
+              This is a system generated computer receipt for school transport dues.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setShowReceiptModal(false)}
+                style={{ padding: '8px 16px', borderRadius: '6px', border: '1px solid #cbd5e1', background: '#f8fafc', color: '#334155', fontWeight: 600, cursor: 'pointer' }}
+              >
+                Close
+              </button>
+              <button
+                onClick={() => window.print()}
+                style={{ padding: '8px 20px', borderRadius: '6px', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+              >
+                <Printer size={15} /> Print Receipt
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3048,6 +4165,12 @@ export const TransportModule = () => {
             justifyContent: 'center',
             zIndex: 1000,
             padding: '20px'
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setPlaybackData(null);
+              setIsPlaybackPlaying(false);
+            }
           }}
         >
           <div
@@ -3086,9 +4209,22 @@ export const TransportModule = () => {
                   setPlaybackData(null);
                   setIsPlaybackPlaying(false);
                 }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  border: 'none',
+                  borderRadius: 'var(--radius-md)',
+                  padding: '7px 14px',
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(239, 68, 68, 0.35)'
+                }}
               >
-                <X size={22} />
+                <X size={16} /> Close Replay
               </button>
             </div>
 
@@ -3181,6 +4317,44 @@ export const TransportModule = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ============================================================== */}
+      {/* BUS DEDICATED TRACK ON MAP MODAL */}
+      {/* ============================================================== */}
+      {showBusTrackModal && selectedBusForMap && (
+        <BusTrackModal
+          isOpen={showBusTrackModal}
+          onClose={() => {
+            setShowBusTrackModal(false);
+            setSelectedBusForMap(null);
+          }}
+          bus={selectedBusForMap}
+          route={
+            routes.find(
+              (r) =>
+                (selectedBusForMap.routeId && r.id === selectedBusForMap.routeId) ||
+                (selectedBusForMap.assignedRouteId && r.id === selectedBusForMap.assignedRouteId) ||
+                (selectedBusForMap.assignedRouteName && r.routeName === selectedBusForMap.assignedRouteName) ||
+                (selectedBusForMap.routeName && r.routeName === selectedBusForMap.routeName)
+            ) || null
+          }
+          driver={
+            drivers.find(
+              (d) =>
+                d.id === selectedBusForMap.assignedDriverId ||
+                d.id === selectedBusForMap.driverId ||
+                d.name === selectedBusForMap.assignedDriverName
+            )
+          }
+          liveData={
+            liveBuses.find(
+              (lb) =>
+                String(lb.busId) === String(selectedBusForMap.id || selectedBusForMap.busId) ||
+                String(lb.busNumber).toLowerCase() === String(selectedBusForMap.busNumber).toLowerCase()
+            )
+          }
+        />
       )}
     </div>
   );

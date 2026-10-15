@@ -129,6 +129,8 @@ const MainLayout = ({ onLogout }) => {
       case 'transport-drivers':
       case 'transport-routes':
       case 'transport-assignments':
+      case 'transport-students':
+      case 'transport-fees':
       case 'transport-live':
       case 'transport-reports':
       case 'transport-alerts':

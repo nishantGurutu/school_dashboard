@@ -44,9 +44,10 @@ export const TransportPlaybackMap = ({
       tileLayer.on('tileerror', () => {
         if (mapInstanceRef.current && !mapInstanceRef.current._hasPlaybackOsmFallback) {
           mapInstanceRef.current._hasPlaybackOsmFallback = true;
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd',
             maxZoom: 19,
-            attribution: '&copy; OpenStreetMap',
+            attribution: '&copy; OpenStreetMap &copy; CARTO',
           }).addTo(mapInstanceRef.current);
         }
       });
