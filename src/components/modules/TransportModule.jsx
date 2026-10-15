@@ -4,6 +4,7 @@ import { useToast } from '../../context/ToastContext';
 import { transportService } from '../../services/transportService';
 import { TransportLiveMap } from './transport/TransportLiveMap';
 import { TransportPlaybackMap } from './transport/TransportPlaybackMap';
+import { ErrorBoundary } from '../common/ErrorBoundary';
 import {
   Bus,
   Users,
@@ -34,7 +35,12 @@ import {
   UserCheck,
   Gauge,
   Compass,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft,
+  Maximize2,
+  Minimize2,
+  Layout,
+  Columns
 } from 'lucide-react';
 
 export const TransportModule = () => {
@@ -98,6 +104,12 @@ export const TransportModule = () => {
   const [selectedRouteForStops, setSelectedRouteForStops] = useState(null);
   const [alertRemarksModal, setAlertRemarksModal] = useState(null); // { alertId, action }
   const [remarksInput, setRemarksInput] = useState('');
+
+  // Live Tracking Layout States (Full Body Map Canvas)
+  const [liveViewMode, setLiveViewMode] = useState('full'); // 'full' or 'split'
+  const [showFleetSidebar, setShowFleetSidebar] = useState(true);
+  const [showInspectorSidebar, setShowInspectorSidebar] = useState(true);
+  const [isLiveFullscreen, setIsLiveFullscreen] = useState(false);
 
   // Map layer toggles
   const [showPlannedRoute, setShowPlannedRoute] = useState(true);
@@ -219,6 +231,77 @@ export const TransportModule = () => {
     }, 12000);
     return () => clearInterval(interval);
   }, []);
+
+  // Handle Track Bus On Map (Direct navigation from Buses list or Overview to Map)
+  const handleTrackBusOnMap = (bus) => {
+    if (!bus) return;
+
+    // 1. Check existing live tracking fleet
+    let target = liveBuses.find(
+      (lb) =>
+        String(lb.busId) === String(bus.id || bus.busId) ||
+        String(lb.busNumber).toLowerCase() === String(bus.busNumber).toLowerCase()
+    );
+
+    // 2. Resolve route assigned to this bus
+    const assignedRoute =
+      routes.find(
+        (r) =>
+          r.id === bus.routeId ||
+          r.routeName === bus.assignedRouteName ||
+          r.routeName === bus.routeName
+      ) || routes[0];
+
+    const stops = assignedRoute?.stops || [];
+    const originStop = stops[0];
+    const destStop = stops[stops.length - 1];
+
+    if (!target) {
+      const lat = originStop?.latitude || 25.6025;
+      const lon = originStop?.longitude || 85.1430;
+
+      target = {
+        busId: bus.id || bus.busId,
+        busNumber: bus.busNumber,
+        registrationNumber: bus.registrationNumber || 'MH-02-TR-1001',
+        tripId: bus.id || 1,
+        tripStatus: bus.status === 'ACTIVE' ? 'IN_PROGRESS' : 'SCHEDULED',
+        driverId: bus.assignedDriverId || 1,
+        driverName: bus.assignedDriverName || 'Assigned Driver',
+        driverPhone: bus.assignedDriverPhone || '+91 98765 43210',
+        routeId: assignedRoute?.id || 1,
+        routeName: assignedRoute?.routeName || bus.assignedRouteName || 'Main Campus Route',
+        shift: 'MORNING',
+        currentLatitude: lat,
+        currentLongitude: lon,
+        currentSpeedKmh: bus.status === 'ACTIVE' ? (bus.currentSpeed || 34.0) : 0.0,
+        heading: 120.0,
+        lastGpsUpdate: new Date().toISOString(),
+        isGpsOnline: true,
+        currentStopName: originStop?.stopName || 'Route Origin',
+        nextStopName: stops[1]?.stopName || destStop?.stopName || 'School Destination',
+        nextStopEtaMinutes: 8,
+        completedStops: 1,
+        totalStops: stops.length || 5,
+        traveledDistanceKm: assignedRoute?.totalDistanceKm
+          ? Number((assignedRoute.totalDistanceKm * 0.4).toFixed(1))
+          : 7.2,
+        totalRouteDistanceKm: assignedRoute?.totalDistanceKm || 18.5,
+        destinationName: destStop?.stopName || assignedRoute?.endLocation || 'School Main Gate',
+        originName: originStop?.stopName || assignedRoute?.startLocation || 'Route Origin',
+        openAlertsCount: 0,
+      };
+
+      setLiveBuses((prev) => {
+        const exists = prev.some((b) => String(b.busId) === String(target.busId));
+        return exists ? prev : [target, ...prev];
+      });
+    }
+
+    setSelectedLiveBus(target);
+    setShowInspectorSidebar(true);
+    handleTabChange('live');
+  };
 
   // Playback timer loop
   useEffect(() => {
@@ -795,10 +878,7 @@ export const TransportModule = () => {
                       </td>
                       <td style={{ padding: '12px', textAlign: 'right' }}>
                         <button
-                          onClick={() => {
-                            setSelectedLiveBus(bus);
-                            handleTabChange('live');
-                          }}
+                          onClick={() => handleTrackBusOnMap(bus)}
                           style={{
                             padding: '6px 12px',
                             borderRadius: 'var(--radius-md)',
@@ -965,11 +1045,7 @@ export const TransportModule = () => {
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
                   <button
-                    onClick={() => {
-                      const live = liveBuses.find((lb) => lb.busId === bus.id);
-                      if (live) setSelectedLiveBus(live);
-                      handleTabChange('live');
-                    }}
+                    onClick={() => handleTrackBusOnMap(bus)}
                     style={{
                       flex: 1,
                       padding: '8px 12px',
@@ -1609,251 +1685,894 @@ export const TransportModule = () => {
 
       {/* TAB 6: LIVE TRACKING SCREEN */}
       {currentTab === 'live' && (
-        <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 340px', gap: '20px', minHeight: '640px' }}>
-          {/* Column 1: Fleet Bus List */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Live Tracking Header Toolbar */}
           <div
             style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '12px',
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '16px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px',
-              overflowY: 'auto',
-              maxHeight: '700px'
+              borderRadius: 'var(--radius-md)',
+              padding: '10px 16px'
             }}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>Active Fleet ({liveBuses.length})</span>
-              <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700 }}>● Live Sync</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '9px', height: '9px', borderRadius: '50%', backgroundColor: '#10b981', display: 'inline-block', boxShadow: '0 0 8px #10b981' }} />
+                <span style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Live Fleet Radar
+                </span>
+              </div>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                {liveBuses.length} Vehicles • {liveBuses.filter(b => b.tripStatus === 'IN_PROGRESS').length} In Transit • Powered by Google Maps
+              </span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {liveBuses.map((bus) => {
-                const isSelected = selectedLiveBus?.busId === bus.busId;
-                return (
-                  <div
-                    key={bus.busId}
-                    onClick={() => setSelectedLiveBus(bus)}
-                    style={{
-                      padding: '14px',
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.12)' : 'var(--bg-app)',
-                      border: isSelected ? '2px solid #0d9488' : '1px solid var(--border-color)',
-                      cursor: 'pointer',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>{bus.busNumber}</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {/* Layout Mode Switcher */}
+              <div
+                style={{
+                  display: 'flex',
+                  backgroundColor: 'var(--bg-app)',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '3px',
+                  border: '1px solid var(--border-color)',
+                  gap: '2px'
+                }}
+              >
+                <button
+                  onClick={() => setLiveViewMode('full')}
+                  title="Full Body Canvas with Floating Panels"
+                  style={{
+                    border: 'none',
+                    background: liveViewMode === 'full' ? '#0d9488' : 'transparent',
+                    color: liveViewMode === 'full' ? '#ffffff' : 'var(--text-secondary)',
+                    padding: '5px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Layout size={13} />
+                  <span>Full Body Map</span>
+                </button>
+
+                <button
+                  onClick={() => setLiveViewMode('split')}
+                  title="3-Column Split Layout"
+                  style={{
+                    border: 'none',
+                    background: liveViewMode === 'split' ? '#0d9488' : 'transparent',
+                    color: liveViewMode === 'split' ? '#ffffff' : 'var(--text-secondary)',
+                    padding: '5px 12px',
+                    borderRadius: '6px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    transition: 'all 0.15s ease'
+                  }}
+                >
+                  <Columns size={13} />
+                  <span>3-Column Split</span>
+                </button>
+              </div>
+
+              {liveViewMode === 'full' && (
+                <button
+                  onClick={() => {
+                    const anyOpen = showFleetSidebar || showInspectorSidebar;
+                    setShowFleetSidebar(!anyOpen);
+                    setShowInspectorSidebar(!anyOpen);
+                  }}
+                  title="Toggle All Panels"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: 'var(--radius-sm)',
+                    border: '1px solid var(--border-color)',
+                    background: 'var(--bg-app)',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.76rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Eye size={13} />
+                  <span>{(showFleetSidebar || showInspectorSidebar) ? 'Maximize Map' : 'Show Panels'}</span>
+                </button>
+              )}
+
+              <button
+                onClick={() => setIsLiveFullscreen(!isLiveFullscreen)}
+                title={isLiveFullscreen ? 'Exit Full Screen' : 'Expand to Viewport Fullscreen'}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '6px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  border: '1px solid var(--border-color)',
+                  background: isLiveFullscreen ? '#0f172a' : 'var(--bg-app)',
+                  color: isLiveFullscreen ? '#38bdf8' : 'var(--text-secondary)',
+                  fontSize: '0.76rem',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                {isLiveFullscreen ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+                <span>{isLiveFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* MODE 1: FULL BODY MAP CANVAS */}
+          {liveViewMode === 'full' ? (
+            <div
+              style={{
+                position: isLiveFullscreen ? 'fixed' : 'relative',
+                inset: isLiveFullscreen ? 0 : 'auto',
+                zIndex: isLiveFullscreen ? 99999 : 10,
+                width: '100%',
+                height: isLiveFullscreen ? '100vh' : 'calc(100vh - 230px)',
+                minHeight: isLiveFullscreen ? '100vh' : '680px',
+                backgroundColor: 'var(--bg-card)',
+                borderRadius: isLiveFullscreen ? 0 : 'var(--radius-lg)',
+                overflow: 'hidden',
+                border: isLiveFullscreen ? 'none' : '1px solid var(--border-color)',
+                boxShadow: isLiveFullscreen ? 'none' : 'var(--shadow-md)',
+              }}
+            >
+              {/* Full Body Interactive Google Map */}
+              <ErrorBoundary title="Live Fleet Radar Map">
+                <TransportLiveMap
+                  selectedBus={selectedLiveBus}
+                  allBuses={liveBuses}
+                  routes={routes}
+                  alerts={alerts}
+                  onSelectBus={(bus) => {
+                    setSelectedLiveBus(bus);
+                    setShowInspectorSidebar(true);
+                  }}
+                  isFullscreen={isLiveFullscreen}
+                  onToggleFullscreen={() => setIsLiveFullscreen(!isLiveFullscreen)}
+                />
+              </ErrorBoundary>
+
+              {/* Floating Overlay Left: Active Fleet List */}
+              {showFleetSidebar ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '16px',
+                    left: '16px',
+                    bottom: '16px',
+                    width: '320px',
+                    maxWidth: 'calc(100% - 32px)',
+                    zIndex: 500,
+                    backgroundColor: 'var(--bg-card)',
+                    backdropFilter: 'blur(16px)',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--border-color)',
+                    boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: '16px',
+                    gap: '12px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Bus size={18} color="#0d9488" />
+                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        Active Fleet ({liveBuses.length})
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700 }}>● Live Sync</span>
+                      <button
+                        onClick={() => setShowFleetSidebar(false)}
+                        title="Collapse Fleet Panel"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text-muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '4px',
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <ChevronLeft size={18} />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {liveBuses.map((bus) => {
+                      const isSelected = selectedLiveBus?.busId === bus.busId;
+                      return (
+                        <div
+                          key={bus.busId}
+                          onClick={() => {
+                            setSelectedLiveBus(bus);
+                            setShowInspectorSidebar(true);
+                          }}
+                          style={{
+                            padding: '14px',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.12)' : 'var(--bg-app)',
+                            border: isSelected ? '2px solid #0d9488' : '1px solid var(--border-color)',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                              {bus.busNumber}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                padding: '2px 6px',
+                                borderRadius: '6px',
+                                backgroundColor: bus.tripStatus === 'IN_PROGRESS' ? '#10b981' : '#64748b',
+                                color: '#ffffff',
+                              }}
+                            >
+                              {bus.tripStatus}
+                            </span>
+                          </div>
+
+                          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                            {bus.routeName} • {bus.driverName}
+                          </div>
+
+                          <div
+                            style={{
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              fontSize: '0.8rem',
+                              marginTop: '4px',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, color: '#0d9488' }}>
+                              <Gauge size={14} />
+                              {Math.round(bus.currentSpeedKmh)} km/h
+                            </div>
+                            <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                              ETA: {bus.nextStopEtaMinutes} mins
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowFleetSidebar(true)}
+                  style={{
+                    position: 'absolute',
+                    top: '16px',
+                    left: '16px',
+                    zIndex: 500,
+                    backgroundColor: '#0d9488',
+                    color: '#ffffff',
+                    border: 'none',
+                    borderRadius: '30px',
+                    padding: '9px 15px',
+                    boxShadow: '0 6px 20px rgba(13, 148, 136, 0.4)',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  <Bus size={16} />
+                  <span>Active Fleet ({liveBuses.length})</span>
+                  <ChevronRight size={16} />
+                </button>
+              )}
+
+              {/* Floating Overlay Right: Trip Inspector */}
+              {showInspectorSidebar ? (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '16px',
+                    right: '16px',
+                    bottom: '16px',
+                    width: '340px',
+                    maxWidth: 'calc(100% - 32px)',
+                    zIndex: 500,
+                    backgroundColor: 'var(--bg-card)',
+                    backdropFilter: 'blur(16px)',
+                    borderRadius: 'var(--radius-lg)',
+                    border: '1px solid var(--border-color)',
+                    boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    padding: '20px',
+                    gap: '16px',
+                    overflowY: 'auto',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      Trip Inspector
+                    </h3>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span
                         style={{
                           fontSize: '0.7rem',
                           fontWeight: 700,
-                          padding: '2px 6px',
-                          borderRadius: '6px',
-                          backgroundColor: bus.tripStatus === 'IN_PROGRESS' ? '#10b981' : '#64748b',
-                          color: '#ffffff'
+                          padding: '3px 8px',
+                          borderRadius: '10px',
+                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                          color: '#10b981',
                         }}
                       >
-                        {bus.tripStatus}
+                        ● GPS ONLINE
                       </span>
+                      <button
+                        onClick={() => setShowInspectorSidebar(false)}
+                        title="Collapse Inspector"
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          color: 'var(--text-muted)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          padding: '4px',
+                          borderRadius: '6px',
+                        }}
+                      >
+                        <X size={18} />
+                      </button>
                     </div>
+                  </div>
 
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {bus.routeName} • {bus.driverName}
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.8rem', marginTop: '4px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, color: '#0d9488' }}>
-                        <Gauge size={14} />
-                        {Math.round(bus.currentSpeedKmh)} km/h
+                  {selectedLiveBus ? (
+                    <>
+                      <div
+                        style={{
+                          backgroundColor: 'var(--bg-app)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '14px',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          fontSize: '0.82rem',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Bus Reg:</span>
+                          <span style={{ fontWeight: 700 }}>{selectedLiveBus.registrationNumber}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Driver Name:</span>
+                          <span style={{ fontWeight: 700 }}>{selectedLiveBus.driverName}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Driver Phone:</span>
+                          <span style={{ fontWeight: 600, color: '#0d9488' }}>{selectedLiveBus.driverPhone}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Route:</span>
+                          <span style={{ fontWeight: 600 }}>{selectedLiveBus.routeName}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Destination:</span>
+                          <span style={{ fontWeight: 700, color: '#ef4444' }}>
+                            {selectedLiveBus.destinationName || 'School Main Gate'}
+                          </span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Traveled:</span>
+                          <span style={{ fontWeight: 700, color: '#0d9488' }}>
+                            {selectedLiveBus.traveledDistanceKm || 7.8} / {selectedLiveBus.totalRouteDistanceKm || 18.5} km
+                          </span>
+                        </div>
+                        <div style={{ marginTop: '4px' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', marginBottom: '4px' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>Route Completion</span>
+                            <span style={{ fontWeight: 700, color: '#0d9488' }}>
+                              {Math.round(
+                                ((selectedLiveBus.traveledDistanceKm || 7.8) /
+                                  (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
+                                  100
+                              )}
+                              %
+                            </span>
+                          </div>
+                          <div
+                            style={{
+                              height: '6px',
+                              borderRadius: '3px',
+                              backgroundColor: 'rgba(0,0,0,0.08)',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: `${Math.min(
+                                  100,
+                                  Math.round(
+                                    ((selectedLiveBus.traveledDistanceKm || 7.8) /
+                                      (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
+                                      100
+                                  )
+                                )}%`,
+                                height: '100%',
+                                backgroundColor: '#0d9488',
+                                borderRadius: '3px',
+                                transition: 'width 0.4s ease',
+                              }}
+                            />
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-                        ETA: {bus.nextStopEtaMinutes} mins
+
+                      {/* Speedometer telemetry card */}
+                      <div
+                        style={{
+                          backgroundColor: 'var(--bg-app)',
+                          borderRadius: 'var(--radius-md)',
+                          padding: '16px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TELEMETRY SPEED</div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0d9488' }}>
+                            {Math.round(selectedLiveBus.currentSpeedKmh)} <span style={{ fontSize: '0.9rem' }}>km/h</span>
+                          </div>
+                        </div>
+                        <Gauge size={38} color="#0d9488" />
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
 
-          {/* Column 2: Interactive Real Live Map Canvas */}
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '8px',
-              display: 'flex',
-              flexDirection: 'column',
-              position: 'relative',
-              overflow: 'hidden',
-              minHeight: '620px'
-            }}
-          >
-            <TransportLiveMap
-              selectedBus={selectedLiveBus}
-              allBuses={liveBuses}
-              routes={routes}
-              alerts={alerts}
-              onSelectBus={(bus) => setSelectedLiveBus(bus)}
-            />
-          </div>
+                      {/* Trip Timeline (Arrival, Departure, Dwell) */}
+                      <div>
+                        <div
+                          style={{
+                            fontSize: '0.85rem',
+                            fontWeight: 700,
+                            marginBottom: '12px',
+                            color: 'var(--text-secondary)',
+                          }}
+                        >
+                          Trip Timeline & Dwell Log
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.8rem' }}>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
+                            <div>
+                              <div style={{ fontWeight: 700 }}>Trip Started</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>07:15 AM • North City Square</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
+                            <div>
+                              <div style={{ fontWeight: 700 }}>Stop 1: Metro Pillar 42</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Departed • Dwell: 2m 10s • 12 Boarded</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#06b6d4', marginTop: '4px' }} />
+                            <div>
+                              <div style={{ fontWeight: 700 }}>Stop 2: Central Mall (Current)</div>
+                              <div style={{ fontSize: '0.72rem', color: '#06b6d4', fontWeight: 600 }}>Bus at Stop • Boarding in progress</div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#64748b', marginTop: '4px' }} />
+                            <div>
+                              <div style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Stop 3: Kankarbagh Park</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Scheduled Arrival: 07:45 AM</div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
 
-          {/* Column 3: Detailed Bus & Trip Timeline Inspector */}
-          <div
-            style={{
-              backgroundColor: 'var(--bg-card)',
-              border: '1px solid var(--border-color)',
-              borderRadius: 'var(--radius-lg)',
-              padding: '20px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              overflowY: 'auto'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                Trip Inspector
-              </h3>
-              <span
-                style={{
-                  fontSize: '0.7rem',
-                  fontWeight: 700,
-                  padding: '3px 8px',
-                  borderRadius: '10px',
-                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                  color: '#10b981'
-                }}
-              >
-                ● GPS ONLINE
-              </span>
-            </div>
-
-            {selectedLiveBus ? (
-              <>
-                <div
-                  style={{
-                    backgroundColor: 'var(--bg-app)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px',
-                    fontSize: '0.82rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Bus Reg:</span>
-                    <span style={{ fontWeight: 700 }}>{selectedLiveBus.registrationNumber}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Driver Name:</span>
-                    <span style={{ fontWeight: 700 }}>{selectedLiveBus.driverName}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Driver Phone:</span>
-                    <span style={{ fontWeight: 600, color: '#0d9488' }}>{selectedLiveBus.driverPhone}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Route:</span>
-                    <span style={{ fontWeight: 600 }}>{selectedLiveBus.routeName}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Distance Covered:</span>
-                    <span style={{ fontWeight: 700 }}>{selectedLiveBus.traveledDistanceKm} / {selectedLiveBus.totalRouteDistanceKm} km</span>
-                  </div>
+                      <button
+                        onClick={() => handleOpenPlayback(selectedLiveBus.tripId || 1)}
+                        style={{
+                          marginTop: 'auto',
+                          padding: '10px 14px',
+                          borderRadius: 'var(--radius-md)',
+                          backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                          color: '#0d9488',
+                          border: '1px solid #0d9488',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '6px',
+                        }}
+                      >
+                        <Play size={15} /> Open Journey Replay
+                      </button>
+                    </>
+                  ) : (
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Select a bus to inspect</div>
+                  )}
                 </div>
-
-                {/* Speedometer gauge card */}
-                <div
-                  style={{
-                    backgroundColor: 'var(--bg-app)',
-                    borderRadius: 'var(--radius-md)',
-                    padding: '16px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between'
-                  }}
-                >
-                  <div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TELEMETRY SPEED</div>
-                    <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0d9488' }}>
-                      {Math.round(selectedLiveBus.currentSpeedKmh)} <span style={{ fontSize: '0.9rem' }}>km/h</span>
-                    </div>
-                  </div>
-                  <Gauge size={38} color="#0d9488" />
-                </div>
-
-                {/* Trip Timeline (Arrival, Departure, Dwell) */}
-                <div>
-                  <div style={{ fontSize: '0.85rem', fontWeight: 700, marginBottom: '12px', color: 'var(--text-secondary)' }}>
-                    Trip Timeline & Dwell Log
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.8rem' }}>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
-                      <div>
-                        <div style={{ fontWeight: 700 }}>Trip Started</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>07:15 AM • North City Square</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
-                      <div>
-                        <div style={{ fontWeight: 700 }}>Stop 1: Metro Pillar 42</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Departed • Dwell: 2m 10s • 12 Boarded</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#06b6d4', marginTop: '4px' }} />
-                      <div>
-                        <div style={{ fontWeight: 700 }}>Stop 2: Central Mall (Current)</div>
-                        <div style={{ fontSize: '0.72rem', color: '#06b6d4', fontWeight: 600 }}>Bus at Stop • Boarding in progress</div>
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', gap: '10px' }}>
-                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#64748b', marginTop: '4px' }} />
-                      <div>
-                        <div style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Stop 3: Kankarbagh Park</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Scheduled Arrival: 07:45 AM</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
+              ) : (
                 <button
-                  onClick={() => handleOpenPlayback(selectedLiveBus.tripId || 1)}
+                  onClick={() => setShowInspectorSidebar(true)}
                   style={{
-                    marginTop: 'auto',
-                    padding: '10px 14px',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'rgba(13, 148, 136, 0.1)',
-                    color: '#0d9488',
-                    border: '1px solid #0d9488',
-                    fontWeight: 700,
-                    fontSize: '0.82rem',
+                    position: 'absolute',
+                    top: '16px',
+                    right: '16px',
+                    zIndex: 500,
+                    backgroundColor: 'var(--bg-card)',
+                    color: 'var(--text-primary)',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: '30px',
+                    padding: '9px 15px',
+                    boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
+                    gap: '8px',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
                   }}
                 >
-                  <Play size={15} /> Open Journey Replay
+                  <ChevronLeft size={16} />
+                  <span>Trip Inspector</span>
+                  <Activity size={16} color="#0d9488" />
                 </button>
-              </>
-            ) : (
-              <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Select a bus to inspect</div>
-            )}
-          </div>
+              )}
+            </div>
+          ) : (
+            /* MODE 2: CLASSIC 3-COLUMN SPLIT */
+            <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr 340px', gap: '20px', minHeight: '680px' }}>
+              {/* Column 1: Fleet Bus List */}
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '12px',
+                  overflowY: 'auto',
+                  maxHeight: '750px',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    Active Fleet ({liveBuses.length})
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: '#10b981', fontWeight: 700 }}>● Live Sync</span>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {liveBuses.map((bus) => {
+                    const isSelected = selectedLiveBus?.busId === bus.busId;
+                    return (
+                      <div
+                        key={bus.busId}
+                        onClick={() => setSelectedLiveBus(bus)}
+                        style={{
+                          padding: '14px',
+                          borderRadius: 'var(--radius-md)',
+                          backgroundColor: isSelected ? 'rgba(13, 148, 136, 0.12)' : 'var(--bg-app)',
+                          border: isSelected ? '2px solid #0d9488' : '1px solid var(--border-color)',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: '8px',
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {bus.busNumber}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              fontWeight: 700,
+                              padding: '2px 6px',
+                              borderRadius: '6px',
+                              backgroundColor: bus.tripStatus === 'IN_PROGRESS' ? '#10b981' : '#64748b',
+                              color: '#ffffff',
+                            }}
+                          >
+                            {bus.tripStatus}
+                          </span>
+                        </div>
+
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          {bus.routeName} • {bus.driverName}
+                        </div>
+
+                        <div
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            fontSize: '0.8rem',
+                            marginTop: '4px',
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700, color: '#0d9488' }}>
+                            <Gauge size={14} />
+                            {Math.round(bus.currentSpeedKmh)} km/h
+                          </div>
+                          <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+                            ETA: {bus.nextStopEtaMinutes} mins
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Column 2: Interactive Real Live Map Canvas */}
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '8px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  height: '680px',
+                  minHeight: '680px',
+                }}
+              >
+                <ErrorBoundary title="Live Fleet Radar Map">
+                  <TransportLiveMap
+                    selectedBus={selectedLiveBus}
+                    allBuses={liveBuses}
+                    routes={routes}
+                    alerts={alerts}
+                    onSelectBus={(bus) => setSelectedLiveBus(bus)}
+                    isFullscreen={isLiveFullscreen}
+                    onToggleFullscreen={() => setIsLiveFullscreen(!isLiveFullscreen)}
+                  />
+                </ErrorBoundary>
+              </div>
+
+              {/* Column 3: Detailed Bus & Trip Timeline Inspector */}
+              <div
+                style={{
+                  backgroundColor: 'var(--bg-card)',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: '20px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                  overflowY: 'auto',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    Trip Inspector
+                  </h3>
+                  <span
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      padding: '3px 8px',
+                      borderRadius: '10px',
+                      backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                      color: '#10b981',
+                    }}
+                  >
+                    ● GPS ONLINE
+                  </span>
+                </div>
+
+                {selectedLiveBus ? (
+                  <>
+                    <div
+                      style={{
+                        backgroundColor: 'var(--bg-app)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '14px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        fontSize: '0.82rem',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Bus Reg:</span>
+                        <span style={{ fontWeight: 700 }}>{selectedLiveBus.registrationNumber}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Driver Name:</span>
+                        <span style={{ fontWeight: 700 }}>{selectedLiveBus.driverName}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Driver Phone:</span>
+                        <span style={{ fontWeight: 600, color: '#0d9488' }}>{selectedLiveBus.driverPhone}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Route:</span>
+                        <span style={{ fontWeight: 600 }}>{selectedLiveBus.routeName}</span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Destination:</span>
+                        <span style={{ fontWeight: 700, color: '#ef4444' }}>
+                          {selectedLiveBus.destinationName || 'School Main Gate'}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                        <span style={{ color: 'var(--text-muted)' }}>Traveled:</span>
+                        <span style={{ fontWeight: 700, color: '#0d9488' }}>
+                          {selectedLiveBus.traveledDistanceKm || 7.8} / {selectedLiveBus.totalRouteDistanceKm || 18.5} km
+                        </span>
+                      </div>
+                      <div style={{ marginTop: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.74rem', marginBottom: '4px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Route Completion</span>
+                          <span style={{ fontWeight: 700, color: '#0d9488' }}>
+                            {Math.round(
+                              ((selectedLiveBus.traveledDistanceKm || 7.8) /
+                                (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
+                                100
+                            )}
+                            %
+                          </span>
+                        </div>
+                        <div
+                          style={{
+                            height: '6px',
+                            borderRadius: '3px',
+                            backgroundColor: 'rgba(0,0,0,0.08)',
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.min(
+                                100,
+                                Math.round(
+                                  ((selectedLiveBus.traveledDistanceKm || 7.8) /
+                                    (selectedLiveBus.totalRouteDistanceKm || 18.5)) *
+                                    100
+                                )
+                              )}%`,
+                              height: '100%',
+                              backgroundColor: '#0d9488',
+                              borderRadius: '3px',
+                              transition: 'width 0.4s ease',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        backgroundColor: 'var(--bg-app)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '16px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>TELEMETRY SPEED</div>
+                        <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0d9488' }}>
+                          {Math.round(selectedLiveBus.currentSpeedKmh)} <span style={{ fontSize: '0.9rem' }}>km/h</span>
+                        </div>
+                      </div>
+                      <Gauge size={38} color="#0d9488" />
+                    </div>
+
+                    <div>
+                      <div
+                        style={{
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          marginBottom: '12px',
+                          color: 'var(--text-secondary)',
+                        }}
+                      >
+                        Trip Timeline & Dwell Log
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', fontSize: '0.8rem' }}>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
+                          <div>
+                            <div style={{ fontWeight: 700 }}>Trip Started</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>07:15 AM • North City Square</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#10b981', marginTop: '4px' }} />
+                          <div>
+                            <div style={{ fontWeight: 700 }}>Stop 1: Metro Pillar 42</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Departed • Dwell: 2m 10s • 12 Boarded</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#06b6d4', marginTop: '4px' }} />
+                          <div>
+                            <div style={{ fontWeight: 700 }}>Stop 2: Central Mall (Current)</div>
+                            <div style={{ fontSize: '0.72rem', color: '#06b6d4', fontWeight: 600 }}>Bus at Stop • Boarding in progress</div>
+                          </div>
+                        </div>
+                        <div style={{ display: 'flex', gap: '10px' }}>
+                          <div style={{ width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#64748b', marginTop: '4px' }} />
+                          <div>
+                            <div style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Stop 3: Kankarbagh Park</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Scheduled Arrival: 07:45 AM</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleOpenPlayback(selectedLiveBus.tripId || 1)}
+                      style={{
+                        marginTop: 'auto',
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                        color: '#0d9488',
+                        border: '1px solid #0d9488',
+                        fontWeight: 700,
+                        fontSize: '0.82rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '6px',
+                      }}
+                    >
+                      <Play size={15} /> Open Journey Replay
+                    </button>
+                  </>
+                ) : (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Select a bus to inspect</div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import L from 'leaflet';
 import { Play, Pause, RotateCcw, FastForward, Clock, Gauge, Compass } from 'lucide-react';
+import { GOOGLE_MAPS_API_KEY } from '../../../config/mapConfig';
 
 export const TransportPlaybackMap = ({
   playbackData,
@@ -30,10 +31,31 @@ export const TransportPlaybackMap = ({
         attributionControl: false,
       });
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-        maxZoom: 19,
-        subdomains: 'abcd',
-      }).addTo(map);
+      const tileUrl = GOOGLE_MAPS_API_KEY
+        ? `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}&key=${GOOGLE_MAPS_API_KEY}`
+        : `https://mt{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}`;
+
+      const tileLayer = L.tileLayer(tileUrl, {
+        maxZoom: 20,
+        subdomains: ['0', '1', '2', '3'],
+        attribution: '&copy; Google Maps',
+      });
+
+      tileLayer.on('tileerror', () => {
+        if (mapInstanceRef.current && !mapInstanceRef.current._hasPlaybackOsmFallback) {
+          mapInstanceRef.current._hasPlaybackOsmFallback = true;
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap',
+          }).addTo(mapInstanceRef.current);
+        }
+      });
+
+      tileLayer.addTo(map);
+
+      // Invalidate map size
+      setTimeout(() => map.invalidateSize(), 100);
+      setTimeout(() => map.invalidateSize(), 350);
 
       pathLineRef.current = L.polyline([], {
         color: '#0d9488',
