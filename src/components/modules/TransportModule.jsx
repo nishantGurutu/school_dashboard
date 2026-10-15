@@ -2,6 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { transportService } from '../../services/transportService';
+import { TransportLiveMap } from './transport/TransportLiveMap';
+import { TransportPlaybackMap } from './transport/TransportPlaybackMap';
 import {
   Bus,
   Users,
@@ -1681,174 +1683,27 @@ export const TransportModule = () => {
             </div>
           </div>
 
-          {/* Column 2: Interactive Visual Live Map Canvas */}
+          {/* Column 2: Interactive Real Live Map Canvas */}
           <div
             style={{
               backgroundColor: 'var(--bg-card)',
               border: '1px solid var(--border-color)',
               borderRadius: 'var(--radius-lg)',
-              padding: '16px',
+              padding: '8px',
               display: 'flex',
               flexDirection: 'column',
               position: 'relative',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              minHeight: '620px'
             }}
           >
-            {/* Map Controls bar */}
-            <div
-              style={{
-                position: 'absolute',
-                top: '24px',
-                left: '24px',
-                zIndex: 10,
-                backgroundColor: 'rgba(255, 255, 255, 0.92)',
-                backdropFilter: 'blur(8px)',
-                padding: '8px 14px',
-                borderRadius: 'var(--radius-md)',
-                boxShadow: '0 4px 16px rgba(0,0,0,0.1)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '12px',
-                fontSize: '0.78rem',
-                fontWeight: 600,
-                color: '#1e293b'
-              }}
-            >
-              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                <input type="checkbox" checked={showPlannedRoute} onChange={(e) => setShowPlannedRoute(e.target.checked)} />
-                Planned Route
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                <input type="checkbox" checked={showActualPath} onChange={(e) => setShowActualPath(e.target.checked)} />
-                Traveled GPS Path
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
-                <input type="checkbox" checked={showGeofences} onChange={(e) => setShowGeofences(e.target.checked)} />
-                Geofences (50m)
-              </label>
-            </div>
-
-            {/* Simulated Live GPS Map Canvas */}
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                minHeight: '560px',
-                backgroundColor: '#0f172a',
-                borderRadius: 'var(--radius-md)',
-                position: 'relative',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              {/* Vector Grid Background */}
-              <svg width="100%" height="100%" style={{ position: 'absolute', top: 0, left: 0 }}>
-                <defs>
-                  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
-                    <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255, 255, 255, 0.05)" strokeWidth="1" />
-                  </pattern>
-                </defs>
-                <rect width="100%" height="100%" fill="url(#grid)" />
-
-                {/* Planned Route Line (Blue dashed) */}
-                {showPlannedRoute && (
-                  <path
-                    d="M 60 120 Q 220 180 340 160 T 560 380"
-                    fill="none"
-                    stroke="#0284c7"
-                    strokeWidth="4"
-                    strokeDasharray="6,6"
-                    opacity="0.8"
-                  />
-                )}
-
-                {/* Actual Traveled GPS Path (Teal Solid) */}
-                {showActualPath && (
-                  <path
-                    d="M 60 120 Q 220 180 340 160"
-                    fill="none"
-                    stroke="#0d9488"
-                    strokeWidth="5"
-                    strokeLinecap="round"
-                  />
-                )}
-
-                {/* Stop 1 Geofence & Pin */}
-                {showGeofences && <circle cx="60" cy="120" r="32" fill="rgba(13, 148, 136, 0.15)" stroke="#0d9488" strokeDasharray="3,3" />}
-                <circle cx="60" cy="120" r="8" fill="#10b981" />
-                <text x="75" y="125" fill="#ffffff" fontSize="11" fontWeight="bold">Stop 1: North City</text>
-
-                {/* Stop 2 Geofence & Pin */}
-                {showGeofences && <circle cx="220" cy="180" r="32" fill="rgba(13, 148, 136, 0.15)" stroke="#0d9488" strokeDasharray="3,3" />}
-                <circle cx="220" cy="180" r="8" fill="#10b981" />
-                <text x="235" y="185" fill="#ffffff" fontSize="11" fontWeight="bold">Stop 2: Metro Pillar 42</text>
-
-                {/* Stop 3 (Current / Active Stop) */}
-                {showGeofences && <circle cx="340" cy="160" r="36" fill="rgba(6, 182, 212, 0.25)" stroke="#06b6d4" />}
-                <circle cx="340" cy="160" r="9" fill="#06b6d4" />
-                <text x="355" y="165" fill="#ffffff" fontSize="11" fontWeight="bold">Stop 3: Central Mall</text>
-
-                {/* Stop 4 (Upcoming) */}
-                {showGeofences && <circle cx="460" cy="280" r="32" fill="rgba(100, 116, 139, 0.15)" stroke="#64748b" />}
-                <circle cx="460" cy="280" r="7" fill="#64748b" />
-                <text x="475" y="285" fill="#94a3b8" fontSize="11">Stop 4: Kankarbagh</text>
-
-                {/* Stop 5: Destination (School Gate) */}
-                <circle cx="560" cy="380" r="10" fill="#ef4444" />
-                <text x="540" y="405" fill="#f87171" fontSize="11" fontWeight="bold">Destination: School Campus</text>
-
-                {/* Active Bus Marker at (340, 160) */}
-                <g transform="translate(325, 145)">
-                  {/* Pulsing beacon */}
-                  <circle cx="15" cy="15" r="22" fill="rgba(13, 148, 136, 0.4)">
-                    <animate attributeName="r" values="18;28;18" dur="2s" repeatCount="indefinite" />
-                    <animate attributeName="opacity" values="0.8;0.2;0.8" dur="2s" repeatCount="indefinite" />
-                  </circle>
-                  <circle cx="15" cy="15" r="14" fill="#0d9488" stroke="#ffffff" strokeWidth="2.5" />
-                  <text x="11" y="19" fill="#ffffff" fontSize="10" fontWeight="bold">🚌</text>
-                </g>
-              </svg>
-
-              {/* Floating Bottom HUD */}
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '20px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 'var(--radius-md)',
-                  padding: '12px 24px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '24px',
-                  color: '#ffffff'
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>ACTIVE VEHICLE</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800 }}>{selectedLiveBus?.busNumber || 'Bus 04'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>SPEED</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#10b981' }}>
-                    {Math.round(selectedLiveBus?.currentSpeedKmh || 34)} km/h
-                  </div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>CURRENT STOP</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800 }}>{selectedLiveBus?.currentStopName || 'Central Mall'}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>NEXT STOP ETA</div>
-                  <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#06b6d4' }}>
-                    {selectedLiveBus?.nextStopEtaMinutes || 6} min
-                  </div>
-                </div>
-              </div>
-            </div>
+            <TransportLiveMap
+              selectedBus={selectedLiveBus}
+              allBuses={liveBuses}
+              routes={routes}
+              alerts={alerts}
+              onSelectBus={(bus) => setSelectedLiveBus(bus)}
+            />
           </div>
 
           {/* Column 3: Detailed Bus & Trip Timeline Inspector */}
@@ -2518,140 +2373,19 @@ export const TransportModule = () => {
               </button>
             </div>
 
-            {/* Playback Canvas Area */}
-            <div
-              style={{
-                height: '380px',
-                backgroundColor: '#0f172a',
-                position: 'relative',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}
-            >
-              <svg width="100%" height="100%">
-                {/* SVG path playback */}
-                <path
-                  d="M 80 80 Q 240 180 400 150 T 700 300"
-                  fill="none"
-                  stroke="rgba(255,255,255,0.15)"
-                  strokeWidth="4"
-                  strokeDasharray="6,6"
-                />
-                {/* Path animated progress */}
-                <path
-                  d="M 80 80 Q 240 180 400 150 T 700 300"
-                  fill="none"
-                  stroke="#0d9488"
-                  strokeWidth="6"
-                  strokeDasharray="900"
-                  strokeDashoffset={900 - (playbackProgress / 100) * 900}
-                />
-
-                {/* Planned Stops */}
-                {playbackData.plannedStops?.map((st, i) => (
-                  <g key={i} transform={`translate(${80 + i * 150}, ${80 + (i % 2) * 80})`}>
-                    <circle cx="0" cy="0" r="7" fill="#10b981" />
-                    <text x="12" y="4" fill="#ffffff" fontSize="10" fontWeight="bold">
-                      {st.stopName} ({st.plannedMorningPickupTime || ''})
-                    </text>
-                  </g>
-                ))}
-
-                {/* Animated Bus Icon Marker following progress */}
-                <g transform={`translate(${80 + (playbackProgress / 100) * 620}, ${80 + Math.sin((playbackProgress / 100) * 3) * 80})`}>
-                  <circle cx="0" cy="0" r="16" fill="#0d9488" stroke="#ffffff" strokeWidth="2" />
-                  <text x="-7" y="5" fill="#ffffff" fontSize="12">🚌</text>
-                </g>
-              </svg>
-
-              {/* Float HUD speed during playback */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '16px',
-                  right: '16px',
-                  backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                  padding: '8px 16px',
-                  borderRadius: 'var(--radius-md)',
-                  color: '#ffffff',
-                  fontSize: '0.85rem',
-                  fontWeight: 700
+            {/* Real Interactive Leaflet Playback Map */}
+            <div style={{ padding: '20px 24px' }}>
+              <TransportPlaybackMap
+                playbackData={playbackData}
+                progress={playbackProgress}
+                isPlaying={isPlaybackPlaying}
+                onTogglePlay={() => setIsPlaybackPlaying(!isPlaybackPlaying)}
+                onSeek={(val) => setPlaybackProgress(val)}
+                onReset={() => {
+                  setPlaybackProgress(0);
+                  setIsPlaybackPlaying(true);
                 }}
-              >
-                Speed: {Math.round(25 + Math.sin(playbackProgress) * 12)} km/h • Dwell: 0s
-              </div>
-            </div>
-
-            {/* Playback Controls & Timeline Scrubber */}
-            <div
-              style={{
-                padding: '20px 24px',
-                backgroundColor: 'var(--bg-app)',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '14px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <button
-                  onClick={() => setIsPlaybackPlaying(!isPlaybackPlaying)}
-                  style={{
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '50%',
-                    backgroundColor: '#0d9488',
-                    color: '#ffffff',
-                    border: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
-                  }}
-                >
-                  {isPlaybackPlaying ? <Pause size={18} /> : <Play size={18} />}
-                </button>
-
-                <button
-                  onClick={() => {
-                    setPlaybackProgress(0);
-                    setIsPlaybackPlaying(true);
-                  }}
-                  style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '50%',
-                    backgroundColor: 'var(--bg-card)',
-                    border: '1px solid var(--border-color)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <RotateCcw size={16} />
-                </button>
-
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={playbackProgress}
-                    onChange={(e) => setPlaybackProgress(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: '#0d9488', cursor: 'pointer' }}
-                  />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 700, minWidth: '40px' }}>{playbackProgress}%</span>
-                </div>
-              </div>
-
-              {/* Dwell and event metrics */}
-              <div style={{ display: 'flex', gap: '16px', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                <div>✓ 3 Scheduled stops passed</div>
-                <div>⏱ Max dwell time: 2m 10s (Within normal threshold)</div>
-                <div>🛡 0 Route deviation flags recorded</div>
-              </div>
+              />
             </div>
           </div>
         </div>
