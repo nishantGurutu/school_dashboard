@@ -17,23 +17,35 @@ export const TeachersModule = () => {
 
   const toTableRow = (t) => {
     let rawType = t.type;
-    if (!rawType) {
-      const desig = (t.designation || '').toLowerCase();
-      const dept = (t.department || '').toLowerCase();
-      if (desig.includes('princip') || dept.includes('princip')) rawType = 'Principal';
-      else if (desig.includes('staff') || dept.includes('staff')) rawType = 'Staff';
-      else rawType = 'Teacher';
+    const desig = (t.designation || '').toLowerCase();
+    const dept = (t.department || '').toLowerCase();
+    const roleStr = (t.role || t.userType || '').toUpperCase();
+
+    if (roleStr.includes('PRINCIP') || desig.includes('princip') || dept.includes('princip') || dept.includes('leadership')) {
+      rawType = 'Principal';
+    } else if (roleStr.includes('ACCOUNT') || desig.includes('account') || desig.includes('cashier') || dept.includes('account') || dept.includes('finance')) {
+      rawType = 'Accountant';
+    } else if (roleStr.includes('LIBRAR') || desig.includes('librar') || dept.includes('librar')) {
+      rawType = 'Librarian';
+    } else if (roleStr.includes('DRIVER') || desig.includes('driver') || dept.includes('transport') || dept.includes('driver')) {
+      rawType = 'Driver';
+    } else if (roleStr.includes('TEACH') || desig.includes('teacher') || desig.includes('faculty') || dept.includes('teach') || dept.includes('acad')) {
+      rawType = 'Teacher';
+    } else if (roleStr.includes('STAFF') || desig.includes('staff') || desig.includes('clerk') || desig.includes('admin') || dept.includes('admin')) {
+      rawType = 'Staff';
+    } else if (!rawType) {
+      rawType = 'Staff';
     }
 
     const assignedClassSummary = t.assignedClass || t.className || (Array.isArray(t.assignedClasses) && t.assignedClasses.map((c) => c.label || c.name).filter(Boolean).join(', ')) || '';
-    const subjectSummary = t.subject || (Array.isArray(t.subjects) && t.subjects.map((s) => s.name).filter(Boolean).join(', ')) || (rawType === 'Teacher' ? 'All Subjects' : 'Administration');
+    const subjectSummary = t.subject || (Array.isArray(t.subjects) && t.subjects.map((s) => s.name).filter(Boolean).join(', ')) || (rawType === 'Teacher' ? 'All Subjects' : (rawType === 'Driver' ? 'Transport' : 'Administration'));
 
     return {
       ...t,
       name: t.fullName || t.name || (t.firstName ? `${t.firstName} ${t.lastName || ''}`.trim() : `${rawType} Member`),
       id: t.id,
       type: rawType,
-      department: t.department || (rawType === 'Principal' || rawType === 'Staff' ? 'Administration' : 'General Faculty'),
+      department: t.department || (rawType === 'Driver' ? 'Transport' : (rawType === 'Principal' || rawType === 'Staff' ? 'Administration' : 'General Faculty')),
       departmentId: t.departmentId || null,
       designation: t.designation || rawType,
       designationId: t.designationId || null,
@@ -89,24 +101,41 @@ export const TeachersModule = () => {
 
   const handleSaveTeacher = async (formData) => {
     setError('');
-    const selectedType = formData.type || 'Teacher';
+    const resolvedRole = (formData.role || formData.userType || 'TEACHER').toUpperCase();
+    const selectedType = formData.type || (
+      resolvedRole === 'PRINCIPAL' ? 'Principal' :
+      resolvedRole === 'ACCOUNTANT' ? 'Accountant' :
+      resolvedRole === 'LIBRARIAN' ? 'Librarian' :
+      resolvedRole === 'DRIVER' ? 'Driver' :
+      resolvedRole === 'STAFF' ? 'Staff' : 'Teacher'
+    );
     const rawName = formData.fullName || formData.name || formData.teacherName || `${selectedType} Member`;
-    const nameParts = rawName.trim().split(' ');
+    const nameParts = rawName.trim().split(/\s+/);
     const firstName = nameParts[0] || selectedType;
-    const lastName = nameParts.slice(1).join(' ') || (selectedType === 'Principal' ? 'Office' : (selectedType === 'Staff' ? 'Staff' : 'Faculty'));
+    const lastName = nameParts.slice(1).join(' ');
 
-    const defaultDesignation = selectedType === 'Principal' ? 'Principal' : (selectedType === 'Staff' ? 'Staff' : 'Teacher');
-    const defaultDept = selectedType === 'Principal' ? 'Administration' : (selectedType === 'Staff' ? 'Administration' : (formData.subject || 'Academic'));
+    const defaultDesignation = 
+      selectedType === 'Principal' ? 'Principal' :
+      selectedType === 'Accountant' ? 'Accountant' :
+      selectedType === 'Librarian' ? 'Librarian' :
+      selectedType === 'Driver' ? 'Bus Driver' :
+      selectedType === 'Staff' ? 'Staff' : 'Teacher';
+    const defaultDept = 
+      selectedType === 'Driver' ? 'Transport' :
+      selectedType === 'Principal' ? 'Administration' :
+      selectedType === 'Staff' ? 'Administration' : (formData.subject || 'Academic');
 
     const payload = {
       ...formData,
       type: selectedType,
+      role: resolvedRole,
+      userType: resolvedRole,
       employeeId: formData.employeeId || formData.teacherId || `${selectedType.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
       firstName: firstName,
       lastName: lastName,
       department: formData.department || defaultDept,
       departmentId: formData.departmentId ? Number(formData.departmentId) : null,
-      subject: formData.subject || (selectedType === 'Principal' ? 'Administration' : (selectedType === 'Staff' ? 'General' : 'General')),
+      subject: formData.subject || (selectedType === 'Principal' ? 'Administration' : (selectedType === 'Driver' ? 'Transport' : (selectedType === 'Staff' ? 'General' : 'General'))),
       subjectIds: Array.isArray(formData.subjectIds) ? formData.subjectIds : [],
       assignedClass: formData.assignedClass || '',
       assignedClassIds: Array.isArray(formData.assignedClassIds) ? formData.assignedClassIds : [],
@@ -161,13 +190,14 @@ export const TeachersModule = () => {
         // Create in backend via teacherService (supports Teacher, Principal, Staff with role & staff sync)
         const created = await teacherService.create(payload);
 
-        // Also ensure direct StaffService registration for Principal / Staff
-        if (selectedType === 'Principal' || selectedType === 'Staff') {
+        // Also ensure direct StaffService registration for non-teachers (Principal, Staff, Accountant, Librarian, Driver)
+        if (selectedType !== 'Teacher') {
           try {
             await staffService.create({
               name: `${firstName} ${lastName}`.trim(),
-              role: selectedType === 'Principal' ? 'PRINCIPAL' : 'STAFF',
+              role: resolvedRole,
               staffType: selectedType,
+              department: payload.department,
               designation: payload.designation,
               phone: payload.phone,
               email: payload.email,
@@ -215,7 +245,7 @@ export const TeachersModule = () => {
   }
 
   const getTypeBadge = (type) => {
-    const normalized = (type || 'Teacher').toLowerCase();
+    const normalized = (type || 'Staff').toLowerCase();
     if (normalized.includes('princip')) {
       return {
         label: 'Principal',
@@ -225,30 +255,60 @@ export const TeachersModule = () => {
         Icon: ShieldCheck
       };
     }
-    if (normalized.includes('staff')) {
+    if (normalized.includes('account')) {
       return {
-        label: 'Staff',
-        bg: 'rgba(16, 185, 129, 0.12)',
-        color: '#059669',
-        border: '1px solid rgba(16, 185, 129, 0.3)',
+        label: 'Accountant',
+        bg: 'rgba(245, 158, 11, 0.12)',
+        color: '#d97706',
+        border: '1px solid rgba(245, 158, 11, 0.3)',
         Icon: Users
       };
     }
+    if (normalized.includes('librar')) {
+      return {
+        label: 'Librarian',
+        bg: 'rgba(99, 102, 241, 0.12)',
+        color: '#4f46e5',
+        border: '1px solid rgba(99, 102, 241, 0.3)',
+        Icon: BookOpen
+      };
+    }
+    if (normalized.includes('driver')) {
+      return {
+        label: 'Driver',
+        bg: 'rgba(249, 115, 22, 0.12)',
+        color: '#ea580c',
+        border: '1px solid rgba(249, 115, 22, 0.3)',
+        Icon: Users
+      };
+    }
+    if (normalized.includes('teach')) {
+      return {
+        label: 'Teacher',
+        bg: 'rgba(59, 130, 246, 0.12)',
+        color: '#2563eb',
+        border: '1px solid rgba(59, 130, 246, 0.3)',
+        Icon: UserCheck
+      };
+    }
     return {
-      label: 'Teacher',
-      bg: 'rgba(59, 130, 246, 0.12)',
-      color: '#2563eb',
-      border: '1px solid rgba(59, 130, 246, 0.3)',
-      Icon: UserCheck
+      label: 'Staff',
+      bg: 'rgba(16, 185, 129, 0.12)',
+      color: '#059669',
+      border: '1px solid rgba(16, 185, 129, 0.3)',
+      Icon: Users
     };
   };
 
   const filteredTeachers = teachers.filter((t) => {
     if (typeFilter !== 'ALL') {
-      const curType = (t.type || 'Teacher').toUpperCase();
+      const curType = (t.type || 'Staff').toUpperCase();
       if (typeFilter === 'TEACHER' && !curType.includes('TEACH')) return false;
       if (typeFilter === 'PRINCIPAL' && !curType.includes('PRINCIP')) return false;
-      if (typeFilter === 'STAFF' && !curType.includes('STAFF')) return false;
+      if (typeFilter === 'ACCOUNTANT' && !curType.includes('ACCOUNT')) return false;
+      if (typeFilter === 'LIBRARIAN' && !curType.includes('LIBRAR')) return false;
+      if (typeFilter === 'DRIVER' && !curType.includes('DRIVER')) return false;
+      if (typeFilter === 'STAFF' && !(curType.includes('STAFF') || curType === 'CLERK' || curType === 'ADMIN')) return false;
     }
     const q = searchTerm.toLowerCase();
     return (
@@ -257,6 +317,7 @@ export const TeachersModule = () => {
       (t.department || '').toLowerCase().includes(q) ||
       (t.type || '').toLowerCase().includes(q) ||
       (t.designation || '').toLowerCase().includes(q) ||
+      (t.role || '').toLowerCase().includes(q) ||
       String(t.id || '').toLowerCase().includes(q)
     );
   });
@@ -266,8 +327,8 @@ export const TeachersModule = () => {
       {/* Header Bar */}
       <div className="card animate-fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Teachers & Faculty Directory</h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Manage school teaching faculty and academic staff members</p>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>Staff Directory</h2>
+          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Manage school teaching faculty, principals, and administrative staff members</p>
         </div>
 
         <button
@@ -275,7 +336,7 @@ export const TeachersModule = () => {
           onClick={() => setShowAddForm(true)}
           style={{ padding: '10px 18px', display: 'inline-flex', alignItems: 'center', gap: '8px' }}
         >
-          <Plus size={18} /> Add New Teacher
+          <Plus size={18} /> Add New Staff
         </button>
       </div>
 
@@ -286,7 +347,7 @@ export const TeachersModule = () => {
             <Search size={18} style={{ position: 'absolute', left: '12px', top: '11px', color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder="Search by name, role, subject, department, ID..."
+              placeholder="Search by name, role, userType, designation, department, ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               style={{
@@ -305,11 +366,14 @@ export const TeachersModule = () => {
           {/* Quick Filter Tabs */}
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {[
-              { id: 'ALL', label: 'All', count: teachers.length },
-              { id: 'TEACHER', label: 'Teachers', count: teachers.filter(t => (t.type || 'Teacher').toLowerCase().includes('teach')).length },
+              { id: 'ALL', label: 'All Staff', count: teachers.length },
+              { id: 'TEACHER', label: 'Teachers', count: teachers.filter(t => (t.type || '').toLowerCase().includes('teach')).length },
               { id: 'PRINCIPAL', label: 'Principals', count: teachers.filter(t => (t.type || '').toLowerCase().includes('princip')).length },
-              { id: 'STAFF', label: 'Staff', count: teachers.filter(t => (t.type || '').toLowerCase().includes('staff')).length }
-            ].map(tab => (
+              { id: 'STAFF', label: 'Staff', count: teachers.filter(t => (t.type || '').toLowerCase().includes('staff')).length },
+              { id: 'ACCOUNTANT', label: 'Accountants', count: teachers.filter(t => (t.type || '').toLowerCase().includes('account')).length },
+              { id: 'LIBRARIAN', label: 'Librarians', count: teachers.filter(t => (t.type || '').toLowerCase().includes('librar')).length },
+              { id: 'DRIVER', label: 'Drivers', count: teachers.filter(t => (t.type || '').toLowerCase().includes('driver')).length }
+            ].filter(tab => tab.id === 'ALL' || tab.count > 0 || ['TEACHER', 'PRINCIPAL', 'STAFF'].includes(tab.id)).map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setTypeFilter(tab.id)}

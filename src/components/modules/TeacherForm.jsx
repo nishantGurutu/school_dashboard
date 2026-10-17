@@ -11,6 +11,86 @@ import { Spinner } from '../ui/Spinner';
 import { MultiSelectDropdown } from '../ui/MultiSelectDropdown';
 import { classService } from '../../services/classService';
 
+/**
+ * Automatically determine role, userType, and type from department and designation
+ */
+export const computeRoleAndType = (department = '', designation = '') => {
+  const d = (designation || '').toLowerCase().trim();
+  const dept = (department || '').toLowerCase().trim();
+
+  // 1. Principal / Headmaster / Director / School Leadership
+  if (
+    d.includes('principal') ||
+    d.includes('headmaster') ||
+    d.includes('headmistress') ||
+    d.includes('director') ||
+    dept.includes('leadership')
+  ) {
+    return { role: 'PRINCIPAL', type: 'Principal', userType: 'PRINCIPAL' };
+  }
+
+  // 2. Accountant / Finance / Cashier
+  if (
+    d.includes('account') ||
+    d.includes('cashier') ||
+    d.includes('finance') ||
+    d.includes('bursar') ||
+    dept.includes('account') ||
+    dept.includes('finance')
+  ) {
+    return { role: 'ACCOUNTANT', type: 'Accountant', userType: 'ACCOUNTANT' };
+  }
+
+  // 3. Librarian / Library
+  if (d.includes('librar') || dept.includes('librar')) {
+    return { role: 'LIBRARIAN', type: 'Librarian', userType: 'LIBRARIAN' };
+  }
+
+  // 4. Driver / Transport
+  if (d.includes('driver') || d.includes('conductor') || dept.includes('transport') || dept.includes('driver')) {
+    return { role: 'DRIVER', type: 'Driver', userType: 'DRIVER' };
+  }
+
+  // 5. Teachers / Faculty / Academic
+  if (
+    d.includes('teacher') ||
+    d.includes('faculty') ||
+    d.includes('pgt') ||
+    d.includes('tgt') ||
+    d.includes('prt') ||
+    d.includes('professor') ||
+    d.includes('lecturer') ||
+    d.includes('instructor') ||
+    dept.includes('teach') ||
+    dept.includes('acad')
+  ) {
+    return { role: 'TEACHER', type: 'Teacher', userType: 'TEACHER' };
+  }
+
+  // 6. Support / Non-Teaching Staff / Admin
+  if (
+    dept.includes('admin') ||
+    dept.includes('support') ||
+    dept.includes('office') ||
+    dept.includes('maint') ||
+    d.includes('staff') ||
+    d.includes('peon') ||
+    d.includes('guard') ||
+    d.includes('reception') ||
+    d.includes('clerk') ||
+    d.includes('admin')
+  ) {
+    return { role: 'STAFF', type: 'Staff', userType: 'STAFF' };
+  }
+
+  // Fallback based on department presence
+  if (dept && !dept.includes('teach') && !dept.includes('acad')) {
+    return { role: 'STAFF', type: 'Staff', userType: 'STAFF' };
+  }
+
+  return { role: 'TEACHER', type: 'Teacher', userType: 'TEACHER' };
+};
+
 export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditMode = false }) => {
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -91,9 +171,24 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     return list;
   }, [classesList]);
 
+  const initialResolved = computeRoleAndType(
+    initialData?.department || '',
+    initialData?.designation || ''
+  );
+  const initRole = (initialData?.role || initialData?.userType || initialResolved.role || 'TEACHER').toUpperCase();
+  const initType = initialData?.type || (
+    initRole === 'PRINCIPAL' ? 'Principal' :
+    initRole === 'ACCOUNTANT' ? 'Accountant' :
+    initRole === 'LIBRARIAN' ? 'Librarian' :
+    initRole === 'DRIVER' ? 'Driver' :
+    initRole === 'STAFF' ? 'Staff' : 'Teacher'
+  );
+
   // Form State containing all fields
   const [formData, setFormData] = useState({
-    type: 'Teacher',
+    type: initType,
+    userType: initRole,
+    role: initRole,
     department: initialData?.department || '',
     departmentId: initialData?.departmentId || '',
     designation: initialData?.designation || '',
@@ -178,9 +273,24 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
           .map((c) => c.id);
       }
 
+      const resolvedRoleType = computeRoleAndType(
+        initialData.department || '',
+        initialData.designation || ''
+      );
+      const targetRole = (initialData.role || initialData.userType || resolvedRoleType.role || 'TEACHER').toUpperCase();
+      const targetType = initialData.type || (
+        targetRole === 'PRINCIPAL' ? 'Principal' :
+        targetRole === 'ACCOUNTANT' ? 'Accountant' :
+        targetRole === 'LIBRARIAN' ? 'Librarian' :
+        targetRole === 'DRIVER' ? 'Driver' :
+        targetRole === 'STAFF' ? 'Staff' : 'Teacher'
+      );
+
       setFormData((prev) => ({
         ...prev,
-        type: initialData.type || prev.type || 'Teacher',
+        type: targetType,
+        userType: targetRole,
+        role: targetRole,
         department: initialData.department || prev.department,
         departmentId: initialData.departmentId || prev.departmentId,
         designation: initialData.designation || prev.designation,
@@ -330,8 +440,20 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     savingRef.current = true;
     setIsSaving(true);
     try {
+      const resolvedRole = (formData.role || formData.userType || 'TEACHER').toUpperCase();
+      const resolvedType = formData.type || (
+        resolvedRole === 'PRINCIPAL' ? 'Principal' :
+        resolvedRole === 'ACCOUNTANT' ? 'Accountant' :
+        resolvedRole === 'LIBRARIAN' ? 'Librarian' :
+        resolvedRole === 'DRIVER' ? 'Driver' :
+        resolvedRole === 'STAFF' ? 'Staff' : 'Teacher'
+      );
+
       await onSaveTeacher({
         ...formData,
+        type: resolvedType,
+        userType: resolvedRole,
+        role: resolvedRole,
         joiningDate: formData.joinDate || formData.joiningDate || new Date().toISOString().split('T')[0],
         departmentId: formData.departmentId ? Number(formData.departmentId) : null,
         designationId: formData.designationId ? Number(formData.designationId) : null,
@@ -349,8 +471,20 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
   const handleReset = () => {
     if (initialData) {
+      const resolvedRoleType = computeRoleAndType(initialData.department || '', initialData.designation || '');
+      const targetRole = (initialData.role || initialData.userType || resolvedRoleType.role || 'TEACHER').toUpperCase();
+      const targetType = initialData.type || (
+        targetRole === 'PRINCIPAL' ? 'Principal' :
+        targetRole === 'ACCOUNTANT' ? 'Accountant' :
+        targetRole === 'LIBRARIAN' ? 'Librarian' :
+        targetRole === 'DRIVER' ? 'Driver' :
+        targetRole === 'STAFF' ? 'Staff' : 'Teacher'
+      );
+
       setFormData({
-        type: 'Teacher',
+        type: targetType,
+        userType: targetRole,
+        role: targetRole,
         department: initialData?.department || '',
         departmentId: initialData?.departmentId || '',
         designation: initialData?.designation || '',
@@ -399,6 +533,8 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     } else {
       setFormData({
         type: 'Teacher',
+        userType: 'TEACHER',
+        role: 'TEACHER',
         department: '',
         departmentId: '',
         designation: '',
@@ -456,15 +592,15 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       >
         <div>
           <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-            Dashboard / Faculty & Teachers / <strong style={{ color: 'var(--text-primary)' }}>{isEditMode ? 'Edit Teacher' : 'Add New Teacher'}</strong>
+            Dashboard / Staff / <strong style={{ color: 'var(--text-primary)' }}>{isEditMode ? 'Edit Staff Profile' : 'Add New Staff'}</strong>
           </div>
           <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>
-            {isEditMode ? `Edit Teacher Profile (${initialData?.name || formData.fullName || 'Teacher'})` : 'Add New Teacher'}
+            {isEditMode ? `Edit Staff Profile (${initialData?.name || formData.fullName || 'Staff'})` : 'Add New Staff'}
           </h2>
         </div>
 
         <button className="btn btn-secondary" onClick={onBack} style={{ padding: '8px 16px' }}>
-          <ArrowLeft size={16} /> Back to Faculty Directory
+          <ArrowLeft size={16} /> Back to Staff Directory
         </button>
       </div>
 
@@ -476,8 +612,8 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
           </h3>
 
           <div className="grid-responsive">
-            {/* Row 1: Full Name, Department (First), Designation (Second) */}
-            <div className="col-span-4">
+            {/* Row 1: Full Name, Department, Designation, and Role */}
+            <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Full Name <span style={{ color: '#ef4444' }}>*</span>
               </label>
@@ -492,7 +628,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
             </div>
 
             {/* Department (First) */}
-            <div className="col-span-4">
+            <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Department <span style={{ color: '#ef4444' }}>*</span>
               </label>
@@ -512,6 +648,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                     deptCode.toLowerCase().includes('teach') ||
                     deptCode.toLowerCase().includes('lead')
                   );
+                  const resolved = computeRoleAndType(deptName, formData.designation);
 
                   setFormData((prev) => ({
                     ...prev,
@@ -520,6 +657,9 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                     // Reset designation when department changes so only valid designations for this department are selected
                     designationId: '',
                     designation: '',
+                    role: resolved.role,
+                    userType: resolved.userType,
+                    type: resolved.type,
                     // Clear subject & assigned classes if switched to non-academic department
                     ...(isAcad ? {} : { subjectIds: [], subject: '', assignedClassIds: [], assignedClass: '' })
                   }));
@@ -540,7 +680,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
             </div>
 
             {/* Designation (Second - dependent on selected Department) */}
-            <div className="col-span-4">
+            <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Designation <span style={{ color: '#ef4444' }}>*</span>
               </label>
@@ -551,10 +691,15 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                 onChange={(e) => {
                   const selId = e.target.value;
                   const sel = designationsList.find((d) => String(d.id) === String(selId));
+                  const desigName = sel ? sel.name : '';
+                  const resolved = computeRoleAndType(formData.department, desigName);
                   setFormData((prev) => ({
                     ...prev,
                     designationId: selId ? Number(selId) : '',
-                    designation: sel ? sel.name : ''
+                    designation: desigName,
+                    role: resolved.role,
+                    userType: resolved.userType,
+                    type: resolved.type
                   }));
                 }}
                 style={{
@@ -592,6 +737,47 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                   No designations found under this department.
                 </div>
               ) : null}
+            </div>
+
+            {/* System Role / UserType (Auto-resolved from Department & Designation) */}
+            <div className="col-span-3">
+              <label style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                <span>Role / UserType <span style={{ color: '#ef4444' }}>*</span></span>
+                <span style={{ fontSize: '0.70rem', color: '#0d9488', fontWeight: 700, background: 'rgba(13, 148, 136, 0.1)', padding: '1px 6px', borderRadius: '4px' }}>
+                  Auto-detected
+                </span>
+              </label>
+              <select
+                id="teacher-role-select"
+                value={formData.role || formData.userType || 'TEACHER'}
+                onChange={(e) => {
+                  const selectedRole = e.target.value;
+                  const normalizedType =
+                    selectedRole === 'PRINCIPAL' ? 'Principal' :
+                    selectedRole === 'ACCOUNTANT' ? 'Accountant' :
+                    selectedRole === 'LIBRARIAN' ? 'Librarian' :
+                    selectedRole === 'DRIVER' ? 'Driver' :
+                    selectedRole === 'STAFF' ? 'Staff' : 'Teacher';
+                  setFormData((prev) => ({
+                    ...prev,
+                    role: selectedRole,
+                    userType: selectedRole,
+                    type: normalizedType
+                  }));
+                }}
+                style={inputStyle}
+                required
+              >
+                <option value="TEACHER">TEACHER (Teacher / Faculty)</option>
+                <option value="PRINCIPAL">PRINCIPAL (Principal / Leadership)</option>
+                <option value="STAFF">STAFF (Non-teaching / Office Staff)</option>
+                <option value="ACCOUNTANT">ACCOUNTANT (Finance / Accounts)</option>
+                <option value="LIBRARIAN">LIBRARIAN (Library Staff)</option>
+                <option value="DRIVER">DRIVER (Transport Driver)</option>
+              </select>
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                Role: <strong>{formData.role || formData.userType || 'TEACHER'}</strong> (Type: {formData.type || 'Staff'})
+              </div>
             </div>
 
             {/* Row 2: Subject & Class (Multi-select) - Only shown for Teaching/Academics or School Leadership */}

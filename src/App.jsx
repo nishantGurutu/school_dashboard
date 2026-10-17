@@ -50,6 +50,7 @@ const MainLayout = ({ onLogout }) => {
       case 'students':
         return <StudentsModule />;
       case 'teachers':
+      case 'staff':
         return <TeachersModule />;
       case 'guardian':
         return <GuardianModule />;
