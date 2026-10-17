@@ -201,6 +201,7 @@ export const API_ENDPOINTS = {
     BUS_BY_ID: (id) => `/v1/transport/buses/${id}`,
     DRIVERS: '/v1/transport/drivers',
     DRIVER_BY_ID: (id) => `/v1/transport/drivers/${id}`,
+    DRIVER_DAILY_DETAILS: (id) => `/v1/transport/drivers/${id}/daily-details`,
     ROUTES: '/v1/transport/routes',
     ROUTE_BY_ID: (id) => `/v1/transport/routes/${id}`,
     ROUTE_STOPS: (routeId) => `/v1/transport/routes/${routeId}/stops`,

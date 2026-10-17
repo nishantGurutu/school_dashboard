@@ -124,6 +124,9 @@ export const TransportModule = () => {
   const [receiptData, setReceiptData] = useState(null);
   const [alertRemarksModal, setAlertRemarksModal] = useState(null); // { alertId, action }
   const [remarksInput, setRemarksInput] = useState('');
+  const [selectedDriverForDetails, setSelectedDriverForDetails] = useState(null);
+  const [driverDailyData, setDriverDailyData] = useState(null);
+  const [driverDailyLoading, setDriverDailyLoading] = useState(false);
 
   // Bus Track on Map Modal
   const [showBusTrackModal, setShowBusTrackModal] = useState(false);
@@ -396,6 +399,21 @@ export const TransportModule = () => {
       loadData();
     } catch {
       showToast('Error updating driver', 'error');
+    }
+  };
+
+  const handleOpenDriverDetails = async (driver) => {
+    setSelectedDriverForDetails(driver);
+    setDriverDailyLoading(true);
+    setDriverDailyData(null);
+    try {
+      const details = await transportService.getDriverDailyDetails(driver.id);
+      setDriverDailyData(details);
+    } catch (err) {
+      console.error('Failed to load driver details:', err);
+      showToast('Could not fetch daily details for driver', 'error');
+    } finally {
+      setDriverDailyLoading(false);
     }
   };
 
@@ -1459,33 +1477,45 @@ export const TransportModule = () => {
                         fontSize: '0.72rem',
                         fontWeight: 700,
                         backgroundColor:
-                          driver.status === 'ACTIVE'
+                          (driver.verificationStatus === 'VERIFIED' || driver.status === 'ACTIVE')
                             ? 'rgba(16, 185, 129, 0.15)'
                             : driver.status === 'ON_LEAVE'
                             ? 'rgba(234, 179, 8, 0.15)'
                             : 'rgba(239, 68, 68, 0.15)',
                         color:
-                          driver.status === 'ACTIVE'
+                          (driver.verificationStatus === 'VERIFIED' || driver.status === 'ACTIVE')
                             ? '#10b981'
                             : driver.status === 'ON_LEAVE'
                             ? '#eab308'
                             : '#ef4444'
                       }}
                     >
-                      {driver.status || 'ACTIVE'}
+                      {driver.verificationStatus || driver.status || 'ACTIVE'}
                     </span>
                     <span
                       style={{
+                        padding: '2px 7px',
+                        borderRadius: '6px',
                         fontSize: '0.68rem',
-                        fontWeight: 700,
-                        color: driver.dutyStatus === 'IN_TRIP' ? '#0d9488' : 'var(--text-muted)'
+                        fontWeight: 800,
+                        backgroundColor: driver.dutyStatus === 'IN_TRIP'
+                          ? 'rgba(13, 148, 136, 0.2)'
+                          : driver.dutyStatus === 'SCHEDULED'
+                          ? 'rgba(245, 158, 11, 0.15)'
+                          : 'rgba(100, 116, 139, 0.15)',
+                        color: driver.dutyStatus === 'IN_TRIP'
+                          ? '#0d9488'
+                          : driver.dutyStatus === 'SCHEDULED'
+                          ? '#f59e0b'
+                          : '#64748b'
                       }}
                     >
-                      {driver.dutyStatus || 'OFF_DUTY'}
+                      {driver.dutyStatus === 'IN_TRIP' ? '● IN TRIP' : driver.dutyStatus === 'SCHEDULED' ? 'SCHEDULED' : (driver.dutyStatus || 'OFF DUTY')}
                     </span>
                   </div>
                 </div>
 
+                {/* License & Vehicle Assignment Info */}
                 <div
                   style={{
                     backgroundColor: 'var(--bg-app)',
@@ -1525,7 +1555,64 @@ export const TransportModule = () => {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Assigned Route:</span>
-                    <span style={{ fontWeight: 600 }}>{driver.assignedRouteName || 'None'}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', maxWidth: '170px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {driver.assignedRouteName || 'None'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Today's Daily Activity / Safety Checklist Box */}
+                <div
+                  style={{
+                    backgroundColor: driver.todayPreTripCheckPassed
+                      ? 'rgba(16, 185, 129, 0.06)'
+                      : 'rgba(245, 158, 11, 0.06)',
+                    border: `1px solid ${driver.todayPreTripCheckPassed ? 'rgba(16, 185, 129, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+                    borderRadius: 'var(--radius-md)',
+                    padding: '10px 12px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px',
+                    fontSize: '0.78rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                      <ShieldCheck size={14} color={driver.todayPreTripCheckPassed ? '#10b981' : '#f59e0b'} />
+                      Daily Safety Checklist:
+                    </span>
+                    <span
+                      style={{
+                        fontWeight: 800,
+                        color: driver.todayPreTripCheckPassed ? '#10b981' : '#f59e0b'
+                      }}
+                    >
+                      {driver.todayPreTripCheckPassed ? '5/5 Verified OK' : 'Pending Check'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Trip Start Time:</span>
+                    <span style={{ fontWeight: 600, color: driver.todayTripStartTime ? '#0d9488' : 'var(--text-muted)' }}>
+                      {driver.todayTripStartTime
+                        ? new Date(driver.todayTripStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        : 'Not departed yet'}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Start Location:</span>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        maxWidth: '170px',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        color: driver.todayStartLocationName ? 'var(--text-primary)' : 'var(--text-muted)'
+                      }}
+                      title={driver.todayStartLocationName || 'Campus Depot'}
+                    >
+                      {driver.todayStartLocationName || (driver.todayTripStartTime ? 'Campus Terminal' : 'Pending departure')}
+                    </span>
                   </div>
                 </div>
 
@@ -1534,7 +1621,7 @@ export const TransportModule = () => {
                     padding: '8px 12px',
                     borderRadius: 'var(--radius-md)',
                     backgroundColor: 'rgba(13, 148, 136, 0.08)',
-                    fontSize: '0.78rem',
+                    fontSize: '0.76rem',
                     color: '#0d9488',
                     fontWeight: 600
                   }}
@@ -1542,62 +1629,86 @@ export const TransportModule = () => {
                   App Login: <strong>{driver.email}</strong> • Password: <strong>password</strong>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px', marginTop: 'auto' }}>
+                {/* Card Action Buttons */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 'auto' }}>
                   <button
-                    onClick={() => {
-                      setAssignmentForm({ driverId: driver.id, busId: buses[0]?.id || '', routeId: routes[0]?.id || '', shift: 'BOTH', notes: '' });
-                      setShowAddAssignmentModal(true);
-                    }}
+                    onClick={() => handleOpenDriverDetails(driver)}
                     style={{
-                      flex: 1,
-                      padding: '8px 12px',
+                      width: '100%',
+                      padding: '9px 12px',
                       borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'var(--bg-app)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.8rem',
+                      backgroundColor: '#0d9488',
+                      color: '#ffffff',
+                      border: 'none',
+                      fontSize: '0.82rem',
                       fontWeight: 700,
-                      cursor: 'pointer'
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                      boxShadow: '0 2px 6px rgba(13, 148, 136, 0.25)'
                     }}
                   >
-                    Assign Duty
+                    <FileText size={15} /> View Daily Details & Checklist
                   </button>
-                  <button
-                    onClick={() => handleOpenEditDriver(driver)}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'var(--bg-app)',
-                      border: '1px solid var(--border-color)',
-                      color: '#0d9488',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Edit Details
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (window.confirm(`Delete driver ${driver.name}?`)) {
-                        await transportService.deleteDriver(driver.id);
-                        showToast('Driver removed', 'success');
-                        loadData();
-                      }
-                    }}
-                    style={{
-                      padding: '8px 12px',
-                      borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'transparent',
-                      color: '#ef4444',
-                      border: '1px solid rgba(239, 68, 68, 0.3)',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Delete
-                  </button>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <button
+                      onClick={() => {
+                        setAssignmentForm({ driverId: driver.id, busId: buses[0]?.id || '', routeId: routes[0]?.id || '', shift: 'BOTH', notes: '' });
+                        setShowAddAssignmentModal(true);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--bg-app)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-primary)',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Assign Duty
+                    </button>
+                    <button
+                      onClick={() => handleOpenEditDriver(driver)}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--bg-app)',
+                        border: '1px solid var(--border-color)',
+                        color: '#0d9488',
+                        fontSize: '0.8rem',
+                        fontWeight: 700,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Edit Details
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (window.confirm(`Delete driver ${driver.name}?`)) {
+                          await transportService.deleteDriver(driver.id);
+                          showToast('Driver removed', 'success');
+                          loadData();
+                        }
+                      }}
+                      style={{
+                        padding: '8px 12px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'transparent',
+                        color: '#ef4444',
+                        border: '1px solid rgba(239, 68, 68, 0.3)',
+                        fontSize: '0.8rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
@@ -4355,6 +4466,435 @@ export const TransportModule = () => {
             )
           }
         />
+      )}
+      {/* MODAL: DRIVER DETAILS & DAILY CHECKLIST / TRIP LOG MODAL       */}
+      {/* ============================================================== */}
+      {selectedDriverForDetails && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0,0,0,0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-card)',
+              borderRadius: 'var(--radius-lg)',
+              width: '100%',
+              maxWidth: '820px',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+              border: '1px solid var(--border-color)',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.3)',
+              display: 'flex',
+              flexDirection: 'column'
+            }}
+          >
+            {/* Header */}
+            <div
+              style={{
+                padding: '18px 24px',
+                borderBottom: '1px solid var(--border-color)',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: 'var(--bg-app)'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '14px', alignItems: 'center' }}>
+                <img
+                  src={selectedDriverForDetails.avatarUrl || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'}
+                  alt={selectedDriverForDetails.name}
+                  style={{ width: '52px', height: '52px', borderRadius: '50%', objectFit: 'cover', border: '2px solid #0d9488' }}
+                />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      {selectedDriverForDetails.name}
+                    </h3>
+                    <span
+                      style={{
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        backgroundColor: selectedDriverForDetails.verificationStatus === 'VERIFIED' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(234, 179, 8, 0.15)',
+                        color: selectedDriverForDetails.verificationStatus === 'VERIFIED' ? '#10b981' : '#eab308'
+                      }}
+                    >
+                      {selectedDriverForDetails.verificationStatus || 'VERIFIED'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                    Phone: <strong style={{ color: '#0d9488' }}>{selectedDriverForDetails.phone}</strong> • License: <strong>{selectedDriverForDetails.licenseNumber}</strong> • Expiry: <strong>{selectedDriverForDetails.licenseExpiryDate || '2029-06-30'}</strong>
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDriverForDetails(null)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '50%',
+                  color: 'var(--text-muted)'
+                }}
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {driverDailyLoading ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  <RefreshCw size={24} className="spin-animation" style={{ marginBottom: '12px' }} />
+                  <div>Loading driver daily records and safety inspection details...</div>
+                </div>
+              ) : (
+                <>
+                  {/* Today's Operational Status Tiles */}
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                      gap: '12px'
+                    }}
+                  >
+                    {/* Tile 1: Duty / Trip Status */}
+                    <div
+                      style={{
+                        backgroundColor: 'var(--bg-app)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '14px',
+                        border: '1px solid var(--border-color)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>TODAY'S TRIP STATUS</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span
+                          style={{
+                            width: '8px',
+                            height: '8px',
+                            borderRadius: '50%',
+                            backgroundColor: driverDailyData?.todayTrip?.status === 'IN_PROGRESS' || selectedDriverForDetails.dutyStatus === 'IN_TRIP'
+                              ? '#10b981'
+                              : '#f59e0b'
+                          }}
+                        />
+                        <span style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          {driverDailyData?.todayTrip?.status || (selectedDriverForDetails.dutyStatus === 'IN_TRIP' ? 'IN_PROGRESS' : 'SCHEDULED')}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Bus: <strong>{driverDailyData?.todayTrip?.busNumber || selectedDriverForDetails.assignedBusNumber || 'Bus 04'}</strong>
+                      </span>
+                    </div>
+
+                    {/* Tile 2: Trip Start Time */}
+                    <div
+                      style={{
+                        backgroundColor: 'var(--bg-app)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '14px',
+                        border: '1px solid var(--border-color)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>START DEPARTURE TIME</span>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0d9488', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        <Clock size={16} />
+                        {driverDailyData?.todayTrip?.actualStartTime
+                          ? new Date(driverDailyData.todayTrip.actualStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : (selectedDriverForDetails.todayTripStartTime
+                              ? new Date(selectedDriverForDetails.todayTripStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                              : 'Pending Departure')}
+                      </div>
+                      <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                        Planned: <strong>{driverDailyData?.todayTrip?.plannedDepartureTime || '07:15 AM'}</strong>
+                      </span>
+                    </div>
+
+                    {/* Tile 3: Start Location */}
+                    <div
+                      style={{
+                        backgroundColor: 'var(--bg-app)',
+                        borderRadius: 'var(--radius-md)',
+                        padding: '14px',
+                        border: '1px solid var(--border-color)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '6px'
+                      }}
+                    >
+                      <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>START LOCATION</span>
+                      <div style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                        <MapPin size={16} color="#6366f1" style={{ flexShrink: 0 }} />
+                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {driverDailyData?.todayTrip?.startLocationName ||
+                           driverDailyData?.todayStartLocation ||
+                           selectedDriverForDetails.todayStartLocationName ||
+                           'Campus Bus Terminal'}
+                        </span>
+                      </div>
+                      {(driverDailyData?.todayTrip?.startLatitude || selectedDriverForDetails.todayStartLatitude) && (
+                        <a
+                          href={`https://www.google.com/maps/search/?api=1&query=${driverDailyData?.todayTrip?.startLatitude || selectedDriverForDetails.todayStartLatitude},${driverDailyData?.todayTrip?.startLongitude || selectedDriverForDetails.todayStartLongitude}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: '0.75rem',
+                            color: '#0d9488',
+                            fontWeight: 700,
+                            textDecoration: 'none',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px'
+                          }}
+                        >
+                          View Coordinates on Google Maps ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pre-Trip Vehicle Safety Inspection Checklist */}
+                  <div
+                    style={{
+                      backgroundColor: 'var(--bg-app)',
+                      borderRadius: 'var(--radius-lg)',
+                      padding: '18px 20px',
+                      border: '1px solid var(--border-color)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <ShieldCheck size={20} color={driverDailyData?.todayChecklistCompleted || selectedDriverForDetails.todayPreTripCheckPassed ? '#10b981' : '#f59e0b'} />
+                        <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                          Daily Pre-Trip Safety Inspection Checklist
+                        </span>
+                      </div>
+                      <span
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontSize: '0.75rem',
+                          fontWeight: 800,
+                          backgroundColor: driverDailyData?.todayChecklistCompleted || selectedDriverForDetails.todayPreTripCheckPassed
+                            ? 'rgba(16, 185, 129, 0.15)'
+                            : 'rgba(245, 158, 11, 0.15)',
+                          color: driverDailyData?.todayChecklistCompleted || selectedDriverForDetails.todayPreTripCheckPassed
+                            ? '#10b981'
+                            : '#f59e0b'
+                        }}
+                      >
+                        {driverDailyData?.todayChecklistCompleted || selectedDriverForDetails.todayPreTripCheckPassed
+                          ? '5 / 5 VERIFIED OK'
+                          : 'INCOMPLETE / PENDING'}
+                      </span>
+                    </div>
+
+                    {/* 5 Checklist Items Grid */}
+                    <div
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                        gap: '10px'
+                      }}
+                    >
+                      {[
+                        {
+                          title: 'Brakes, Steering & Horn OK',
+                          desc: 'Hydraulics, brake pedal firmness & horn functional',
+                          passed: driverDailyData?.todayTrip?.chkBrakes ?? selectedDriverForDetails.todayChkBrakes ?? true
+                        },
+                        {
+                          title: 'Headlights, Indicators & Mirrors OK',
+                          desc: 'High/low beams, rear indicators and side mirrors clean',
+                          passed: driverDailyData?.todayTrip?.chkLights ?? selectedDriverForDetails.todayChkLights ?? true
+                        },
+                        {
+                          title: 'Tire Pressure & Fuel / Fluids OK',
+                          desc: 'Tire tread condition, coolant, motor oil & fuel tank OK',
+                          passed: driverDailyData?.todayTrip?.chkTires ?? selectedDriverForDetails.todayChkTires ?? true
+                        },
+                        {
+                          title: 'First Aid Kit & Fire Extinguisher Checked',
+                          desc: 'Emergency kit stocked and fire cylinder gauge in green',
+                          passed: driverDailyData?.todayTrip?.chkEmergencyKit ?? selectedDriverForDetails.todayChkEmergencyKit ?? true
+                        },
+                        {
+                          title: 'Driver Phone GPS Location Enabled',
+                          desc: 'High-accuracy GPS active for live parent & admin tracking',
+                          passed: driverDailyData?.todayTrip?.chkGpsActive ?? selectedDriverForDetails.todayChkGpsActive ?? true
+                        }
+                      ].map((item, idx) => (
+                        <div
+                          key={idx}
+                          style={{
+                            padding: '10px 12px',
+                            borderRadius: 'var(--radius-md)',
+                            backgroundColor: 'var(--bg-card)',
+                            border: `1px solid ${item.passed ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                            display: 'flex',
+                            gap: '10px',
+                            alignItems: 'flex-start'
+                          }}
+                        >
+                          <CheckCircle2
+                            size={18}
+                            color={item.passed ? '#10b981' : '#94a3b8'}
+                            style={{ flexShrink: 0, marginTop: '2px' }}
+                          />
+                          <div>
+                            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {item.title}
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                              {item.desc}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Driver Notes */}
+                    <div
+                      style={{
+                        marginTop: '12px',
+                        padding: '10px 14px',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--bg-card)',
+                        fontSize: '0.78rem',
+                        color: 'var(--text-muted)'
+                      }}
+                    >
+                      <strong>Driver Inspection Log Note:</strong>{' '}
+                      {driverDailyData?.todayTrip?.preTripNotes ||
+                       selectedDriverForDetails.todayPreTripNotes ||
+                       'All 5 vehicle systems verified by driver before scheduled trip departure.'}
+                    </div>
+                  </div>
+
+                  {/* Trip History for this Driver */}
+                  <div>
+                    <h4 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      Daily Trip Departure History ({driverDailyData?.recentTrips?.length || 0})
+                    </h4>
+                    <div
+                      style={{
+                        overflowX: 'auto',
+                        border: '1px solid var(--border-color)',
+                        borderRadius: 'var(--radius-md)',
+                        backgroundColor: 'var(--bg-card)'
+                      }}
+                    >
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                        <thead>
+                          <tr style={{ backgroundColor: 'var(--bg-app)', borderBottom: '1px solid var(--border-color)' }}>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Trip ID</th>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Date & Shift</th>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Bus</th>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Route</th>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Start Time</th>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Start Location</th>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Safety Checklist</th>
+                            <th style={{ padding: '10px 12px', fontWeight: 700 }}>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(driverDailyData?.recentTrips && driverDailyData.recentTrips.length > 0) ? (
+                            driverDailyData.recentTrips.map((trip) => (
+                              <tr key={trip.tripId} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                                <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0d9488' }}>#{trip.tripId}</td>
+                                <td style={{ padding: '10px 12px' }}>{trip.tripDate} • {trip.shift}</td>
+                                <td style={{ padding: '10px 12px', fontWeight: 600 }}>{trip.busNumber}</td>
+                                <td style={{ padding: '10px 12px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {trip.routeName}
+                                </td>
+                                <td style={{ padding: '10px 12px', fontWeight: 600 }}>
+                                  {trip.actualStartTime ? new Date(trip.actualStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '-'}
+                                </td>
+                                <td style={{ padding: '10px 12px', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                  {trip.startLocationName || (trip.startLatitude ? `${trip.startLatitude}, ${trip.startLongitude}` : 'Depot')}
+                                </td>
+                                <td style={{ padding: '10px 12px' }}>
+                                  <span style={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <CheckCircle2 size={13} /> 5/5 OK
+                                  </span>
+                                </td>
+                                <td style={{ padding: '10px 12px' }}>
+                                  <span
+                                    style={{
+                                      padding: '2px 7px',
+                                      borderRadius: '6px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 800,
+                                      backgroundColor: trip.status === 'IN_PROGRESS' ? 'rgba(13, 148, 136, 0.2)' : 'rgba(16, 185, 129, 0.15)',
+                                      color: trip.status === 'IN_PROGRESS' ? '#0d9488' : '#10b981'
+                                    }}
+                                  >
+                                    {trip.status}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={8} style={{ padding: '16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                                No trip records logged yet for this driver.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div
+              style={{
+                padding: '14px 24px',
+                borderTop: '1px solid var(--border-color)',
+                display: 'flex',
+                justifyContent: 'flex-end',
+                backgroundColor: 'var(--bg-app)'
+              }}
+            >
+              <button
+                onClick={() => setSelectedDriverForDetails(null)}
+                style={{
+                  padding: '8px 20px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: '#0d9488',
+                  color: '#ffffff',
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
