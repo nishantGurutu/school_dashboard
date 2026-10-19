@@ -3779,7 +3779,10 @@ export const TransportModule = () => {
                 <select
                   required
                   value={assignmentForm.driverId}
-                  onChange={(e) => setAssignmentForm({ ...assignmentForm, driverId: e.target.value })}
+                  onChange={(e) => {
+                    const selectedDriver = drivers.find(driver => String(driver.id) === e.target.value);
+                    setAssignmentForm({ ...assignmentForm, driverId: e.target.value, busId: selectedDriver?.assignedBusId ? String(selectedDriver.assignedBusId) : '' });
+                  }}
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
                 >
                   <option value="">-- Choose Driver --</option>
@@ -3798,7 +3801,11 @@ export const TransportModule = () => {
                   style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
                 >
                   <option value="">-- Choose Bus --</option>
-                  {buses.map(b => (
+                  {buses.filter(b => b.status === 'ACTIVE' && assignmentForm.driverId &&
+                    (!b.assignedDriverId || String(b.assignedDriverId) === String(assignmentForm.driverId)) &&
+                    (!drivers.find(d => String(d.id) === String(assignmentForm.driverId))?.assignedBusId ||
+                      String(b.id) === String(drivers.find(d => String(d.id) === String(assignmentForm.driverId)).assignedBusId))
+                  ).map(b => (
                     <option key={b.id} value={b.id}>{b.busNumber} ({b.registrationNumber}) - {b.capacity} Seats</option>
                   ))}
                 </select>

@@ -29,54 +29,8 @@ export const transportService = {
 
   // Buses
   async getBuses(schoolId = 'SCH-001') {
-    try {
-      const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.BUSES}?schoolId=${schoolId}`);
-      return Array.isArray(res) ? res : [];
-    } catch {
-      return [
-        {
-          id: 1,
-          busNumber: 'Bus 01',
-          registrationNumber: 'MH-02-AB-1001',
-          capacity: 42,
-          model: 'Starbus Ultra',
-          manufacturer: 'Tata Motors',
-          fuelType: 'CNG',
-          gpsDeviceId: 'GPS-TT-1001',
-          status: 'ACTIVE',
-          assignedDriverName: 'Suresh Yadav',
-          assignedRouteName: 'Route 2 - South Residential Belt'
-        },
-        {
-          id: 2,
-          busNumber: 'Bus 02',
-          registrationNumber: 'MH-02-CD-2002',
-          capacity: 38,
-          model: 'Cruiser Deluxe',
-          manufacturer: 'Force Motors',
-          fuelType: 'DIESEL',
-          gpsDeviceId: 'GPS-FC-2002',
-          status: 'MAINTENANCE',
-          assignedDriverName: 'Unassigned',
-          assignedRouteName: 'Maintenance Bay'
-        },
-        {
-          id: 3,
-          busNumber: 'Bus 04',
-          registrationNumber: 'MH-02-EF-4004',
-          capacity: 45,
-          model: 'Skyline Pro',
-          manufacturer: 'Eicher',
-          fuelType: 'DIESEL',
-          gpsDeviceId: 'GPS-EC-4004',
-          status: 'ACTIVE',
-          currentSpeed: 34.0,
-          assignedDriverName: 'Ramesh Kumar',
-          assignedRouteName: 'Route 1 - North Campus Loop',
-          activeTripStatus: 'IN_PROGRESS'
-        }
-      ];
-    }
+    const result = await apiRequest(`${API_ENDPOINTS.TRANSPORT.BUSES}?schoolId=${encodeURIComponent(schoolId)}`);
+    return Array.isArray(result) ? result : [];
   },
 
   async createBus(busData, schoolId = 'SCH-001') {
@@ -372,58 +326,17 @@ export const transportService = {
 
   // Historical Playback
   async getTripPlayback(tripId, schoolId = 'SCH-001') {
-    try {
-      return await apiRequest(`${API_ENDPOINTS.TRANSPORT.TRIP_PLAYBACK(tripId)}?schoolId=${schoolId}`);
-    } catch {
-      return {
-        tripId,
-        busNumber: 'Bus 04',
-        driverName: 'Ramesh Kumar',
-        routeName: 'Route 1 - North Campus Loop',
-        tripDate: new Date().toISOString().split('T')[0],
-        startTime: '07:15 AM',
-        endTime: '08:00 AM',
-        totalDistanceKm: 18.5,
-        durationMinutes: 45,
-        pathPoints: [
-          { latitude: 25.6150, longitude: 85.1280, speedKmh: 0.0, heading: 0.0 },
-          { latitude: 25.6135, longitude: 85.1305, speedKmh: 28.0, heading: 135.0 },
-          { latitude: 25.6100, longitude: 85.1350, speedKmh: 0.0, heading: 140.0 },
-          { latitude: 25.6075, longitude: 85.1380, speedKmh: 35.0, heading: 145.0 },
-          { latitude: 25.6050, longitude: 85.1410, speedKmh: 15.0, heading: 150.0 },
-          { latitude: 25.6025, longitude: 85.1430, speedKmh: 34.0, heading: 150.0 },
-          { latitude: 25.6010, longitude: 85.1480, speedKmh: 30.0, heading: 155.0 },
-          { latitude: 25.5970, longitude: 85.1550, speedKmh: 0.0, heading: 160.0 }
-        ],
-        plannedStops: [
-          { stopName: 'North City Square', stopOrder: 1, plannedMorningPickupTime: '07:15 AM', latitude: 25.6150, longitude: 85.1280 },
-          { stopName: 'Metro Station Pillar 42', stopOrder: 2, plannedMorningPickupTime: '07:25 AM', latitude: 25.6100, longitude: 85.1350 },
-          { stopName: 'Central Mall Junction', stopOrder: 3, plannedMorningPickupTime: '07:35 AM', latitude: 25.6050, longitude: 85.1410 },
-          { stopName: 'Kankarbagh Park', stopOrder: 4, plannedMorningPickupTime: '07:45 AM', latitude: 25.6010, longitude: 85.1480 },
-          { stopName: 'School Main Gate', stopOrder: 5, plannedMorningPickupTime: '08:00 AM', latitude: 25.5970, longitude: 85.1550 }
-        ],
-        stopEvents: [
-          { stopName: 'North City Square', stopOrder: 1, dwellDurationSeconds: 120, status: 'DEPARTED', studentsBoarded: 8 },
-          { stopName: 'Metro Station Pillar 42', stopOrder: 2, dwellDurationSeconds: 130, status: 'DEPARTED', studentsBoarded: 12 },
-          { stopName: 'Central Mall Junction', stopOrder: 3, dwellDurationSeconds: 95, status: 'DEPARTED', studentsBoarded: 10 }
-        ],
-        incidents: []
-      };
-    }
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.TRIP_PLAYBACK(tripId)}?schoolId=${encodeURIComponent(schoolId)}`);
   },
 
   // Trip Reports
   async getTripReports(schoolId = 'SCH-001', date = null, busId = null, driverId = null) {
-    try {
-      let query = `?schoolId=${schoolId}`;
-      if (date) query += `&date=${date}`;
-      if (busId) query += `&busId=${busId}`;
-      if (driverId) query += `&driverId=${driverId}`;
-      const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.TRIP_REPORTS}${query}`);
-      return Array.isArray(res) ? res : [];
-    } catch {
-      return [];
-    }
+    const query = new URLSearchParams({ schoolId });
+    if (date) query.set('date', date);
+    if (busId) query.set('busId', busId);
+    if (driverId) query.set('driverId', driverId);
+    const result = await apiRequest(`${API_ENDPOINTS.TRANSPORT.TRIP_REPORTS}?${query}`);
+    return Array.isArray(result) ? result : [];
   },
 
   // Alerts

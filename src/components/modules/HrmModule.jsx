@@ -68,7 +68,7 @@ export const HrmModule = () => {
     fetchHrm();
   }, [fetchHrm]);
 
-  const isDriver = formData.role === 'DRIVER' || /driver|conductor/i.test(formData.designation) || /driver/i.test(formData.staffType);
+  const isDriver = formData.role === 'DRIVER';
 
   useEffect(() => {
     if (!showAddModal || !isDriver) {
