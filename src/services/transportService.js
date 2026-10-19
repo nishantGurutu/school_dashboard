@@ -500,15 +500,8 @@ export const transportService = {
 
   // Live Tracking
   async getLiveTracking(schoolId = 'SCH-001') {
-    try {
-      const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.LIVE_TRACKING}?schoolId=${schoolId}`);
-      if (Array.isArray(res) && res.length > 0) {
-        return res;
-      }
-      return MOCK_FALLBACK_OVERVIEW.liveBuses;
-    } catch {
-      return MOCK_FALLBACK_OVERVIEW.liveBuses;
-    }
+    const result = await apiRequest(`${API_ENDPOINTS.TRANSPORT.LIVE_TRACKING}?schoolId=${encodeURIComponent(schoolId)}`);
+    return Array.isArray(result) ? result : [];
   },
 
   // Historical Playback

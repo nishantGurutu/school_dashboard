@@ -1,3 +1,4 @@
+import { trackingDataForBus } from './transport/trackingMapData';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
@@ -4441,15 +4442,7 @@ export const TransportModule = () => {
             setSelectedBusForMap(null);
           }}
           bus={selectedBusForMap}
-          route={
-            routes.find(
-              (r) =>
-                (selectedBusForMap.routeId && r.id === selectedBusForMap.routeId) ||
-                (selectedBusForMap.assignedRouteId && r.id === selectedBusForMap.assignedRouteId) ||
-                (selectedBusForMap.assignedRouteName && r.routeName === selectedBusForMap.assignedRouteName) ||
-                (selectedBusForMap.routeName && r.routeName === selectedBusForMap.routeName)
-            ) || null
-          }
+          route={trackingDataForBus(selectedBusForMap, liveBuses, routes, assignments).route}
           driver={
             drivers.find(
               (d) =>
@@ -4458,13 +4451,7 @@ export const TransportModule = () => {
                 d.name === selectedBusForMap.assignedDriverName
             )
           }
-          liveData={
-            liveBuses.find(
-              (lb) =>
-                String(lb.busId) === String(selectedBusForMap.id || selectedBusForMap.busId) ||
-                String(lb.busNumber).toLowerCase() === String(selectedBusForMap.busNumber).toLowerCase()
-            )
-          }
+          liveData={trackingDataForBus(selectedBusForMap, liveBuses, routes, assignments).live}
         />
       )}
       {/* MODAL: DRIVER DETAILS & DAILY CHECKLIST / TRIP LOG MODAL       */}
