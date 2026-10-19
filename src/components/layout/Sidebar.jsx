@@ -53,6 +53,7 @@ export const Sidebar = () => {
         { key: 'classes-room', label: 'Class Room' }
       ]
     },
+    { key: 'portal', label: 'Diary & Online Exams', icon: BookOpen, hasSub: false },
     { key: 'homework', label: 'Assignments', icon: FileEdit, hasSub: false },
     { key: 'curriculum', label: 'Curriculum & Notes', icon: BookOpen, hasSub: false },
     {

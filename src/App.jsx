@@ -1,3 +1,4 @@
+import { PortalModule } from './components/modules/PortalModule';
 import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
@@ -45,6 +46,8 @@ const MainLayout = ({ onLogout }) => {
     switch (activeTab) {
       case 'dashboard':
         return roleFor(authStorage.getUser()) === 'TEACHER' ? <TeacherDashboard /> : <SchoolAdminDashboard />;
+      case 'portal':
+        return <PortalModule />;
       case 'homework':
         return <HomeworkModule />;
       case 'students':

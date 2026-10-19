@@ -24,69 +24,22 @@ import { useTheme } from '../../context/ThemeContext';
 import { dashboardService } from '../../services/dashboardService';
 import { attendanceService } from '../../services/attendanceService';
 import { feeService } from '../../services/feeService';
+import { accountService } from '../../services/accountService';
+import { authStorage } from '../../services/api';
 import { noticeService } from '../../services/noticeService';
 
-const MOCK_RECEIPTS = [
-
-  {
-    receiptNo: 'REC-2026-0891',
-    student: 'Alexander Wright',
-    rollNo: '2024-0412',
-    grade: 'Grade 10-A',
-    amount: '$1,250.00',
-    mode: 'Online (Stripe)',
-    date: 'Today, 14:32',
-    status: 'Paid'
-  },
-  {
-    receiptNo: 'REC-2026-0890',
-    student: 'Sophia Martinez',
-    rollNo: '2024-0318',
-    grade: 'Grade 8-B',
-    amount: '$980.00',
-    mode: 'Bank Transfer',
-    date: 'Today, 11:15',
-    status: 'Paid'
-  },
-  {
-    receiptNo: 'REC-2026-0889',
-    student: 'Liam Hemsworth',
-    rollNo: '2024-0511',
-    grade: 'Grade 12-C',
-    amount: '$1,400.00',
-    mode: 'Cash Receipt',
-    date: 'Yesterday',
-    status: 'Pending'
-  },
-  {
-    receiptNo: 'REC-2026-0888',
-    student: 'Emma Watson',
-    rollNo: '2024-0199',
-    grade: 'Grade 6-A',
-    amount: '$850.00',
-    mode: 'Cheque (#40192)',
-    date: 'Yesterday',
-    status: 'Paid'
-  },
-  {
-    receiptNo: 'REC-2026-0887',
-    student: 'Ethan Carter',
-    rollNo: '2024-0672',
-    grade: 'Grade 11-B',
-    amount: '$1,350.00',
-    mode: 'Online (UPI)',
-    date: '04 Sep 2026',
-    status: 'Overdue'
-  }
-];
-
 export const SchoolAdminDashboard = () => {
-  const { theme } = useTheme();
+  const { theme, setActiveTab } = useTheme();
   const isDark = theme === 'dark';
 
   const [stats, setStats] = useState(null);
   const [hrm, setHrm] = useState(null);
-  const [receipts, setReceipts] = useState(MOCK_RECEIPTS);
+  const [receipts, setReceipts] = useState([]);
+  const [feeRows, setFeeRows] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [attendanceClasses, setAttendanceClasses] = useState([]);
+  const [presentCount, setPresentCount] = useState(0);
+  const [attendanceTotal, setAttendanceTotal] = useState(0);
   const [notices, setNotices] = useState([]);
   const [attendancePct, setAttendancePct] = useState(null);
   const [attendanceSeries, setAttendanceSeries] = useState(null);
@@ -106,18 +59,19 @@ export const SchoolAdminDashboard = () => {
     }
     try {
       const list = await feeService.collections.list();
-      if (Array.isArray(list) && list.length) {
+      if (Array.isArray(list)) {
+        setFeeRows(list);
         const totalCollected = list.reduce((sum, r) => sum + (parseFloat(r.amount) || 0), 0);
         setReceipts(
           list.slice(0, 5).map((r, i) => ({
-            receiptNo: `REC-${r.id || 2026000 + i}`,
+            receiptNo: r.receiptNo || String(r.id),
             student: r.name,
             rollNo: r.rollNo,
             grade: r.className,
             amount: `$${Number(parseFloat(r.amount) || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-            mode: r.paymentType || 'Cash',
+            mode: r.paymentType || '—',
             date: r.date || '—',
-            status: r.status || 'Paid'
+            status: r.status || '—'
           }))
         );
       }
@@ -138,8 +92,14 @@ export const SchoolAdminDashboard = () => {
       nextErrors.notices = e.message;
     }
     try {
-      const res = await attendanceService.list('type=STUDENT');
+      const today = new Date();
+      const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const res = await attendanceService.list(`type=STUDENT&date=${date}`);
       const list = Array.isArray(res) ? res : (Array.isArray(res?.data) ? res.data : []);
+      setPresentCount(list.filter(r => (r.status || '').toLowerCase() === 'present').length);
+      setAttendanceTotal(list.length);
+      setAttendanceClasses([]); setAttendanceSeries([]);
+      setAttendancePct(list.length ? null : 0);
       if (list.length) {
         const present = list.filter((r) => (r.status || '').toLowerCase() === 'present').length;
         setAttendancePct(Math.round((present / list.length) * 1000) / 10);
@@ -150,6 +110,7 @@ export const SchoolAdminDashboard = () => {
           byClass[c].total += 1;
           if ((r.status || '').toLowerCase() === 'present') byClass[c].present += 1;
         });
+        setAttendanceClasses(Object.keys(byClass));
         setAttendanceSeries(
           Object.entries(byClass).map(([c, v]) => Math.round((v.present / v.total) * 1000) / 10)
         );
@@ -157,6 +118,7 @@ export const SchoolAdminDashboard = () => {
     } catch (e) {
       nextErrors.attendance = e.message;
     }
+    try { const list = await accountService.transactions.list(); setTransactions(Array.isArray(list) ? list : []); } catch (e) { nextErrors.accounts = e.message; }
     setErrors(nextErrors);
   }, []);
 
@@ -165,15 +127,20 @@ export const SchoolAdminDashboard = () => {
   }, [fetchDashboard]);
 
   // Timed settings derived from API
-  const totalStudents = stats ? stats.totalStudents : 2840;
+  const totalStudents = stats?.totalStudents || 0;
   const totalTeachersStaff = stats
     ? stats.totalTeachers + (hrm ? (hrm.supportStaff || 0) : 0)
-    : 185;
-  const boys = stats ? stats.boys : 1480;
-  const girls = stats ? stats.girls : 1260;
-  const special = stats ? stats.otherStudents : 100;
-  const todayAttendanceValue = attendancePct ? `${attendancePct}%` : '96.4%';
+    : 0;
+  const boys = stats?.boys || 0;
+  const girls = stats?.girls || 0;
+  const special = stats?.otherStudents || 0;
+  const todayAttendanceValue = attendancePct != null ? `${attendancePct}%` : '—';
 
+  const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(); return new Date(d.getFullYear(), d.getMonth() - 5 + i, 1); });
+  const monthKey = date => { const d = new Date(date); return `${d.getFullYear()}-${d.getMonth()}`; };
+  const paidAmount = row => Number.parseFloat(row.paid) || ((row.status || '').toLowerCase() === 'paid' ? Number.parseFloat(row.amount) || 0 : 0);
+  const monthlyCollected = feeRows.filter(row => monthKey(row.date) === monthKey(new Date())).reduce((total, row) => total + paidAmount(row), 0);
+  const outstanding = feeRows.reduce((total, row) => total + (Number.parseFloat(row.due) || 0), 0);
   // Fee Collection vs Expenses Area Chart Options
   const feeChartOptions = {
     chart: {
@@ -194,7 +161,7 @@ export const SchoolAdminDashboard = () => {
     },
     dataLabels: { enabled: false },
     xaxis: {
-      categories: ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'],
+      categories: months.map(d => d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })),
       labels: {
         style: { colors: isDark ? '#9ca3af' : '#64748b', fontFamily: 'Plus Jakarta Sans' }
       },
@@ -216,8 +183,8 @@ export const SchoolAdminDashboard = () => {
   };
 
   const feeChartSeries = [
-    { name: 'Fees Collected', data: [110, 145, 128, 160, 152, 148.5] },
-    { name: 'Operational Expenses', data: [85, 92, 88, 98, 95, 91] }
+    { name: 'Fees Collected', data: months.map(month => feeRows.filter(row => monthKey(row.date) === monthKey(month)).reduce((total, row) => total + paidAmount(row), 0)) },
+    { name: 'Operational Expenses', data: months.map(month => transactions.filter(row => (row.transactionType || '').toLowerCase() === 'expense' && monthKey(row.transactionDate) === monthKey(month)).reduce((total, row) => total + Number(row.amount || 0), 0)) }
   ];
 
   // Grade Attendance Column Chart Options
@@ -237,7 +204,7 @@ export const SchoolAdminDashboard = () => {
     colors: ['#2563eb', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#14b8a6', '#6366f1', '#a855f7', '#f43f5e', '#10b981'],
     dataLabels: { enabled: false },
     xaxis: {
-      categories: ['Gr 1', 'Gr 2', 'Gr 3', 'Gr 4', 'Gr 5', 'Gr 6', 'Gr 7', 'Gr 8', 'Gr 9', 'Gr 10', 'Gr 11', 'Gr 12'],
+      categories: attendanceClasses,
       labels: {
         style: { colors: isDark ? '#9ca3af' : '#64748b', fontFamily: 'Plus Jakarta Sans', fontSize: '11px' }
       },
@@ -260,7 +227,7 @@ export const SchoolAdminDashboard = () => {
   };
 
   const attendanceChartSeries = [
-    { name: 'Attendance Rate', data: [98, 96, 97, 95, 96, 94, 95, 93, 97, 98, 95, 96] }
+    { name: 'Attendance Rate', data: [] }
   ];
 
   // Demographics Donut Chart Options
@@ -303,6 +270,7 @@ export const SchoolAdminDashboard = () => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {Object.values(errors).map((message, index) => <p role="alert" key={index}>{message}</p>)}
       {/* Top Banner & Quick Actions */}
       <div
         className="card animate-fade-in"
@@ -331,15 +299,15 @@ export const SchoolAdminDashboard = () => {
                 borderRadius: 'var(--radius-full)'
               }}
             >
-              Academic Year 2026–2027
+              School Overview
             </span>
             <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>
-              Term 1 | Sunday, Sep 06, 2026
+              {new Date().toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </span>
           </div>
 
           <h2 style={{ fontSize: '1.65rem', fontWeight: 800, marginTop: '8px', color: 'var(--text-primary)' }}>
-            Good morning, Principal Dr. Arthur Vance! 🎓
+            Welcome, {authStorage.getUser()?.name || 'School administrator'}
           </h2>
           <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
             Here is your daily school management operational summary, attendance metrics, and fee collection overview.
@@ -348,19 +316,19 @@ export const SchoolAdminDashboard = () => {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button className="btn btn-primary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
+          <button onClick={() => setActiveTab('students')} className="btn btn-primary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
             <Plus size={16} /> Add Student
           </button>
 
-          <button className="btn btn-secondary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
+          <button onClick={() => setActiveTab('attendance-student')} className="btn btn-secondary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
             <CalendarCheck size={16} /> Record Attendance
           </button>
 
-          <button className="btn btn-secondary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
+          <button onClick={() => setActiveTab('fees-collect')} className="btn btn-secondary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
             <Receipt size={16} /> Collect Fee
           </button>
 
-          <button className="btn btn-secondary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
+          <button onClick={() => setActiveTab('notice')} className="btn btn-secondary" style={{ padding: '10px 16px', fontSize: '0.85rem' }}>
             <Bell size={16} /> Post Notice
           </button>
         </div>
@@ -385,7 +353,7 @@ export const SchoolAdminDashboard = () => {
             >
               <GraduationCap size={24} />
             </div>
-            <span className="badge badge-success">+120 new</span>
+
           </div>
 
           <div>
@@ -415,7 +383,7 @@ export const SchoolAdminDashboard = () => {
             >
               <UserCheck size={24} />
             </div>
-            <span className="badge badge-info">178 Present</span>
+
           </div>
 
           <div>
@@ -424,7 +392,7 @@ export const SchoolAdminDashboard = () => {
           </div>
 
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-            120 Faculty Teachers | {hrm ? (hrm.supportStaff || 0) : 65} Support Staff
+            {stats?.totalTeachers || 0} Faculty Teachers | {hrm?.supportStaff || 0} Support Staff
           </div>
         </div>
 
@@ -445,7 +413,7 @@ export const SchoolAdminDashboard = () => {
             >
               <CalendarCheck size={24} />
             </div>
-            <span className="badge badge-success">+1.2% vs yesterday</span>
+
           </div>
 
           <div>
@@ -454,7 +422,7 @@ export const SchoolAdminDashboard = () => {
           </div>
 
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-            2,738 Present | 102 Absent / Leave
+            {presentCount} Present | {attendanceTotal - presentCount} Absent / Leave
           </div>
         </div>
 
@@ -475,16 +443,16 @@ export const SchoolAdminDashboard = () => {
             >
               <DollarSign size={24} />
             </div>
-            <span className="badge badge-warning">88.5% Target</span>
+
           </div>
 
           <div>
-            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>$148,500</span>
+            <span style={{ fontSize: '1.9rem', fontWeight: 800 }}>{monthlyCollected.toLocaleString()}</span>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Monthly Fees Collected</div>
           </div>
 
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', borderTop: '1px solid var(--border-light)', paddingTop: '8px' }}>
-            $19,200 Outstanding Overdue
+            {outstanding.toLocaleString()} Outstanding
           </div>
         </div>
       </div>
@@ -674,11 +642,7 @@ export const SchoolAdminDashboard = () => {
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {(notices.length ? notices : [
-                { title: 'Mid-Term Exam Timetable Announced', tag: 'Exams', date: '05 Sep', type: 'warning' },
-                { title: 'Annual Sports Day Registrations Open', tag: 'Events', date: '04 Sep', type: 'info' },
-                { title: 'Parent-Teacher Meeting (PTM) Scheduled', tag: 'PTM', date: '02 Sep', type: 'success' }
-              ]).map((n, i) => (
+              {notices.map((n, i) => (
                 <div
                   key={i}
                   style={{

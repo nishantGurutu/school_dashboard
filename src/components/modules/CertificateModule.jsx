@@ -100,7 +100,7 @@ export const CertificateModule = () => {
     studentId: '',
     rollNo: '',
     avatar: '',
-    date: '15/05/2025',
+    date: new Date().toLocaleDateString('en-GB'),
     footerLeftText: '',
     footerRightText: ''
   });
@@ -306,12 +306,13 @@ export const CertificateModule = () => {
         (s) => String(s.id) === String(formData.studentId) || s.name === formData.studentName
       );
 
-      const studentName = formData.studentName || matchedStudent?.name || 'Student';
-      const studentRollNo = formData.rollNo || matchedStudent?.rollNo || '1';
+      if (!matchedStudent?.admissionNo) throw new Error('Select an enrolled student with an admission number.');
+      const studentName = matchedStudent.name;
+      const studentRollNo = matchedStudent.rollNo || '';
       const studentClass = formData.className && formData.className !== 'Select Class'
         ? (formData.section && formData.section !== 'Select Section' ? `${formData.className} (${formData.section})` : formData.className)
-        : (matchedStudent?.className || 'Class 1');
-      const studentAvatar = formData.avatar || matchedStudent?.avatar || matchedStudent?.studentPhoto || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80';
+        : (matchedStudent.className || '');
+      const studentAvatar = matchedStudent.avatar || matchedStudent.studentPhoto || '';
 
       if (editingItem) {
         const updated = await certificateService.update(editingItem.id, {
@@ -319,6 +320,7 @@ export const CertificateModule = () => {
           certificateName: formData.certificateName.trim(),
           className: studentClass,
           name: studentName,
+          admissionNo: matchedStudent?.admissionNo || formData.admissionNo,
           rollNo: studentRollNo,
           avatar: studentAvatar,
           date: formData.date || editingItem.date,
@@ -330,6 +332,7 @@ export const CertificateModule = () => {
       } else {
         const created = await certificateService.create({
           name: studentName,
+          admissionNo: matchedStudent?.admissionNo || formData.admissionNo,
           rollNo: studentRollNo,
           className: studentClass,
           certificateName: formData.certificateName.trim(),
