@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { authStorage } from '../../services/api';
 import { roleFor, visibleMenu } from '../../config/roleAccess';
+import schoolDeskLogo from '../../assets/school_desk_logo.png';
 import {
   Home,
   GraduationCap,
@@ -238,26 +239,21 @@ export const Sidebar = () => {
           height: 'var(--header-height)',
           display: 'flex',
           alignItems: 'center',
-          padding: isSidebarCollapsed ? '0 20px' : '0 24px',
+          padding: isSidebarCollapsed ? '0 18px' : '0 20px',
           gap: '12px',
           borderBottom: '1px solid var(--border-light)'
         }}
       >
-        <div
+        <img
+          src={schoolDeskLogo}
+          alt="School Desk"
           style={{
-            width: '36px',
-            height: '36px',
-            borderRadius: '10px',
-            background: 'linear-gradient(135deg, #0d9488 0%, #06b6d4 50%, #2563eb 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(13, 148, 136, 0.3)',
+            width: isSidebarCollapsed ? '38px' : '42px',
+            height: isSidebarCollapsed ? '38px' : '42px',
+            objectFit: 'contain',
             flexShrink: 0
           }}
-        >
-          <GraduationCap size={22} color="#ffffff" />
-        </div>
+        />
         {!isSidebarCollapsed && (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span
@@ -270,7 +266,7 @@ export const Sidebar = () => {
                 lineHeight: 1.1
               }}
             >
-              EduDash
+              School Desk
             </span>
             <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.5px' }}>
               SCHOOL MANAGEMENT
@@ -279,39 +275,8 @@ export const Sidebar = () => {
         )}
       </div>
 
-      {/* Admin Profile Widget matching screenshot */}
-      {!isSidebarCollapsed && (
-        <div
-          style={{
-            margin: '12px 12px 4px 12px',
-            padding: '10px 14px',
-            backgroundColor: 'var(--bg-app)',
-            borderRadius: 'var(--radius-md)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            border: '1px solid var(--border-light)'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <img
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80"
-              alt="Admin"
-              style={{ width: '32px', height: '32px', borderRadius: '50%', objectFit: 'cover' }}
-            />
-            <div>
-              <div style={{ fontSize: '0.85rem', fontWeight: 700, lineHeight: 1.2 }}>{(currentUser && currentUser.name) || 'Admin'}</div>
-              <div style={{ fontSize: '0.7rem', color: '#0d9488', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                {normalizedRole.replace('_', ' ')}
-              </div>
-            </div>
-          </div>
-          <ChevronRight size={16} color="var(--text-muted)" />
-        </div>
-      )}
-
       {/* Sidebar Function List */}
-      <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+      <div style={{ padding: '12px 12px 8px 12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
         {visibleMenuItems.map((item) => {
           const IconComp = item.icon;
           const isActive = isItemActive(item);

@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { AlertCircle, Eye, EyeOff, GraduationCap, LockKeyhole, Mail, ShieldCheck } from 'lucide-react';
 import { authService } from '../../services/authService';
 import { Spinner } from '../ui/Spinner';
+import schoolDeskLogo from '../../assets/school_desk_logo.png';
 
 export const LoginScreen = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -52,12 +53,12 @@ export const LoginScreen = ({ onLogin }) => {
 
   return (
     <main className="login-screen">
-      <section className="login-visual-panel" aria-label="EduDash school community">
+      <section className="login-visual-panel" aria-label="School Desk community">
         <div className="login-visual-overlay" />
         <div className="login-visual-content">
           <div className="login-visual-brand">
-            <span className="login-brand-mark"><GraduationCap size={25} /></span>
-            <span>EduDash</span>
+            <img src={schoolDeskLogo} alt="School Desk" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
+            <span>School Desk</span>
           </div>
           <div>
             <p className="login-visual-kicker">SMARTER SCHOOL MANAGEMENT</p>
@@ -73,8 +74,8 @@ export const LoginScreen = ({ onLogin }) => {
       <section className="login-form-panel">
         <div className="login-form-wrap">
           <div className="login-mobile-brand">
-            <span className="login-brand-mark"><GraduationCap size={22} /></span>
-            <span>EduDash</span>
+            <img src={schoolDeskLogo} alt="School Desk" style={{ width: '36px', height: '36px', objectFit: 'contain' }} />
+            <span>School Desk</span>
           </div>
           <div className="login-heading">
             <p className="login-eyebrow">ADMIN PORTAL</p>
@@ -154,7 +155,7 @@ export const LoginScreen = ({ onLogin }) => {
             </button>
           </form>
 
-          <p className="login-help">Need help signing in? <a href="mailto:support@edudash.example">Contact support</a></p>
+          <p className="login-help">Need help signing in? <a href="mailto:support@schooldesk.com">Contact support</a></p>
         </div>
       </section>
     </main>
