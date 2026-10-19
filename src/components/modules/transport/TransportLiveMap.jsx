@@ -693,8 +693,8 @@ export const TransportLiveMap = ({
           <div style="background: #f8fafc; border-radius: 8px; padding: 8px; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; font-size: 11px; margin-bottom: 8px;">
             <div><strong>Speed:</strong> <span style="color: ${speed > 45 ? '#ef4444' : '#0d9488'}; font-weight: 800;">${speed} km/h</span></div>
             <div><strong>Traveled:</strong> <span style="color: #0d9488; font-weight: 800;">${bus.traveledDistanceKm || 7.8} km</span></div>
-            <div><strong>Driver:</strong> ${bus.driverName || 'Ramesh Kumar'}</div>
-            <div><strong>Phone:</strong> ${bus.driverPhone || '+91 98765 43210'}</div>
+            <div><strong>Driver:</strong> ${bus.driverName || 'Not Assigned'}</div>
+            <div><strong>Phone:</strong> ${bus.driverPhone || 'N/A'}</div>
             <div><strong>Next Stop:</strong> ${bus.nextStopName || 'Campus Depot'}</div>
             <div><strong>Destination:</strong> ${destinationStop?.stopName || 'School Main Gate'}</div>
           </div>

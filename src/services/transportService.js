@@ -2,85 +2,17 @@ import { apiRequest } from './api';
 import { API_ENDPOINTS } from './apiConfig';
 
 const MOCK_FALLBACK_OVERVIEW = {
-  totalBuses: 3,
-  activeTrips: 1,
-  idleBuses: 2,
-  delayedTrips: 1,
+  totalBuses: 0,
+  activeTrips: 0,
+  idleBuses: 0,
+  delayedTrips: 0,
   offlineGpsCount: 0,
-  openAlertsCount: 1,
-  totalRoutes: 2,
-  totalDrivers: 2,
-  totalStudentsAssigned: 42,
-  liveBuses: [
-    {
-      busId: 3,
-      busNumber: 'Bus 04',
-      registrationNumber: 'MH-02-EF-4004',
-      tripId: 1,
-      tripStatus: 'IN_PROGRESS',
-      driverId: 1,
-      driverName: 'Ramesh Kumar',
-      driverPhone: '+91 98765 43210',
-      routeId: 1,
-      routeName: 'Route 1 - North Campus Loop',
-      shift: 'MORNING',
-      currentLatitude: 25.6025,
-      currentLongitude: 85.1430,
-      currentSpeedKmh: 34.0,
-      heading: 150.0,
-      lastGpsUpdate: new Date().toISOString(),
-      isGpsOnline: true,
-      currentStopName: 'Central Mall Junction',
-      nextStopName: 'Kankarbagh Park',
-      nextStopEtaMinutes: 6,
-      completedStops: 2,
-      totalStops: 5,
-      traveledDistanceKm: 7.8,
-      totalRouteDistanceKm: 18.5,
-      openAlertsCount: 1
-    },
-    {
-      busId: 1,
-      busNumber: 'Bus 01',
-      registrationNumber: 'MH-02-AB-1001',
-      tripId: null,
-      tripStatus: 'IDLE',
-      driverId: 2,
-      driverName: 'Suresh Yadav',
-      driverPhone: '+91 98123 45678',
-      routeId: 2,
-      routeName: 'Route 2 - South Residential Belt',
-      shift: 'MORNING',
-      currentLatitude: 25.6120,
-      currentLongitude: 85.1320,
-      currentSpeedKmh: 0.0,
-      heading: 0.0,
-      lastGpsUpdate: new Date(Date.now() - 120000).toISOString(),
-      isGpsOnline: true,
-      currentStopName: 'Campus Depot',
-      nextStopName: 'Ready for Dispatch',
-      nextStopEtaMinutes: 0,
-      completedStops: 0,
-      totalStops: 6,
-      traveledDistanceKm: 0.0,
-      totalRouteDistanceKm: 22.0,
-      openAlertsCount: 0
-    }
-  ],
-  recentAlerts: [
-    {
-      id: 1,
-      tripId: 1,
-      busId: 3,
-      busNumber: 'Bus 04',
-      alertType: 'DELAY',
-      severity: 'INFO',
-      title: 'Traffic Congestion on Metro Corridor',
-      message: 'Slight 4-minute delay due to peak hour traffic near Metro Station Pillar 42.',
-      status: 'OPEN',
-      createdAt: new Date(Date.now() - 300000).toISOString()
-    }
-  ]
+  openAlertsCount: 0,
+  totalRoutes: 0,
+  totalDrivers: 0,
+  totalStudentsAssigned: 0,
+  liveBuses: [],
+  recentAlerts: []
 };
 
 export const transportService = {
@@ -173,40 +105,7 @@ export const transportService = {
       const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.DRIVERS}?schoolId=${schoolId}`);
       return Array.isArray(res) ? res : [];
     } catch {
-      return [
-        {
-          id: 1,
-          name: 'Ramesh Kumar',
-          email: 'driver@school.com',
-          phone: '+91 98765 43210',
-          licenseNumber: 'DL-0420110056789',
-          licenseExpiryDate: '2029-06-30',
-          licenseCategory: 'COMMERCIAL_HEAVY',
-          experienceYears: 8,
-          verificationStatus: 'VERIFIED',
-          status: 'ACTIVE',
-          assignedBusNumber: 'Bus 04',
-          assignedRouteName: 'Route 1 - North Campus Loop',
-          dutyStatus: 'IN_TRIP',
-          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80'
-        },
-        {
-          id: 2,
-          name: 'Suresh Yadav',
-          email: 'suresh.driver@school.com',
-          phone: '+91 98123 45678',
-          licenseNumber: 'DL-0420150012345',
-          licenseExpiryDate: '2028-09-15',
-          licenseCategory: 'COMMERCIAL_HEAVY',
-          experienceYears: 6,
-          verificationStatus: 'VERIFIED',
-          status: 'ACTIVE',
-          assignedBusNumber: 'Bus 01',
-          assignedRouteName: 'Route 2 - South Residential Belt',
-          dutyStatus: 'SCHEDULED',
-          avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=150&q=80'
-        }
-      ];
+      return [];
     }
   },
 
@@ -343,40 +242,7 @@ export const transportService = {
       const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.ASSIGNMENTS}?schoolId=${schoolId}`);
       return Array.isArray(res) ? res : [];
     } catch {
-      return [
-        {
-          id: 1,
-          driverId: 1,
-          driverName: 'Ramesh Kumar',
-          driverPhone: '+91 98765 43210',
-          busId: 3,
-          busNumber: 'Bus 04',
-          registrationNumber: 'MH-02-EF-4004',
-          routeId: 1,
-          routeName: 'Route 1 - North Campus Loop',
-          routeCode: 'RT-NORTH-01',
-          shift: 'BOTH',
-          effectiveStartDate: '2026-09-01',
-          status: 'ACTIVE',
-          notes: 'Regular driver assignment'
-        },
-        {
-          id: 2,
-          driverId: 2,
-          driverName: 'Suresh Yadav',
-          driverPhone: '+91 98123 45678',
-          busId: 1,
-          busNumber: 'Bus 01',
-          registrationNumber: 'MH-02-AB-1001',
-          routeId: 2,
-          routeName: 'Route 2 - South Residential Belt',
-          routeCode: 'RT-SOUTH-02',
-          shift: 'BOTH',
-          effectiveStartDate: '2026-09-01',
-          status: 'ACTIVE',
-          notes: 'Southern loop'
-        }
-      ];
+      return [];
     }
   },
 
@@ -556,28 +422,7 @@ export const transportService = {
       const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.TRIP_REPORTS}${query}`);
       return Array.isArray(res) ? res : [];
     } catch {
-      return [
-        {
-          tripId: 1,
-          busNumber: 'Bus 04',
-          registrationNumber: 'MH-02-EF-4004',
-          driverName: 'Ramesh Kumar',
-          routeName: 'Route 1 - North Campus Loop',
-          routeCode: 'RT-NORTH-01',
-          shift: 'MORNING',
-          tripDate: new Date().toISOString().split('T')[0],
-          status: 'IN_PROGRESS',
-          actualStartTime: new Date(Date.now() - 1500000).toISOString(),
-          totalDistanceKm: 7.8,
-          currentSpeedKmh: 34.0,
-          completedStopsCount: 2,
-          totalStopsCount: 5,
-          currentStopName: 'Central Mall Junction',
-          nextStopName: 'Kankarbagh Park',
-          nextStopEtaMinutes: 6,
-          incidentCount: 0
-        }
-      ];
+      return [];
     }
   },
 

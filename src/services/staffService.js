@@ -2,6 +2,7 @@ import NetworkService from './networkService';
 import { API_ENDPOINTS } from './apiConfig';
 
 export const staffService = {
+  availableBuses: () => NetworkService.get(`${API_ENDPOINTS.STAFF.BASE}/available-buses`),
   list: (params = '') => {
     let queryParams = {};
     if (typeof params === 'string') {

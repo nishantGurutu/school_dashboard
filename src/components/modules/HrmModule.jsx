@@ -22,6 +22,9 @@ export const HrmModule = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [modalError, setModalError] = useState('');
+  const [availableBuses, setAvailableBuses] = useState([]);
+  const [busLoading, setBusLoading] = useState(false);
+  const [busError, setBusError] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -33,7 +36,8 @@ export const HrmModule = () => {
     salary: '',
     joinDate: new Date().toISOString().split('T')[0],
     status: 'ACTIVE',
-    password: ''
+    password: '',
+    busId: ''
   });
 
   const fetchHrm = useCallback(async () => {
@@ -63,6 +67,30 @@ export const HrmModule = () => {
   useEffect(() => {
     fetchHrm();
   }, [fetchHrm]);
+
+  const isDriver = formData.role === 'DRIVER' || /driver|conductor/i.test(formData.designation) || /driver/i.test(formData.staffType);
+
+  useEffect(() => {
+    if (!showAddModal || !isDriver) {
+      setAvailableBuses([]);
+      setBusError('');
+      setBusLoading(false);
+      setFormData(previous => previous.busId ? { ...previous, busId: '' } : previous);
+      return;
+    }
+    let cancelled = false;
+    setBusLoading(true);
+    setBusError('');
+    staffService.availableBuses().then(result => {
+      if (cancelled) return;
+      const buses = Array.isArray(result) ? result : [];
+      setAvailableBuses(buses);
+      setFormData(previous => buses.some(bus => String(bus.id) === String(previous.busId)) ? previous : { ...previous, busId: '' });
+    }).catch(error => {
+      if (!cancelled) { setAvailableBuses([]); setBusError(error.message || 'Could not load available buses'); }
+    }).finally(() => { if (!cancelled) setBusLoading(false); });
+    return () => { cancelled = true; };
+  }, [showAddModal, isDriver]);
 
   const handleNumericKeyDown = (e) => {
     if (
@@ -100,6 +128,9 @@ export const HrmModule = () => {
     } else if (selectedRole === 'SUPER_ADMIN') {
       defaultType = 'Administration';
       defaultDesig = 'System Administrator';
+    } else if (selectedRole === 'DRIVER') {
+      defaultType = 'Transportation';
+      defaultDesig = 'Bus Driver';
     } else if (selectedRole === 'STAFF') {
       defaultType = 'Administration';
       defaultDesig = 'Office Administrator';
@@ -109,7 +140,8 @@ export const HrmModule = () => {
       ...prev,
       role: selectedRole,
       staffType: defaultType,
-      designation: defaultDesig
+      designation: defaultDesig,
+      busId: ''
     }));
   };
 
@@ -124,7 +156,8 @@ export const HrmModule = () => {
       salary: '',
       joinDate: new Date().toISOString().split('T')[0],
       status: 'ACTIVE',
-      password: ''
+      password: '',
+      busId: ''
     });
     setModalError('');
     setShowAddModal(true);
@@ -145,12 +178,16 @@ export const HrmModule = () => {
       return;
     }
 
+    if (isDriver && (busLoading || busError || !availableBuses.some(bus => String(bus.id) === String(formData.busId)))) {
+      setModalError(busError || 'Select an available unassigned bus for this driver');
+      return;
+    }
     setIsSubmitting(true);
     setModalError('');
     try {
       const payload = {
         name: formData.name.trim(),
-        role: formData.role,
+        role: isDriver ? 'DRIVER' : formData.role,
         staffType: formData.staffType,
         designation: formData.designation.trim() || formData.role,
         phone: formData.phone.trim(),
@@ -158,7 +195,8 @@ export const HrmModule = () => {
         salary: formData.salary ? parseFloat(formData.salary) : 0,
         joinDate: formData.joinDate,
         status: formData.status,
-        password: formData.password.trim()
+        password: formData.password.trim(),
+        ...(isDriver ? { busId: Number(formData.busId) } : {})
       };
 
       const created = await staffService.create(payload);
@@ -172,6 +210,13 @@ export const HrmModule = () => {
     } catch (err) {
       toast.error(err.message || 'Failed to create staff member', 'Staff & HRM');
       setModalError(err.message || 'Failed to create staff member');
+      if (isDriver) {
+        try {
+          const buses = await staffService.availableBuses();
+          setAvailableBuses(Array.isArray(buses) ? buses : []);
+          setFormData(previous => ({ ...previous, busId: '' }));
+        } catch { setAvailableBuses([]); setBusError('Could not refresh available buses. Reopen the form to retry.'); }
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -196,6 +241,7 @@ export const HrmModule = () => {
     const rawDesig = (staff.designation || '').toUpperCase();
     const rawType = (staff.staffType || '').toUpperCase();
 
+    if (rawRole.includes('DRIVER') || rawDesig.includes('DRIVER') || rawDesig.includes('CONDUCTOR') || rawType.includes('DRIVER')) return 'DRIVER';
     if (rawRole.includes('PRINCIPAL') || rawDesig.includes('PRINCIPAL') || rawType.includes('PRINCIPAL')) {
       return 'PRINCIPAL';
     }
@@ -213,6 +259,8 @@ export const HrmModule = () => {
 
   const getRoleBadge = (role) => {
     switch (role) {
+      case 'DRIVER':
+        return { label: 'Driver', bg: '#e0f2fe', text: '#0369a1', border: '#7dd3fc' };
       case 'PRINCIPAL':
         return { label: 'Principal (Head)', bg: '#f3e8ff', text: '#7e22ce', border: '#d8b4fe' };
       case 'ACCOUNTANT':
@@ -450,6 +498,7 @@ export const HrmModule = () => {
             {[
               { id: 'ALL', label: 'All Staff' },
               { id: 'PRINCIPAL', label: 'Principals' },
+              { id: 'DRIVER', label: 'Drivers' },
               { id: 'ACCOUNTANT', label: 'Accountants' },
               { id: 'LIBRARIAN', label: 'Librarians' },
               { id: 'STAFF', label: 'Administrative Staff' }
@@ -636,7 +685,7 @@ export const HrmModule = () => {
               <div>
                 <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>Add School Staff / Principal</h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                  Assign role permissions and create credentials for Principal, Accountant, Librarian, or Staff
+                  Assign role permissions and create credentials for Principal, Accountant, Librarian, Driver, or Staff
                 </p>
               </div>
               <button
@@ -688,6 +737,7 @@ export const HrmModule = () => {
                   <option value="PRINCIPAL">👑 Principal (Head of School - Academic & Admin Access)</option>
                   <option value="ACCOUNTANT">💰 Accountant (Finance & Fees Collection Access)</option>
                   <option value="LIBRARIAN">📚 Librarian (Library & Books Inventory Access)</option>
+                  <option value="DRIVER">🚌 Driver (School Bus & Trip Access)</option>
                   <option value="STAFF">🏢 Administrative Staff (General Office & Student Support)</option>
                   <option value="SUPER_ADMIN">⚡ Super Admin (Full Unrestricted System Access)</option>
                 </select>
@@ -695,6 +745,19 @@ export const HrmModule = () => {
                   Selecting this role will configure user dashboard modules and mobile app access according to RBAC rules.
                 </span>
               </div>
+
+              {isDriver && (
+                <div>
+                  <label htmlFor="staff-driver-bus" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: 6 }}>Assign Bus <span style={{ color: '#ef4444' }}>*</span></label>
+                  <select id="staff-driver-bus" value={formData.busId} onChange={event => handleChange('busId', event.target.value)}
+                    required disabled={busLoading || !!busError || availableBuses.length === 0} style={modalInputStyle}>
+                    <option value="">{busLoading ? 'Loading unassigned buses…' : 'Select an unassigned bus'}</option>
+                    {availableBuses.map(bus => <option key={bus.id} value={bus.id}>{bus.busNumber} — {bus.registrationNumber}</option>)}
+                  </select>
+                  {busError && <p role="alert" style={{ color: '#ef4444' }}>{busError}</p>}
+                  {!busLoading && !busError && availableBuses.length === 0 && <p>No unassigned buses available. Add or unassign a bus first.</p>}
+                </div>
+              )}
 
               <div className="grid-responsive">
                 <div className="col-span-6">
@@ -859,7 +922,7 @@ export const HrmModule = () => {
                 <button
                   type="submit"
                   className="btn btn-primary"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || (isDriver && (busLoading || !!busError || !formData.busId || availableBuses.length === 0))}
                   style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}
                 >
                   {isSubmitting && <Spinner size={16} color="#ffffff" />}

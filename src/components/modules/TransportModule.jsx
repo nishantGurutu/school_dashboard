@@ -1713,6 +1713,42 @@ export const TransportModule = () => {
                 </div>
               </div>
             ))}
+            {filteredDrivers.length === 0 && (
+              <div
+                style={{
+                  gridColumn: '1 / -1',
+                  textAlign: 'center',
+                  padding: '48px 24px',
+                  backgroundColor: 'var(--bg-card)',
+                  borderRadius: 'var(--radius-lg)',
+                  border: '1px dashed var(--border-color)'
+                }}
+              >
+                <Users size={40} color="var(--text-muted)" style={{ margin: '0 auto 12px', display: 'block' }} />
+                <h4 style={{ margin: '0 0 6px', color: 'var(--text-primary)' }}>No Drivers Found</h4>
+                <p style={{ margin: '0 0 16px', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  {driverSearch
+                    ? 'No drivers match your search query.'
+                    : 'To register a driver, go to Staff Directory / HRM and click "Add Staff" with Role or Designation set to Driver.'}
+                </p>
+                <button
+                  onClick={() => {
+                    if (setActiveTab) setActiveTab('teachers');
+                  }}
+                  style={{
+                    padding: '8px 18px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: '#0d9488',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Go to Staff Directory →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
