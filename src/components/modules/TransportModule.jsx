@@ -1,5 +1,5 @@
 import { trackingDataForBus } from './transport/trackingMapData';
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
 import { transportService } from '../../services/transportService';
@@ -23,6 +23,7 @@ import {
   Filter,
   Plus,
   RefreshCw,
+  Loader2,
   Eye,
   Sliders,
   Radio,
@@ -57,7 +58,20 @@ import {
 
 export const TransportModule = () => {
   const { activeTab, setActiveTab } = useTheme();
-  const { showToast } = useToast();
+  const toastContext = useToast();
+  const showToast = useCallback((msg, type = 'info', title = null) => {
+    try {
+      if (typeof toastContext?.showToast === 'function') {
+        toastContext.showToast(msg, type, title);
+      } else if (typeof toastContext?.[type] === 'function') {
+        toastContext[type](msg, title);
+      } else {
+        console.log(`[Toast ${type}]:`, msg);
+      }
+    } catch (e) {
+      console.warn('Toast display warning:', e);
+    }
+  }, [toastContext]);
 
   // Tab mapping
   const resolveInitialTab = () => {
@@ -111,6 +125,7 @@ export const TransportModule = () => {
   // Modals
   const [showAddBusModal, setShowAddBusModal] = useState(false);
   const [editingBus, setEditingBus] = useState(null);
+  const [isSavingBus, setIsSavingBus] = useState(false);
   const [showEditDriverModal, setShowEditDriverModal] = useState(false);
   const [editingDriver, setEditingDriver] = useState(null);
   const [showAddRouteModal, setShowAddRouteModal] = useState(false);
@@ -228,8 +243,8 @@ export const TransportModule = () => {
   });
 
   // Load initial data
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (showFullLoading = true) => {
+    if (showFullLoading) setLoading(true);
     try {
       const [ov, bList, dList, rList, asList, saList, liveList, alList, repList, fSum] = await Promise.all([
         transportService.getOverview(),
@@ -261,7 +276,7 @@ export const TransportModule = () => {
     } catch {
       showToast('Error loading transport data', 'error');
     } finally {
-      setLoading(false);
+      if (showFullLoading) setLoading(false);
     }
   };
 
@@ -324,15 +339,85 @@ export const TransportModule = () => {
 
   // Form Submissions
   const handleCreateOrUpdateBus = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
+    if (isSavingBus) return;
+    setIsSavingBus(true);
     try {
+      const payload = {
+        busNumber: busForm.busNumber?.trim(),
+        registrationNumber: busForm.registrationNumber?.trim(),
+        capacity: Number(busForm.capacity) || 40,
+        model: busForm.model?.trim() || null,
+        manufacturer: busForm.manufacturer?.trim() || null,
+        fuelType: busForm.fuelType || 'DIESEL',
+        gpsDeviceId: busForm.gpsDeviceId?.trim() || null,
+        insuranceExpiryDate: busForm.insuranceExpiryDate || null,
+        fitnessExpiryDate: busForm.fitnessExpiryDate || null,
+        permitExpiryDate: busForm.permitExpiryDate || null,
+        pollutionExpiryDate: busForm.pollutionExpiryDate || null,
+        status: busForm.status || 'ACTIVE'
+      };
+
       if (editingBus) {
-        await transportService.updateBus(editingBus.id, busForm);
+        const updated = await transportService.updateBus(editingBus.id, payload);
+        const resolvedBus = { ...editingBus, ...payload, ...(updated || {}) };
+        setBuses((prev) => (Array.isArray(prev) ? prev.map((b) => (b.id === editingBus.id ? resolvedBus : b)) : [resolvedBus]));
+        setLiveBuses((prev) =>
+          Array.isArray(prev)
+            ? prev.map((b) =>
+                (b.busId || b.id) === editingBus.id
+                  ? {
+                      ...b,
+                      busNumber: payload.busNumber,
+                      registrationNumber: payload.registrationNumber
+                    }
+                  : b
+              )
+            : []
+        );
         showToast('Bus details updated successfully', 'success');
       } else {
-        await transportService.createBus(busForm);
+        const created = await transportService.createBus(payload);
+        const newBus = created && created.id ? created : {
+          id: Date.now(),
+          ...payload,
+          assignmentStatus: 'AVAILABLE',
+          availableForAssignment: true
+        };
+        // Update buses list immediately
+        setBuses((prev) => [newBus, ...(Array.isArray(prev) ? prev.filter((b) => b.id !== newBus.id) : [])]);
+        // Update live fleet table immediately
+        setLiveBuses((prev) => [
+          {
+            busId: newBus.id,
+            busNumber: newBus.busNumber,
+            registrationNumber: newBus.registrationNumber,
+            tripStatus: 'IDLE',
+            driverName: 'Unassigned',
+            driverPhone: '',
+            routeName: 'No Route',
+            shift: 'MORNING',
+            currentSpeedKmh: 0,
+            nextStopName: 'Depot',
+            nextStopEtaMinutes: 5,
+            completedStops: 0,
+            totalStops: 5
+          },
+          ...(Array.isArray(prev) ? prev.filter((b) => (b.busId || b.id) !== newBus.id) : [])
+        ]);
+        setOverview((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalBuses: (prev.totalBuses || 0) + 1,
+                idleBuses: (prev.idleBuses || 0) + 1
+              }
+            : prev
+        );
         showToast('Bus added successfully', 'success');
       }
+
+      // Close modal immediately and clear state
       setShowAddBusModal(false);
       setEditingBus(null);
       setBusForm({
@@ -349,10 +434,77 @@ export const TransportModule = () => {
         pollutionExpiryDate: '',
         status: 'ACTIVE'
       });
-      loadData();
-    } catch {
-      showToast('Error saving bus', 'error');
+
+      // Background fast refresh
+      try {
+        const [freshBuses, freshLive, freshOverview] = await Promise.all([
+          transportService.getBuses(),
+          transportService.getLiveTracking(),
+          transportService.getOverview()
+        ]);
+        if (Array.isArray(freshBuses) && freshBuses.length > 0) setBuses(freshBuses);
+        if (Array.isArray(freshLive) && freshLive.length > 0) setLiveBuses(freshLive);
+        if (freshOverview) setOverview(freshOverview);
+      } catch (syncErr) {
+        console.warn('Background sync warning:', syncErr);
+      }
+    } catch (err) {
+      showToast(err?.apiMessage || err?.message || 'Error saving bus', 'error');
+    } finally {
+      setIsSavingBus(false);
     }
+  };
+
+  const handleDeleteBus = async (busId, busNumber) => {
+    if (!busId) {
+      showToast('Bus ID not found', 'error');
+      return;
+    }
+    if (window.confirm(`Are you sure you want to delete ${busNumber || 'this bus'}?`)) {
+      try {
+        await transportService.deleteBus(busId);
+        showToast(`Bus ${busNumber || ''} deleted successfully`, 'success');
+        setBuses((prev) => prev.filter((b) => b.id !== busId));
+        setLiveBuses((prev) => prev.filter((b) => (b.busId || b.id) !== busId));
+        setOverview((prev) =>
+          prev
+            ? {
+                ...prev,
+                totalBuses: Math.max(0, (prev.totalBuses || 1) - 1)
+              }
+            : prev
+        );
+        try {
+          const [freshBuses, freshLive] = await Promise.all([
+            transportService.getBuses(),
+            transportService.getLiveTracking()
+          ]);
+          if (Array.isArray(freshBuses)) setBuses(freshBuses);
+          if (Array.isArray(freshLive)) setLiveBuses(freshLive);
+        } catch {}
+      } catch (err) {
+        showToast(err?.apiMessage || err?.message || 'Error deleting bus', 'error');
+      }
+    }
+  };
+
+  const handleOpenAddBus = () => {
+    setEditingBus(null);
+    setBusForm({
+      busNumber: '',
+      registrationNumber: '',
+      capacity: 40,
+      model: '',
+      manufacturer: '',
+      fuelType: 'DIESEL',
+      gpsDeviceId: '',
+      insuranceExpiryDate: '',
+      fitnessExpiryDate: '',
+      permitExpiryDate: '',
+      pollutionExpiryDate: '',
+      status: 'ACTIVE'
+    });
+    setShowAddBusModal(true);
   };
 
   const handleOpenEditBus = (bus) => {
@@ -719,7 +871,7 @@ export const TransportModule = () => {
           </button>
 
           <button
-            onClick={() => setShowAddBusModal(true)}
+            onClick={handleOpenAddBus}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -1024,87 +1176,128 @@ export const TransportModule = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {liveBuses.map((bus) => (
-                    <tr key={bus.busId} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{bus.busNumber}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{bus.registrationNumber}</div>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: 600 }}>{bus.driverName}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{bus.driverPhone}</div>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: 600 }}>{bus.routeName}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Shift: {bus.shift}</div>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <span
-                          style={{
-                            padding: '3px 8px',
-                            borderRadius: '12px',
-                            fontSize: '0.72rem',
-                            fontWeight: 700,
-                            backgroundColor: bus.tripStatus === 'IN_PROGRESS' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(100, 116, 139, 0.15)',
-                            color: bus.tripStatus === 'IN_PROGRESS' ? '#10b981' : '#64748b'
-                          }}
-                        >
-                          {bus.tripStatus === 'IN_PROGRESS' ? '● IN TRANSIT' : '○ IDLE / READY'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: 700, color: bus.currentSpeedKmh > 45 ? '#ef4444' : '#0d9488' }}>
-                          {Math.round(bus.currentSpeedKmh)} km/h
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <div>{bus.nextStopName || 'Depot'}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#0d9488', fontWeight: 600 }}>
-                          ETA: {bus.nextStopEtaMinutes} mins
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px' }}>
-                        <div style={{ fontWeight: 600 }}>
-                          {bus.completedStops} / {bus.totalStops}
-                        </div>
-                        <div
-                          style={{
-                            width: '80px',
-                            height: '5px',
-                            backgroundColor: 'var(--bg-app)',
-                            borderRadius: '3px',
-                            overflow: 'hidden',
-                            marginTop: '4px'
-                          }}
-                        >
+                  {liveBuses.map((bus) => {
+                    const busEntity = buses.find((b) => b.id === bus.busId || b.busNumber === bus.busNumber);
+                    const targetBus = busEntity || {
+                      id: bus.busId,
+                      busNumber: bus.busNumber,
+                      registrationNumber: bus.registrationNumber,
+                      capacity: 40,
+                      fuelType: 'DIESEL',
+                      status: 'ACTIVE'
+                    };
+                    const targetId = targetBus.id || bus.busId;
+                    return (
+                      <tr key={bus.busId || bus.busNumber} style={{ borderBottom: '1px solid var(--border-light)' }}>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{bus.busNumber}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{bus.registrationNumber}</div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontWeight: 600 }}>{bus.driverName}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{bus.driverPhone}</div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontWeight: 600 }}>{bus.routeName}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Shift: {bus.shift}</div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <span
+                            style={{
+                              padding: '3px 8px',
+                              borderRadius: '12px',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              backgroundColor: bus.tripStatus === 'IN_PROGRESS' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(100, 116, 139, 0.15)',
+                              color: bus.tripStatus === 'IN_PROGRESS' ? '#10b981' : '#64748b'
+                            }}
+                          >
+                            {bus.tripStatus === 'IN_PROGRESS' ? '● IN TRANSIT' : '○ IDLE / READY'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontWeight: 700, color: bus.currentSpeedKmh > 45 ? '#ef4444' : '#0d9488' }}>
+                            {Math.round(bus.currentSpeedKmh)} km/h
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <div>{bus.nextStopName || 'Depot'}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#0d9488', fontWeight: 600 }}>
+                            ETA: {bus.nextStopEtaMinutes} mins
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px' }}>
+                          <div style={{ fontWeight: 600 }}>
+                            {bus.completedStops} / {bus.totalStops}
+                          </div>
                           <div
                             style={{
-                              width: `${(bus.completedStops / (bus.totalStops || 1)) * 100}%`,
-                              height: '100%',
-                              backgroundColor: '#0d9488'
+                              width: '80px',
+                              height: '5px',
+                              backgroundColor: 'var(--bg-app)',
+                              borderRadius: '3px',
+                              overflow: 'hidden',
+                              marginTop: '4px'
                             }}
-                          />
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px', textAlign: 'right' }}>
-                        <button
-                          onClick={() => handleTrackBusOnMap(bus)}
-                          style={{
-                            padding: '6px 12px',
-                            borderRadius: 'var(--radius-md)',
-                            backgroundColor: '#0d9488',
-                            color: '#ffffff',
-                            border: 'none',
-                            fontSize: '0.78rem',
-                            fontWeight: 700,
-                            cursor: 'pointer'
-                          }}
-                        >
-                          Track Live
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                          >
+                            <div
+                              style={{
+                                width: `${(bus.completedStops / (bus.totalStops || 1)) * 100}%`,
+                                height: '100%',
+                                backgroundColor: '#0d9488'
+                              }}
+                            />
+                          </div>
+                        </td>
+                        <td style={{ padding: '12px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            <button
+                              onClick={() => handleOpenEditBus(targetBus)}
+                              title="Edit Bus"
+                              aria-label="Edit Bus"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                                borderRadius: 'var(--radius-md)',
+                                backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                                color: '#0d9488',
+                                border: '1px solid rgba(13, 148, 136, 0.3)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <Edit2 size={15} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteBus(targetId, bus.busNumber)}
+                              title="Delete Bus"
+                              aria-label="Delete Bus"
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                width: '32px',
+                                height: '32px',
+                                padding: 0,
+                                borderRadius: 'var(--radius-md)',
+                                backgroundColor: 'rgba(239, 68, 68, 0.08)',
+                                color: '#ef4444',
+                                border: '1px solid rgba(239, 68, 68, 0.3)',
+                                cursor: 'pointer',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1135,24 +1328,7 @@ export const TransportModule = () => {
               />
             </div>
             <button
-              onClick={() => {
-                setEditingBus(null);
-                setBusForm({
-                  busNumber: '',
-                  registrationNumber: '',
-                  capacity: 40,
-                  model: '',
-                  manufacturer: '',
-                  fuelType: 'DIESEL',
-                  gpsDeviceId: '',
-                  insuranceExpiryDate: '',
-                  fitnessExpiryDate: '',
-                  permitExpiryDate: '',
-                  pollutionExpiryDate: '',
-                  status: 'ACTIVE'
-                });
-                setShowAddBusModal(true);
-              }}
+              onClick={handleOpenAddBus}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1336,39 +1512,43 @@ export const TransportModule = () => {
                   </button>
                   <button
                     onClick={() => handleOpenEditBus(bus)}
+                    title="Edit Bus"
+                    aria-label="Edit Bus"
                     style={{
-                      padding: '8px 12px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '36px',
+                      height: '36px',
+                      padding: 0,
                       borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'var(--bg-app)',
-                      border: '1px solid var(--border-color)',
-                      color: 'var(--text-primary)',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
+                      backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                      border: '1px solid rgba(13, 148, 136, 0.3)',
+                      color: '#0d9488',
                       cursor: 'pointer'
                     }}
                   >
-                    Edit
+                    <Edit2 size={16} />
                   </button>
                   <button
-                    onClick={async () => {
-                      if (window.confirm(`Delete ${bus.busNumber}?`)) {
-                        await transportService.deleteBus(bus.id);
-                        showToast('Bus removed', 'success');
-                        loadData();
-                      }
-                    }}
+                    onClick={() => handleDeleteBus(bus.id, bus.busNumber)}
+                    title="Delete Bus"
+                    aria-label="Delete Bus"
                     style={{
-                      padding: '8px 12px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '36px',
+                      height: '36px',
+                      padding: 0,
                       borderRadius: 'var(--radius-md)',
-                      backgroundColor: 'transparent',
+                      backgroundColor: 'rgba(239, 68, 68, 0.08)',
                       color: '#ef4444',
                       border: '1px solid rgba(239, 68, 68, 0.3)',
-                      fontSize: '0.8rem',
-                      fontWeight: 600,
                       cursor: 'pointer'
                     }}
                   >
-                    Delete
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
@@ -3097,6 +3277,12 @@ export const TransportModule = () => {
       {/* ============================================================== */}
       {showAddBusModal && (
         <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !isSavingBus) {
+              setShowAddBusModal(false);
+              setEditingBus(null);
+            }
+          }}
           style={{
             position: 'fixed',
             inset: 0,
@@ -3130,11 +3316,13 @@ export const TransportModule = () => {
                 </p>
               </div>
               <button
+                disabled={isSavingBus}
                 onClick={() => {
+                  if (isSavingBus) return;
                   setShowAddBusModal(false);
                   setEditingBus(null);
                 }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ background: 'none', border: 'none', cursor: isSavingBus ? 'not-allowed' : 'pointer' }}
               >
                 <X size={20} />
               </button>
@@ -3275,19 +3463,45 @@ export const TransportModule = () => {
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
                 <button
                   type="button"
+                  disabled={isSavingBus}
                   onClick={() => {
+                    if (isSavingBus) return;
                     setShowAddBusModal(false);
                     setEditingBus(null);
                   }}
-                  style={{ padding: '8px 16px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', background: 'none', cursor: 'pointer' }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--border-color)',
+                    background: 'none',
+                    cursor: isSavingBus ? 'not-allowed' : 'pointer',
+                    opacity: isSavingBus ? 0.6 : 1
+                  }}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  style={{ padding: '8px 20px', borderRadius: 'var(--radius-md)', backgroundColor: '#0d9488', color: '#ffffff', border: 'none', fontWeight: 700, cursor: 'pointer' }}
+                  disabled={isSavingBus}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 20px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: '#0d9488',
+                    color: '#ffffff',
+                    border: 'none',
+                    fontWeight: 700,
+                    cursor: isSavingBus ? 'not-allowed' : 'pointer',
+                    opacity: isSavingBus ? 0.8 : 1,
+                    transition: 'all 0.15s ease'
+                  }}
                 >
-                  {editingBus ? 'Update Bus' : 'Save Bus'}
+                  {isSavingBus && <Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} />}
+                  {isSavingBus
+                    ? (editingBus ? 'Updating Bus...' : 'Saving Bus...')
+                    : (editingBus ? 'Update Bus' : 'Save Bus')}
                 </button>
               </div>
             </form>

@@ -34,21 +34,29 @@ export const transportService = {
   },
 
   async createBus(busData, schoolId = 'SCH-001') {
-    return apiRequest(`${API_ENDPOINTS.TRANSPORT.BUSES}?schoolId=${schoolId}`, {
+    const cleaned = { ...busData };
+    ['insuranceExpiryDate', 'fitnessExpiryDate', 'permitExpiryDate', 'pollutionExpiryDate'].forEach((k) => {
+      if (cleaned[k] === '') cleaned[k] = null;
+    });
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.BUSES}?schoolId=${encodeURIComponent(schoolId)}`, {
       method: 'POST',
-      body: JSON.stringify(busData)
+      body: cleaned
     });
   },
 
   async updateBus(id, busData, schoolId = 'SCH-001') {
-    return apiRequest(`${API_ENDPOINTS.TRANSPORT.BUS_BY_ID(id)}?schoolId=${schoolId}`, {
+    const cleaned = { ...busData };
+    ['insuranceExpiryDate', 'fitnessExpiryDate', 'permitExpiryDate', 'pollutionExpiryDate'].forEach((k) => {
+      if (cleaned[k] === '') cleaned[k] = null;
+    });
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.BUS_BY_ID(id)}?schoolId=${encodeURIComponent(schoolId)}`, {
       method: 'PUT',
-      body: JSON.stringify(busData)
+      body: cleaned
     });
   },
 
   async deleteBus(id, schoolId = 'SCH-001') {
-    return apiRequest(`${API_ENDPOINTS.TRANSPORT.BUS_BY_ID(id)}?schoolId=${schoolId}`, {
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.BUS_BY_ID(id)}?schoolId=${encodeURIComponent(schoolId)}`, {
       method: 'DELETE'
     });
   },

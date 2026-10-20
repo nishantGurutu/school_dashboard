@@ -118,7 +118,7 @@ class NetworkServiceClass {
     };
 
     if (body !== undefined) {
-      fetchConfig.body = body instanceof FormData ? body : JSON.stringify(body);
+      fetchConfig.body = body instanceof FormData || typeof body === 'string' ? body : JSON.stringify(body);
     }
 
     let response;

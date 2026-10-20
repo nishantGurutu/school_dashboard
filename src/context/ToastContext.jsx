@@ -19,7 +19,13 @@ export const ToastProvider = ({ children }) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
+  const showToast = useCallback((message, type = 'info', title = null) => {
+    addToast(message, type, title);
+  }, [addToast]);
+
   const toast = {
+    showToast,
+    addToast,
     success: (msg, title) => addToast(msg, 'success', title),
     error: (msg, title) => addToast(msg, 'error', title),
     info: (msg, title) => addToast(msg, 'info', title),
@@ -71,6 +77,8 @@ export const useToast = () => {
   const context = useContext(ToastContext);
   if (!context) {
     return {
+      showToast: (m, type) => console.log(`Toast (${type}):`, m),
+      addToast: (m, type) => console.log(`Toast (${type}):`, m),
       success: (m) => console.log('Toast (success):', m),
       error: (m) => console.error('Toast (error):', m),
       info: (m) => console.log('Toast (info):', m),
