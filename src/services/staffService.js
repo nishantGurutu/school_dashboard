@@ -2,7 +2,14 @@ import NetworkService from './networkService';
 import { API_ENDPOINTS } from './apiConfig';
 
 export const staffService = {
-  availableBuses: () => NetworkService.get(`${API_ENDPOINTS.STAFF.BASE}/available-buses`),
+  availableBuses: async () => {
+    const buses = await NetworkService.get(`${API_ENDPOINTS.STAFF.BASE}/available-buses`, { _: Date.now() }, { cache: 'no-store' });
+    if (!Array.isArray(buses)) throw new Error('Could not verify bus availability.');
+    if (buses.some(bus => !bus.assignmentStatus || typeof bus.availableForAssignment !== 'boolean')) {
+      throw new Error('Bus availability API needs the updated backend. Please restart or deploy the backend.');
+    }
+    return buses.filter(bus => bus.assignmentStatus === 'AVAILABLE' && bus.availableForAssignment === true && bus.status === 'ACTIVE');
+  },
   list: (params = '') => {
     let queryParams = {};
     if (typeof params === 'string') {

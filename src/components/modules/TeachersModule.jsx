@@ -130,6 +130,7 @@ export const TeachersModule = () => {
       type: selectedType,
       role: resolvedRole,
       userType: resolvedRole,
+      busId: resolvedRole === 'DRIVER' && formData.busId ? Number(formData.busId) : null,
       employeeId: formData.employeeId || formData.teacherId || `${selectedType.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}`,
       firstName: firstName,
       lastName: lastName,
@@ -184,14 +185,18 @@ export const TeachersModule = () => {
         await fetchTeachers();
       } catch (e) {
         setError(e.message || 'Failed to update member');
+        throw e;
       }
     } else {
       try {
         // Create in backend via teacherService (supports Teacher, Principal, Staff with role & staff sync)
         const created = await teacherService.create(payload);
+        if (resolvedRole === 'DRIVER' && Number(created?.busId) !== Number(payload.busId)) {
+          throw new Error('The backend did not confirm the selected bus assignment. Update/restart the backend and check this driver before creating another.');
+        }
 
         // Also ensure direct StaffService registration for non-teachers (Principal, Staff, Accountant, Librarian, Driver)
-        if (selectedType !== 'Teacher') {
+        if (selectedType !== 'Teacher' && selectedType !== 'Driver') {
           try {
             await staffService.create({
               name: `${firstName} ${lastName}`.trim(),
@@ -216,6 +221,7 @@ export const TeachersModule = () => {
         await fetchTeachers();
       } catch (e) {
         setError(e.message || `Failed to create ${selectedType}`);
+        throw e;
       }
     }
   };

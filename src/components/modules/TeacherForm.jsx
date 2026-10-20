@@ -10,6 +10,7 @@ import {
 import { Spinner } from '../ui/Spinner';
 import { MultiSelectDropdown } from '../ui/MultiSelectDropdown';
 import { classService } from '../../services/classService';
+import { staffService } from '../../services/staffService';
 
 /**
  * Automatically determine role, userType, and type from department and designation
@@ -95,6 +96,11 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
   const [showPassword, setShowPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const savingRef = useRef(false);
+
+  const [availableBuses, setAvailableBuses] = useState([]);
+  const [busLoading, setBusLoading] = useState(false);
+  const [busError, setBusError] = useState('');
+  const [saveError, setSaveError] = useState('');
 
   // Dynamic Subjects, Classes, Departments, and Designations loaded from backend APIs
   const [subjectsList, setSubjectsList] = useState([]);
@@ -186,6 +192,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
   // Form State containing all fields
   const [formData, setFormData] = useState({
+    busId: '',
     type: initType,
     userType: initRole,
     role: initRole,
@@ -332,6 +339,35 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     }
   }, [initialData, availableSubjects, availableClasses]);
 
+  const isDriver = String(formData.role || formData.userType || '').toUpperCase() === 'DRIVER';
+  useEffect(() => {
+    let cancelled = false;
+    setAvailableBuses([]);
+    setBusError('');
+    setFormData(previous => ({ ...previous, busId: '' }));
+    if (!isDriver) { setBusLoading(false); return; }
+    let refreshing = false;
+    const load = async () => {
+      if (refreshing || cancelled) return;
+      refreshing = true;
+      setBusLoading(true);
+      try {
+        const buses = await staffService.availableBuses();
+        if (cancelled) return;
+        setAvailableBuses(buses);
+        setBusError('');
+        setFormData(previous => !previous.busId || buses.some(bus => String(bus.id) === String(previous.busId))
+          ? previous : { ...previous, busId: '' });
+      } catch (error) {
+        if (!cancelled) { setAvailableBuses([]); setBusError(error.message || 'Could not load available buses. Please retry.'); }
+      } finally { refreshing = false; if (!cancelled) setBusLoading(false); }
+    };
+    load();
+    window.addEventListener('focus', load);
+    const timer = setInterval(() => { if (document.visibilityState === 'visible') load(); }, 15000);
+    return () => { cancelled = true; clearInterval(timer); window.removeEventListener('focus', load); };
+  }, [isDriver, initialData?.id]);
+
   // Sync departmentId if only department name was set
   useEffect(() => {
     if (departmentsList.length > 0 && formData.department && !formData.departmentId) {
@@ -437,9 +473,24 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     if (!onSaveTeacher || savingRef.current) {
       return;
     }
+    setSaveError('');
+    if (isDriver && (busLoading || busError || (!isEditMode && !formData.busId)
+      || (formData.busId && !availableBuses.some(bus => String(bus.id) === String(formData.busId))))) {
+      setSaveError(busError || 'Select an available bus for this driver.');
+      return;
+    }
     savingRef.current = true;
     setIsSaving(true);
     try {
+      if (isDriver && formData.busId) {
+        const buses = await staffService.availableBuses();
+        setAvailableBuses(buses);
+        if (!buses.some(bus => String(bus.id) === String(formData.busId))) {
+          setFormData(previous => ({ ...previous, busId: '' }));
+          setSaveError('This bus has already been assigned. Select an available bus.');
+          return;
+        }
+      }
       const resolvedRole = (formData.role || formData.userType || 'TEACHER').toUpperCase();
       const resolvedType = formData.type || (
         resolvedRole === 'PRINCIPAL' ? 'Principal' :
@@ -454,6 +505,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         type: resolvedType,
         userType: resolvedRole,
         role: resolvedRole,
+        busId: isDriver && formData.busId ? Number(formData.busId) : null,
         joiningDate: formData.joinDate || formData.joiningDate || new Date().toISOString().split('T')[0],
         departmentId: formData.departmentId ? Number(formData.departmentId) : null,
         designationId: formData.designationId ? Number(formData.designationId) : null,
@@ -463,6 +515,18 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         subject: isAcademicOrLeadershipDept ? formData.subject : '',
         assignedClass: isAcademicOrLeadershipDept ? formData.assignedClass : ''
       });
+    } catch (error) {
+      setSaveError(error.message || 'Could not save staff. Please retry.');
+      if (isDriver) {
+        try {
+          const refreshed = await staffService.availableBuses();
+          const buses = Array.isArray(refreshed) ? refreshed : [];
+          setAvailableBuses(buses);
+          setFormData(previous => buses.some(bus => String(bus.id) === String(previous.busId)) ? previous : { ...previous, busId: '' });
+        } catch (refreshError) {
+          setBusError(refreshError.message || 'Could not refresh available buses. Reopen this form to retry.');
+        }
+      }
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -604,6 +668,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         </button>
       </div>
 
+      {saveError && <div role="alert" style={{ color: '#ef4444' }}>{saveError}</div>}
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
         {/* Section 1: Personal Info */}
         <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -779,6 +844,23 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
                 Role: <strong>{formData.role || formData.userType || 'TEACHER'}</strong> (Type: {formData.type || 'Staff'})
               </div>
             </div>
+
+            {isDriver && (
+              <div className="col-span-3">
+                <label htmlFor="teacher-driver-bus" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: 6 }}>
+                  Assign Bus {!isEditMode && <span style={{ color: '#ef4444' }}>*</span>}
+                </label>
+                <select id="teacher-driver-bus" value={formData.busId || ''}
+                  onChange={event => handleChange('busId', event.target.value)}
+                  required={!isEditMode} disabled={busLoading || !!busError} style={inputStyle}>
+                  <option value="">{busLoading ? 'Loading available buses…' : isEditMode ? 'Keep current bus assignment' : '-- Select available bus --'}</option>
+                  {availableBuses.map(bus => <option key={bus.id} value={bus.id}>{bus.busNumber} ({bus.registrationNumber})</option>)}
+                </select>
+                {busError && <p role="alert" style={{ color: '#ef4444' }}>{busError}</p>}
+                {!busLoading && !busError && availableBuses.length === 0 && <p style={{ fontSize: '0.8rem' }}>No unassigned active buses available. Add a bus in Transport first.</p>}
+                <small>Only active buses not assigned to another driver are listed.</small>
+              </div>
+            )}
 
             {/* Row 2: Subject & Class (Multi-select) - Only shown for Teaching/Academics or School Leadership */}
             {isAcademicOrLeadershipDept && (
@@ -1335,7 +1417,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
           <button
             type="submit"
             className="btn btn-primary"
-            disabled={isSaving}
+            disabled={isSaving || (isDriver && (busLoading || !!busError || (!isEditMode && !formData.busId)))}
             style={{
               padding: '12px 40px',
               backgroundColor: '#0d9488',

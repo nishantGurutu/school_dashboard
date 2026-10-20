@@ -1301,6 +1301,12 @@ export const TransportModule = () => {
                 </div>
 
                 <div style={{ fontSize: '0.8rem', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>Bus Assignment:</span>
+                    <span style={{ fontWeight: 700, color: bus.assignmentStatus === 'ASSIGNED' ? '#d97706' : '#16a34a' }}>
+                      {bus.assignmentStatus === 'ASSIGNED' ? 'Assigned' : bus.assignmentStatus === 'AVAILABLE' ? 'Available' : 'Status unavailable'}
+                    </span>
+                  </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Assigned Driver:</span>
                     <span style={{ fontWeight: 700, color: '#0d9488' }}>{bus.assignedDriverName || 'Not Assigned'}</span>

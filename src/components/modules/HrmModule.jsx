@@ -185,6 +185,15 @@ export const HrmModule = () => {
     setIsSubmitting(true);
     setModalError('');
     try {
+      if (isDriver) {
+        const buses = await staffService.availableBuses();
+        setAvailableBuses(buses);
+        if (!buses.some(bus => String(bus.id) === String(formData.busId))) {
+          setFormData(previous => ({ ...previous, busId: '' }));
+          setModalError('This bus has already been assigned. Select an available bus.');
+          return;
+        }
+      }
       const payload = {
         name: formData.name.trim(),
         role: isDriver ? 'DRIVER' : formData.role,
