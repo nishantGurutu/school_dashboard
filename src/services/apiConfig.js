@@ -216,7 +216,10 @@ export const API_ENDPOINTS = {
     TRIP_REPORTS: '/v1/transport/reports/trips',
     ALERTS: '/v1/transport/alerts',
     ACK_ALERT: (id) => `/v1/transport/alerts/${id}/acknowledge`,
-    RESOLVE_ALERT: (id) => `/v1/transport/alerts/${id}/resolve`
+    RESOLVE_ALERT: (id) => `/v1/transport/alerts/${id}/resolve`,
+    SAFETY_CHECKLIST: '/v1/transport/safety-checklist',
+    SAFETY_CHECKLIST_ITEM: (id) => `/v1/transport/safety-checklist/${id}`,
+    SAFETY_CHECKLIST_RESET: '/v1/transport/safety-checklist/reset-defaults'
   }
 };
 

@@ -5,6 +5,7 @@ import { useToast } from '../../context/ToastContext';
 import { transportService } from '../../services/transportService';
 import { BusTrackModal } from './transport/BusTrackModal';
 import { TransportPlaybackMap } from './transport/TransportPlaybackMap';
+import { SafetyChecklistTab } from './transport/SafetyChecklistTab';
 import { ErrorBoundary } from '../common/ErrorBoundary';
 import {
   Bus,
@@ -79,6 +80,7 @@ export const TransportModule = () => {
     if (activeTab === 'transport-drivers') return 'drivers';
     if (activeTab === 'transport-routes') return 'routes';
     if (activeTab === 'transport-assignments') return 'assignments';
+    if (activeTab === 'transport-safety-checklist') return 'safety-checklist';
     if (activeTab === 'transport-students') return 'students';
     if (activeTab === 'transport-fees') return 'fees';
     if (activeTab === 'transport-reports') return 'reports';
@@ -110,6 +112,7 @@ export const TransportModule = () => {
   const [routes, setRoutes] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [studentAssignments, setStudentAssignments] = useState([]);
+  const [safetyChecklist, setSafetyChecklist] = useState([]);
   const [liveBuses, setLiveBuses] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [tripsHistory, setTripsHistory] = useState([]);
@@ -246,13 +249,14 @@ export const TransportModule = () => {
   const loadData = async (showFullLoading = true) => {
     if (showFullLoading) setLoading(true);
     try {
-      const [ov, bList, dList, rList, asList, saList, liveList, alList, repList, fSum] = await Promise.all([
+      const [ov, bList, dList, rList, asList, saList, scList, liveList, alList, repList, fSum] = await Promise.all([
         transportService.getOverview(),
         transportService.getBuses(),
         transportService.getDrivers(),
         transportService.getRoutes(),
         transportService.getAssignments(),
         transportService.getStudentAssignments(),
+        transportService.getSafetyChecklist(),
         transportService.getLiveTracking(),
         transportService.getAlerts(),
         transportService.getTripReports(),
@@ -265,6 +269,7 @@ export const TransportModule = () => {
       setRoutes(rList);
       setAssignments(asList);
       setStudentAssignments(saList);
+      setSafetyChecklist(scList);
       setLiveBuses(liveList);
       setAlerts(alList);
       setTripsHistory(repList);
@@ -909,6 +914,7 @@ export const TransportModule = () => {
           { key: 'drivers', label: 'Driver List', icon: Users, badge: drivers.length },
           { key: 'routes', label: 'Route & Stops', icon: MapPin, badge: routes.length },
           { key: 'assignments', label: 'Bus-Driver Assignment', icon: ShieldCheck, badge: assignments.length },
+          { key: 'safety-checklist', label: 'Safety Checklist', icon: CheckCircle2, badge: safetyChecklist.length },
           { key: 'students', label: 'Student Transport', icon: GraduationCap, badge: studentAssignments.length },
           { key: 'fees', label: 'Transport Fees', icon: CircleDollarSign },
           { key: 'reports', label: 'Reports & Playback', icon: Play },
@@ -1877,9 +1883,13 @@ export const TransportModule = () => {
                     <button
                       onClick={async () => {
                         if (window.confirm(`Delete driver ${driver.name}?`)) {
-                          await transportService.deleteDriver(driver.id);
-                          showToast('Driver removed', 'success');
-                          loadData();
+                          try {
+                            await transportService.deleteDriver(driver.id);
+                            showToast('Driver removed successfully', 'success');
+                            await loadData();
+                          } catch (err) {
+                            showToast(err?.message || 'Failed to delete driver', 'error');
+                          }
                         }
                       }}
                       style={{
@@ -3270,6 +3280,17 @@ export const TransportModule = () => {
             ))}
           </div>
         </div>
+      )}
+
+      {currentTab === 'safety-checklist' && (
+        <SafetyChecklistTab
+          checklist={safetyChecklist}
+          onRefresh={async () => {
+            const list = await transportService.getSafetyChecklist();
+            setSafetyChecklist(list);
+          }}
+          showToast={showToast}
+        />
       )}
 
       {/* ============================================================== */}

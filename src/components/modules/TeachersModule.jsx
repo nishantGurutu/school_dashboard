@@ -83,7 +83,28 @@ export const TeachersModule = () => {
         ? result.content
         : [];
 
-      setTeachers(items.map(toTableRow));
+      // Also query staffService to make sure drivers and staff are immediately loaded and unified
+      let staffItems = [];
+      try {
+        const staffRes = await staffService.list();
+        staffItems = Array.isArray(staffRes) ? staffRes : (staffRes?.data || staffRes?.content || []);
+      } catch (ignored) {}
+
+      const combined = [...items];
+      for (const s of staffItems) {
+        const email = (s.email || '').toLowerCase().trim();
+        const phone = (s.phone || '').trim();
+        const exists = combined.some((t) => {
+          if (email && t.email && t.email.toLowerCase().trim() === email) return true;
+          if (phone && t.phone && t.phone.trim() === phone) return true;
+          return false;
+        });
+        if (!exists) {
+          combined.push(s);
+        }
+      }
+
+      setTeachers(combined.map(toTableRow));
     } catch (e) {
       setError(e.message || 'Failed to load faculty & staff directory');
     } finally {
@@ -228,11 +249,34 @@ export const TeachersModule = () => {
 
   const handleDeleteTeacher = async (id) => {
     setError('');
+    const target = teachers.find((t) => t.id === id || String(t.id) === String(id));
     try {
-      await teacherService.remove(id);
+      try {
+        await teacherService.remove(id);
+      } catch (err) {
+        console.warn('teacherService.remove notice:', err?.message);
+      }
+
+      // Also ensure staffService.remove if target is in staff table
+      if (target?.email) {
+        try {
+          const staffList = await staffService.list();
+          const items = Array.isArray(staffList) ? staffList : (staffList?.data || staffList?.content || []);
+          const match = items.find((s) => s.email && s.email.toLowerCase() === target.email.toLowerCase());
+          if (match?.id) {
+            await staffService.remove(match.id);
+          }
+        } catch (ignored) {}
+      } else if (target?.id) {
+        try {
+          await staffService.remove(target.id);
+        } catch (ignored) {}
+      }
+
       setTeachers((prev) => prev.filter((t) => t.id !== id && String(t.id) !== String(id)));
+      await fetchTeachers();
     } catch (e) {
-      setError(e.message || 'Failed to delete teacher');
+      setError(e.message || 'Failed to delete member');
     }
   };
 

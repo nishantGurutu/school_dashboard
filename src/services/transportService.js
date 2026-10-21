@@ -371,6 +371,43 @@ export const transportService = {
       method: 'POST',
       body: JSON.stringify({ remarks })
     });
+  },
+
+  // Vehicle Safety Checklist
+  async getSafetyChecklist(schoolId = 'SCH-001', onlyActive = false) {
+    try {
+      const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.SAFETY_CHECKLIST}?schoolId=${encodeURIComponent(schoolId)}&onlyActive=${onlyActive}`);
+      return Array.isArray(res) ? res : [];
+    } catch (e) {
+      console.warn('Failed to fetch safety checklist:', e);
+      return [];
+    }
+  },
+
+  async createSafetyChecklistItem(itemData, schoolId = 'SCH-001') {
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.SAFETY_CHECKLIST}?schoolId=${encodeURIComponent(schoolId)}`, {
+      method: 'POST',
+      body: JSON.stringify(itemData)
+    });
+  },
+
+  async updateSafetyChecklistItem(id, itemData, schoolId = 'SCH-001') {
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.SAFETY_CHECKLIST_ITEM(id)}?schoolId=${encodeURIComponent(schoolId)}`, {
+      method: 'PUT',
+      body: JSON.stringify(itemData)
+    });
+  },
+
+  async deleteSafetyChecklistItem(id, schoolId = 'SCH-001') {
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.SAFETY_CHECKLIST_ITEM(id)}?schoolId=${encodeURIComponent(schoolId)}`, {
+      method: 'DELETE'
+    });
+  },
+
+  async resetSafetyChecklist(schoolId = 'SCH-001') {
+    return apiRequest(`${API_ENDPOINTS.TRANSPORT.SAFETY_CHECKLIST_RESET}?schoolId=${encodeURIComponent(schoolId)}`, {
+      method: 'POST'
+    });
   }
 };
 
