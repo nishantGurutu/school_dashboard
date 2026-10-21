@@ -151,6 +151,7 @@ export const Sidebar = () => {
         { key: 'transport-drivers', label: 'Driver List' },
         { key: 'transport-routes', label: 'Route & Stops' },
         { key: 'transport-assignments', label: 'Bus-Driver Assignment' },
+        { key: 'transport-safety-checklist', label: 'Safety Checklist' },
         { key: 'transport-students', label: 'Student Transport' },
         { key: 'transport-fees', label: 'Transport Fees' },
         { key: 'transport-reports', label: 'Reports & Playback' },

@@ -15,7 +15,6 @@ import {
   Lightbulb,
   Crosshair,
   Smartphone,
-  Eye,
   Sliders,
   Sparkles,
   Info
@@ -488,25 +487,16 @@ export const SafetyChecklistTab = ({
         </div>
       </div>
 
-      {/* Main Grid: Management Table + Live Mobile Preview */}
+      {/* Management Table */}
       <div
         style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1.8fr) minmax(320px, 1fr)',
-          gap: '24px',
-          alignItems: 'start'
+          background: 'var(--bg-card, #ffffff)',
+          borderRadius: 'var(--radius-lg, 14px)',
+          border: '1px solid var(--border-color, #e2e8f0)',
+          overflow: 'hidden',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
         }}
       >
-        {/* Left Column: Management Table */}
-        <div
-          style={{
-            background: 'var(--bg-card, #ffffff)',
-            borderRadius: 'var(--radius-lg, 14px)',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            overflow: 'hidden',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
-          }}
-        >
           {/* Filter Bar */}
           <div
             style={{
@@ -791,237 +781,6 @@ export const SafetyChecklistTab = ({
             </div>
           )}
         </div>
-
-        {/* Right Column: Driver Mobile App Live Preview */}
-        <div
-          style={{
-            background: 'var(--bg-card, #ffffff)',
-            borderRadius: 'var(--radius-lg, 14px)',
-            border: '1px solid var(--border-color, #e2e8f0)',
-            padding: '20px',
-            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            position: 'sticky',
-            top: '20px'
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
-            <Eye size={18} color="#0d9488" />
-            <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-              Driver App Live Preview
-            </h3>
-          </div>
-          <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0 0 16px 0' }}>
-            This preview simulates the actual driver home screen. Drivers must verify all mandatory items before starting their trip.
-          </p>
-
-          {/* Phone Shell */}
-          <div
-            style={{
-              background: '#f8fafc',
-              borderRadius: '24px',
-              border: '6px solid #1e293b',
-              padding: '16px 14px',
-              boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '12px'
-            }}
-          >
-            {/* Phone Top Bar */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: '6px' }}>
-              <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#0f172a' }}>Driver Companion</div>
-              <div style={{ fontSize: '0.68rem', color: '#64748b' }}>Safe Route Navigator</div>
-            </div>
-
-            {/* Today Assigned Duty Card Mock */}
-            <div
-              style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '12px',
-                border: '1px solid #e2e8f0',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.03)'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>Today's Assigned Duty</span>
-                <span
-                  style={{
-                    fontSize: '0.62rem',
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    borderRadius: '8px',
-                    background: '#ecfdf5',
-                    color: '#059669'
-                  }}
-                >
-                  MORNING
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem' }}>
-                <div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.62rem' }}>Vehicle</div>
-                  <div style={{ fontWeight: 800, color: '#1e293b' }}>DEL76768</div>
-                </div>
-                <div>
-                  <div style={{ color: '#94a3b8', fontSize: '0.62rem' }}>Departure</div>
-                  <div style={{ fontWeight: 800, color: '#0d9488' }}>07:15 AM</div>
-                </div>
-              </div>
-              <div style={{ marginTop: '6px', fontSize: '0.68rem', color: '#475569', fontWeight: 600 }}>
-                Route 1 - North Campus Loop
-              </div>
-            </div>
-
-            {/* Vehicle Safety Checklist Section */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0f172a' }}>Vehicle Safety Checklist</div>
-              <span
-                style={{
-                  fontSize: '0.62rem',
-                  fontWeight: 800,
-                  padding: '2px 6px',
-                  borderRadius: '10px',
-                  background: '#fef3c7',
-                  color: '#d97706'
-                }}
-              >
-                {mandatoryCount} Required Checks
-              </span>
-            </div>
-
-            {/* Checklist items list */}
-            <div
-              style={{
-                background: '#ffffff',
-                borderRadius: '12px',
-                padding: '8px',
-                border: '1px solid #e2e8f0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                maxHeight: '260px',
-                overflowY: 'auto'
-              }}
-            >
-              {checklist.filter((i) => i.active ?? i.isActive).length === 0 ? (
-                <div style={{ fontSize: '0.72rem', color: '#94a3b8', textAlign: 'center', padding: '12px' }}>
-                  No active safety items.
-                </div>
-              ) : (
-                checklist
-                  .filter((i) => i.active ?? i.isActive)
-                  .map((item, idx) => {
-                    const isReq = item.required ?? item.isRequired;
-                    const IconComp = getIconComponent(item.iconKey);
-                    return (
-                      <div
-                        key={item.id || idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: '8px',
-                          padding: '6px 4px',
-                          borderBottom: idx < checklist.length - 1 ? '1px solid #f1f5f9' : 'none'
-                        }}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: 0 }}>
-                          <div
-                            style={{
-                              width: '24px',
-                              height: '24px',
-                              borderRadius: '6px',
-                              background: 'rgba(13, 148, 136, 0.1)',
-                              color: '#0d9488',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              flexShrink: 0
-                            }}
-                          >
-                            <IconComp size={13} />
-                          </div>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div
-                              style={{
-                                fontSize: '0.72rem',
-                                fontWeight: 700,
-                                color: '#1e293b',
-                                whiteSpace: 'nowrap',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis'
-                              }}
-                            >
-                              {item.title}
-                            </div>
-                            <div style={{ fontSize: '0.62rem', color: isReq ? '#dc2626' : '#64748b' }}>
-                              {isReq ? '★ Mandatory' : 'Optional'}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Checkbox preview */}
-                        <div
-                          style={{
-                            width: '18px',
-                            height: '18px',
-                            borderRadius: '4px',
-                            border: `2px solid ${isReq ? '#dc2626' : '#cbd5e1'}`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            background: '#ffffff'
-                          }}
-                        >
-                          {isReq && <span style={{ fontSize: '10px', color: '#dc2626', fontWeight: 900 }}>*</span>}
-                        </div>
-                      </div>
-                    );
-                  })
-              )}
-            </div>
-
-            {/* Start Trip Button Mock */}
-            <div
-              style={{
-                background: '#0d9488',
-                color: '#ffffff',
-                borderRadius: '10px',
-                padding: '10px',
-                textAlign: 'center',
-                fontSize: '0.78rem',
-                fontWeight: 800,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px'
-              }}
-            >
-              <span>Verify Required Checks to Start</span>
-            </div>
-
-            {/* Driver License Card Mock */}
-            <div
-              style={{
-                background: 'rgba(13, 148, 136, 0.08)',
-                border: '1px solid rgba(13, 148, 136, 0.25)',
-                borderRadius: '8px',
-                padding: '8px 10px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}
-            >
-              <ShieldCheck size={16} color="#0d9488" />
-              <div style={{ fontSize: '0.65rem', color: '#334155' }}>
-                <div style={{ fontWeight: 700 }}>Driver License Verified: DL-DRI-7398</div>
-                <div style={{ color: '#64748b' }}>Valid through 2031-10-21</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
       {/* Add / Edit Checklist Item Modal */}
       {showModal && (

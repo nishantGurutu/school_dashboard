@@ -108,7 +108,7 @@ export const transportService = {
       recentTrips: trips,
       todayChecklistCompleted: Boolean(todayTrip?.preTripCheckPassed),
       todayChecklistSummary: todayTrip?.preTripCheckPassed
-        ? '5/5 Verified • Pre-departure Inspection Complete'
+        ? 'Verified • Pre-departure Inspection Complete'
         : 'Daily Checklist Incomplete',
       todayStartLocation: todayTrip?.startLocationName || (todayTrip?.startLatitude ? `${todayTrip.startLatitude}, ${todayTrip.startLongitude}` : 'School Depot Gate'),
       todayStartTime: todayTrip?.actualStartTime || '07:15 AM'

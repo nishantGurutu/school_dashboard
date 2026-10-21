@@ -1780,7 +1780,7 @@ export const TransportModule = () => {
                         color: driver.todayPreTripCheckPassed ? '#10b981' : '#f59e0b'
                       }}
                     >
-                      {driver.todayPreTripCheckPassed ? '5/5 Verified OK' : 'Pending Check'}
+                      {driver.todayPreTripCheckPassed ? 'Verified OK' : 'Pending Check'}
                     </span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -4973,74 +4973,71 @@ export const TransportModule = () => {
                         }}
                       >
                         {driverDailyData?.todayChecklistCompleted || selectedDriverForDetails.todayPreTripCheckPassed
-                          ? '5 / 5 VERIFIED OK'
+                          ? (safetyChecklist && safetyChecklist.length > 0 ? `${safetyChecklist.length} / ${safetyChecklist.length} VERIFIED OK` : 'VERIFIED OK')
                           : 'INCOMPLETE / PENDING'}
                       </span>
                     </div>
 
-                    {/* 5 Checklist Items Grid */}
-                    <div
-                      style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-                        gap: '10px'
-                      }}
-                    >
-                      {[
-                        {
-                          title: 'Brakes, Steering & Horn OK',
-                          desc: 'Hydraulics, brake pedal firmness & horn functional',
-                          passed: driverDailyData?.todayTrip?.chkBrakes ?? selectedDriverForDetails.todayChkBrakes ?? true
-                        },
-                        {
-                          title: 'Headlights, Indicators & Mirrors OK',
-                          desc: 'High/low beams, rear indicators and side mirrors clean',
-                          passed: driverDailyData?.todayTrip?.chkLights ?? selectedDriverForDetails.todayChkLights ?? true
-                        },
-                        {
-                          title: 'Tire Pressure & Fuel / Fluids OK',
-                          desc: 'Tire tread condition, coolant, motor oil & fuel tank OK',
-                          passed: driverDailyData?.todayTrip?.chkTires ?? selectedDriverForDetails.todayChkTires ?? true
-                        },
-                        {
-                          title: 'First Aid Kit & Fire Extinguisher Checked',
-                          desc: 'Emergency kit stocked and fire cylinder gauge in green',
-                          passed: driverDailyData?.todayTrip?.chkEmergencyKit ?? selectedDriverForDetails.todayChkEmergencyKit ?? true
-                        },
-                        {
-                          title: 'Driver Phone GPS Location Enabled',
-                          desc: 'High-accuracy GPS active for live parent & admin tracking',
-                          passed: driverDailyData?.todayTrip?.chkGpsActive ?? selectedDriverForDetails.todayChkGpsActive ?? true
-                        }
-                      ].map((item, idx) => (
-                        <div
-                          key={idx}
-                          style={{
-                            padding: '10px 12px',
-                            borderRadius: 'var(--radius-md)',
-                            backgroundColor: 'var(--bg-card)',
-                            border: `1px solid ${item.passed ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-                            display: 'flex',
-                            gap: '10px',
-                            alignItems: 'flex-start'
-                          }}
-                        >
-                          <CheckCircle2
-                            size={18}
-                            color={item.passed ? '#10b981' : '#94a3b8'}
-                            style={{ flexShrink: 0, marginTop: '2px' }}
-                          />
-                          <div>
-                            <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                              {item.title}
+                    {/* Dynamic Checklist Items Grid */}
+                    {safetyChecklist && safetyChecklist.length > 0 ? (
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                          gap: '10px'
+                        }}
+                      >
+                        {safetyChecklist.map((item, idx) => {
+                          const isPassed = Boolean(
+                            driverDailyData?.todayChecklistCompleted ||
+                            selectedDriverForDetails?.todayPreTripCheckPassed
+                          );
+                          return (
+                            <div
+                              key={item.id || idx}
+                              style={{
+                                padding: '10px 12px',
+                                borderRadius: 'var(--radius-md)',
+                                backgroundColor: 'var(--bg-card)',
+                                border: `1px solid ${isPassed ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+                                display: 'flex',
+                                gap: '10px',
+                                alignItems: 'flex-start'
+                              }}
+                            >
+                              <CheckCircle2
+                                size={18}
+                                color={isPassed ? '#10b981' : '#94a3b8'}
+                                style={{ flexShrink: 0, marginTop: '2px' }}
+                              />
+                              <div>
+                                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                                  {item.title}
+                                </div>
+                                {item.description && (
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                                    {item.description}
+                                  </div>
+                                )}
+                              </div>
                             </div>
-                            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                              {item.desc}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div
+                        style={{
+                          padding: '16px',
+                          textAlign: 'center',
+                          borderRadius: 'var(--radius-md)',
+                          backgroundColor: 'var(--bg-card)',
+                          color: 'var(--text-muted)',
+                          fontSize: '0.84rem'
+                        }}
+                      >
+                        No safety checklist items configured. Items can be added from the Safety Checklist tab.
+                      </div>
+                    )}
 
                     {/* Driver Notes */}
                     <div
@@ -5056,7 +5053,7 @@ export const TransportModule = () => {
                       <strong>Driver Inspection Log Note:</strong>{' '}
                       {driverDailyData?.todayTrip?.preTripNotes ||
                        selectedDriverForDetails.todayPreTripNotes ||
-                       'All 5 vehicle systems verified by driver before scheduled trip departure.'}
+                       'Vehicle systems verified by driver before scheduled trip departure.'}
                     </div>
                   </div>
 
@@ -5104,7 +5101,7 @@ export const TransportModule = () => {
                                 </td>
                                 <td style={{ padding: '10px 12px' }}>
                                   <span style={{ color: '#10b981', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px' }}>
-                                    <CheckCircle2 size={13} /> 5/5 OK
+                                    <CheckCircle2 size={13} /> Verified OK
                                   </span>
                                 </td>
                                 <td style={{ padding: '10px 12px' }}>
