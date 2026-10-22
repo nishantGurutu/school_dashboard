@@ -2,6 +2,7 @@ import { trackingDataForBus } from './transport/trackingMapData';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
+import { studentService } from '../../services/studentService';
 import { transportService } from '../../services/transportService';
 import { BusTrackModal } from './transport/BusTrackModal';
 import { TransportPlaybackMap } from './transport/TransportPlaybackMap';
@@ -134,6 +135,8 @@ export const TransportModule = () => {
   const [showAddRouteModal, setShowAddRouteModal] = useState(false);
   const [editingRoute, setEditingRoute] = useState(null);
   const [showAddAssignmentModal, setShowAddAssignmentModal] = useState(false);
+  const [enrolledStudents, setEnrolledStudents] = useState([]);
+  const [studentsLoading, setStudentsLoading] = useState(false);
   const [showAssignStudentModal, setShowAssignStudentModal] = useState(false);
   const [editingStudentAssign, setEditingStudentAssign] = useState(null);
   const [showManageStopsModal, setShowManageStopsModal] = useState(false);
@@ -644,11 +647,35 @@ export const TransportModule = () => {
     }
   };
 
+  useEffect(() => {
+    if (!showAssignStudentModal) return;
+    let cancelled = false;
+    const fetchStudents = async () => {
+      setStudentsLoading(true);
+      try {
+        const all = [];
+        for (let page = 0; ; page += 1) {
+          const result = await studentService.list({ page, size: 500 });
+          const rows = Array.isArray(result) ? result : result?.content || result?.data || [];
+          all.push(...rows);
+          if (Array.isArray(result) || result?.last || rows.length < 500) break;
+        }
+        if (!cancelled) setEnrolledStudents(all);
+      } catch (error) {
+        if (!cancelled) showToast(error.message || 'Unable to load students', 'error');
+      } finally {
+        if (!cancelled) setStudentsLoading(false);
+      }
+    };
+    fetchStudents();
+    return () => { cancelled = true; };
+  }, [showAssignStudentModal, showToast]);
+
   const handleAssignOrUpdateStudent = async (e) => {
     e.preventDefault();
     try {
       const payload = {
-        studentId: editingStudentAssign?.studentId || (Date.now() % 10000),
+        studentId: enrolledStudents.find(s => s.admissionNo === studentAssignForm.admissionNo)?.id || editingStudentAssign?.studentId,
         studentName: studentAssignForm.studentName,
         admissionNo: studentAssignForm.admissionNo,
         className: studentAssignForm.className,
@@ -693,8 +720,8 @@ export const TransportModule = () => {
         status: 'ACTIVE'
       });
       loadData();
-    } catch {
-      showToast('Error saving student assignment', 'error');
+    } catch (error) {
+      showToast(error.message || 'Error saving student assignment', 'error');
     }
   };
 
@@ -4162,14 +4189,22 @@ export const TransportModule = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Student Name *</label>
-                  <input
-                    required
-                    type="text"
-                    placeholder="e.g. Aarav Sharma"
-                    value={studentAssignForm.studentName}
-                    onChange={(e) => setStudentAssignForm({ ...studentAssignForm, studentName: e.target.value })}
-                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
-                  />
+                  <select required disabled={studentsLoading || !!editingStudentAssign}
+                    value={studentAssignForm.admissionNo}
+                    onChange={(e) => {
+                      const student = enrolledStudents.find(s => s.admissionNo === e.target.value);
+                      setStudentAssignForm({ ...studentAssignForm, admissionNo: student?.admissionNo || '',
+                        studentName: student?.name || '', className: student ? `${student.className} (${student.section})` : '',
+                        guardianPhone: student?.guardianPhone || studentAssignForm.guardianPhone });
+                    }}
+                    style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}>
+                    <option value="">{studentsLoading ? 'Loading students...' : '-- Select enrolled student --'}</option>
+                    {editingStudentAssign && !enrolledStudents.some(s => s.admissionNo === studentAssignForm.admissionNo) &&
+                      <option value={studentAssignForm.admissionNo}>{studentAssignForm.studentName} ({studentAssignForm.admissionNo})</option>}
+                    {enrolledStudents.map(student => <option key={student.id} value={student.admissionNo}>
+                      {student.name} ({student.admissionNo}) — {student.className} {student.section}
+                    </option>)}
+                  </select>
                 </div>
                 <div>
                   <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Admission No *</label>
@@ -4177,6 +4212,7 @@ export const TransportModule = () => {
                     required
                     type="text"
                     placeholder="ADM-2024-001"
+                    readOnly
                     value={studentAssignForm.admissionNo}
                     onChange={(e) => setStudentAssignForm({ ...studentAssignForm, admissionNo: e.target.value })}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
@@ -4191,6 +4227,7 @@ export const TransportModule = () => {
                     required
                     type="text"
                     placeholder="e.g. Class 7-A"
+                    readOnly
                     value={studentAssignForm.className}
                     onChange={(e) => setStudentAssignForm({ ...studentAssignForm, className: e.target.value })}
                     style={{ width: '100%', padding: '9px 12px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)', backgroundColor: 'var(--bg-app)' }}
@@ -4320,6 +4357,16 @@ export const TransportModule = () => {
                   />
                 </div>
               </div>
+
+              {editingStudentAssign && <div>
+                <label style={{ fontWeight: 600, display: 'block', marginBottom: '4px' }}>Transport Status</label>
+                <select value={studentAssignForm.status || 'ACTIVE'}
+                  onChange={(e) => setStudentAssignForm({ ...studentAssignForm, status: e.target.value })}
+                  style={{ padding: '9px 12px', width: '100%' }}>
+                  <option value="ACTIVE">Active — student uses transport</option>
+                  <option value="INACTIVE">Inactive — student does not use transport</option>
+                </select>
+              </div>}
 
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
                 <button

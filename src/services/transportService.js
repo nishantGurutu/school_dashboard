@@ -117,58 +117,8 @@ export const transportService = {
 
   // Routes
   async getRoutes(schoolId = 'SCH-001') {
-    try {
-      const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.ROUTES}?schoolId=${schoolId}`);
-      return Array.isArray(res) ? res : [];
-    } catch {
-      return [
-        {
-          id: 1,
-          routeName: 'Route 1 - North Campus Loop',
-          routeCode: 'RT-NORTH-01',
-          description: 'Serves North City, City Center, Metro Station, and School North Gate',
-          startLocation: 'North City Square',
-          endLocation: 'School Main Gate',
-          plannedDurationMinutes: 45,
-          totalDistanceKm: 18.5,
-          morningStartTime: '07:15 AM',
-          eveningStartTime: '02:45 PM',
-          speedLimitKmh: 45,
-          status: 'ACTIVE',
-          stopsCount: 5,
-          assignedStudentsCount: 39,
-          stops: [
-            { id: 1, stopName: 'North City Square', stopOrder: 1, latitude: 25.6150, longitude: 85.1280, plannedMorningPickupTime: '07:15 AM', plannedEveningDropTime: '03:30 PM', geofenceRadiusMeters: 60, landmark: 'Opposite HDFC Bank', assignedStudentsCount: 8 },
-            { id: 2, stopName: 'Metro Station Pillar 42', stopOrder: 2, latitude: 25.6100, longitude: 85.1350, plannedMorningPickupTime: '07:25 AM', plannedEveningDropTime: '03:20 PM', geofenceRadiusMeters: 50, landmark: 'Near Gate 2 Escalator', assignedStudentsCount: 12 },
-            { id: 3, stopName: 'Central Mall Junction', stopOrder: 3, latitude: 25.6050, longitude: 85.1410, plannedMorningPickupTime: '07:35 AM', plannedEveningDropTime: '03:10 PM', geofenceRadiusMeters: 50, landmark: 'Bus Bay 3', assignedStudentsCount: 10 },
-            { id: 4, stopName: 'Kankarbagh Park', stopOrder: 4, latitude: 25.6010, longitude: 85.1480, plannedMorningPickupTime: '07:45 AM', plannedEveningDropTime: '03:00 PM', geofenceRadiusMeters: 50, landmark: 'Roundabout Park Corner', assignedStudentsCount: 9 },
-            { id: 5, stopName: 'School Main Gate (Arrival)', stopOrder: 5, latitude: 25.5970, longitude: 85.1550, plannedMorningPickupTime: '08:00 AM', plannedEveningDropTime: '02:45 PM', geofenceRadiusMeters: 70, landmark: 'Campus Bus Bay', assignedStudentsCount: 39 }
-          ]
-        },
-        {
-          id: 2,
-          routeName: 'Route 2 - South Residential Belt',
-          routeCode: 'RT-SOUTH-02',
-          description: 'Covers Southern Apartments, Central Market, and Green Park',
-          startLocation: 'Green Park Gate 1',
-          endLocation: 'School Main Gate',
-          plannedDurationMinutes: 50,
-          totalDistanceKm: 22.0,
-          morningStartTime: '07:05 AM',
-          eveningStartTime: '02:40 PM',
-          speedLimitKmh: 50,
-          status: 'ACTIVE',
-          stopsCount: 4,
-          assignedStudentsCount: 28,
-          stops: [
-            { id: 6, stopName: 'Green Park Gate 1', stopOrder: 1, latitude: 25.5900, longitude: 85.1600, plannedMorningPickupTime: '07:05 AM', plannedEveningDropTime: '03:40 PM', geofenceRadiusMeters: 50, landmark: 'Security Booth', assignedStudentsCount: 10 },
-            { id: 7, stopName: 'Southern Apartments', stopOrder: 2, latitude: 25.5930, longitude: 85.1650, plannedMorningPickupTime: '07:18 AM', plannedEveningDropTime: '03:25 PM', geofenceRadiusMeters: 50, landmark: 'Clubhouse Entrance', assignedStudentsCount: 12 },
-            { id: 8, stopName: 'Central Market', stopOrder: 3, latitude: 25.5950, longitude: 85.1610, plannedMorningPickupTime: '07:30 AM', plannedEveningDropTime: '03:10 PM', geofenceRadiusMeters: 50, landmark: 'Market Clock Tower', assignedStudentsCount: 6 },
-            { id: 9, stopName: 'School Main Gate (Arrival)', stopOrder: 4, latitude: 25.5970, longitude: 85.1550, plannedMorningPickupTime: '07:55 AM', plannedEveningDropTime: '02:45 PM', geofenceRadiusMeters: 70, landmark: 'Campus Bus Bay', assignedStudentsCount: 28 }
-          ]
-        }
-      ];
-    }
+    const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.ROUTES}?schoolId=${schoolId}`);
+    return Array.isArray(res) ? res : [];
   },
 
   async createRoute(routeData, schoolId = 'SCH-001') {
@@ -223,49 +173,8 @@ export const transportService = {
 
   // Student assignments
   async getStudentAssignments(schoolId = 'SCH-001') {
-    try {
-      const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.STUDENT_ASSIGNMENTS}?schoolId=${schoolId}`);
-      return Array.isArray(res) ? res : [];
-    } catch {
-      return [
-        {
-          id: 1,
-          studentId: 1,
-          studentName: 'Aarav Sharma',
-          admissionNo: 'ADM-2024-001',
-          className: 'Class 9-A',
-          routeId: 1,
-          routeName: 'Route 1 - North Campus Loop',
-          pickupStopId: 2,
-          pickupStopName: 'Metro Station Pillar 42',
-          dropStopId: 2,
-          dropStopName: 'Metro Station Pillar 42',
-          pickupTime: '07:25 AM',
-          dropTime: '03:20 PM',
-          guardianPhone: '+91 98765 11111',
-          status: 'ACTIVE',
-          pickupStatus: 'PICKED_UP'
-        },
-        {
-          id: 2,
-          studentId: 2,
-          studentName: 'Ananya Verma',
-          admissionNo: 'ADM-2024-002',
-          className: 'Class 7-B',
-          routeId: 1,
-          routeName: 'Route 1 - North Campus Loop',
-          pickupStopId: 3,
-          pickupStopName: 'Central Mall Junction',
-          dropStopId: 3,
-          dropStopName: 'Central Mall Junction',
-          pickupTime: '07:35 AM',
-          dropTime: '03:10 PM',
-          guardianPhone: '+91 98765 22222',
-          status: 'ACTIVE',
-          pickupStatus: 'SCHEDULED'
-        }
-      ];
-    }
+    const res = await apiRequest(`${API_ENDPOINTS.TRANSPORT.STUDENT_ASSIGNMENTS}?schoolId=${schoolId}`);
+    return Array.isArray(res) ? res : [];
   },
 
   async assignStudent(data, schoolId = 'SCH-001') {
