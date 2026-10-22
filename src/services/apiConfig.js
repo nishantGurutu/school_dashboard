@@ -170,7 +170,9 @@ export const API_ENDPOINTS = {
   // Certificates
   CERTIFICATES: {
     BASE: '/certificates',
-    BY_ID: (id) => `/certificates/${id}`
+    BY_ID: (id) => `/certificates/${id}`,
+    PDF: (id) => `/certificates/${id}/pdf`,
+    DOWNLOAD: (id) => `/certificates/${id}/download`
   },
 
   // Holiday Management

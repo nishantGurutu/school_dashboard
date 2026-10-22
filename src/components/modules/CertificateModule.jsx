@@ -119,10 +119,25 @@ export const CertificateModule = () => {
     return list;
   }, [classesList]);
 
-  // Dynamic Unique Sections from Section API (exact same data as Section list)
+  // Dynamic Sections prioritized for selected Class
   const availableSections = useMemo(() => {
     const list = [];
     const seen = new Set();
+
+    if (formData.className && formData.className !== 'Select Class') {
+      const selectedLower = formData.className.trim().toLowerCase();
+      const classMatches = classesList.filter(
+        (c) => (c.name || '').trim().toLowerCase() === selectedLower
+      );
+      classMatches.forEach((c) => {
+        const sec = c.section?.trim();
+        if (sec && !seen.has(sec)) {
+          seen.add(sec);
+          list.push({ id: c.sectionId || c.id, name: sec });
+        }
+      });
+    }
+
     sectionsList.forEach((s) => {
       const name = s.name?.trim();
       if (name && !seen.has(name)) {
@@ -131,50 +146,95 @@ export const CertificateModule = () => {
       }
     });
     return list;
-  }, [sectionsList]);
+  }, [classesList, sectionsList, formData.className]);
 
-  // Dynamic Students filtered by selected Class and Section
+  // Dynamic Students strictly filtered by selected Class and Section
   const filteredStudents = useMemo(() => {
+    const selectedClass = (formData.className || '').trim().toLowerCase();
+    const selectedSection = (formData.section || '').trim().toLowerCase();
+
+    // If no class is selected yet, no students should appear in the dropdown
+    if (!selectedClass || selectedClass === 'select class') {
+      return [];
+    }
+
     return studentsList.filter((s) => {
-      if (formData.className && formData.className !== 'Select Class') {
-        const studentClass = (s.className || '').trim().toLowerCase();
-        const selectedClass = formData.className.trim().toLowerCase();
-        if (studentClass !== selectedClass && !studentClass.includes(selectedClass) && !selectedClass.includes(studentClass)) {
-          return false;
-        }
+      // Student class name can be: "Play", "Play (A)", "play", or combined "Play - A"
+      const studentClass = (s.className || s.class || '').trim().toLowerCase();
+
+      // Class match check
+      const matchesClass =
+        studentClass === selectedClass ||
+        studentClass.startsWith(selectedClass + ' ') ||
+        studentClass.startsWith(selectedClass + '(') ||
+        studentClass.startsWith(selectedClass + '-') ||
+        studentClass.includes(`(${selectedClass})`);
+
+      if (!matchesClass) {
+        return false;
       }
-      if (formData.section && formData.section !== 'Select Section') {
+
+      // If a section is selected, strictly verify section
+      if (selectedSection && selectedSection !== 'select section') {
         const studentSec = (s.section || '').trim().toLowerCase();
-        const selectedSec = formData.section.trim().toLowerCase();
-        if (studentSec && studentSec !== selectedSec && !selectedSec.includes(studentSec) && !studentSec.includes(selectedSec)) {
+        const matchesSection =
+          studentSec === selectedSection ||
+          studentClass.includes(`(${selectedSection})`) ||
+          studentClass.includes(`- ${selectedSection}`) ||
+          studentClass.endsWith(` ${selectedSection}`);
+
+        if (!matchesSection) {
           return false;
         }
       }
+
       return true;
     });
   }, [studentsList, formData.className, formData.section]);
 
   const handleClassChange = (selectedClass) => {
+    // When class changes, clear student selection so students from other classes never leak
+    const classInfo = classesList.find(
+      (c) => (c.name || '').trim().toLowerCase() === (selectedClass || '').trim().toLowerCase()
+    );
+
     setFormData((prev) => {
-      const isSelectDefault = !selectedClass || selectedClass === 'Select Class';
-      const studentStillValid = !prev.studentName || isSelectDefault || studentsList.some(
-        (s) => (s.name === prev.studentName || String(s.id) === String(prev.studentId)) &&
-               (s.className || '').toLowerCase().includes(selectedClass.toLowerCase())
-      );
+      // If the selected class has an associated section in classesList, auto-set or keep section
+      const newSection = classInfo?.section || prev.section;
       return {
         ...prev,
         className: selectedClass,
-        studentName: studentStillValid ? prev.studentName : '',
-        studentId: studentStillValid ? prev.studentId : ''
+        section: newSection,
+        studentName: '',
+        studentId: '',
+        rollNo: '',
+        avatar: ''
       };
     });
   };
 
   const handleSectionChange = (selectedSection) => {
-    setFormData((prev) => ({
-      ...prev,
-      section: selectedSection
-    }));
+    setFormData((prev) => {
+      // Check if current student still matches the newly selected section
+      const currentStudent = studentsList.find((s) => String(s.id) === String(prev.studentId));
+      let keepStudent = false;
+      if (currentStudent) {
+        const studentSec = (currentStudent.section || '').trim().toLowerCase();
+        const selSec = (selectedSection || '').trim().toLowerCase();
+        if (!selSec || selSec === 'select section' || studentSec === selSec) {
+          keepStudent = true;
+        }
+      }
+
+      return {
+        ...prev,
+        section: selectedSection,
+        studentName: keepStudent ? prev.studentName : '',
+        studentId: keepStudent ? prev.studentId : '',
+        rollNo: keepStudent ? prev.rollNo : '',
+        avatar: keepStudent ? prev.avatar : ''
+      };
+    });
   };
 
   const handleStudentChange = (studentIdentifier) => {
@@ -232,8 +292,8 @@ export const CertificateModule = () => {
       rollNo: '',
       avatar: '',
       date: todayFormatted,
-      footerLeftText: 'Arthur Vance (Principal)',
-      footerRightText: 'Sarah Jenkins (Class Teacher)'
+      footerLeftText: '',
+      footerRightText: ''
     });
     setError('');
     setIsDrawerOpen(true);
@@ -243,11 +303,24 @@ export const CertificateModule = () => {
   const handleOpenEditModal = (item) => {
     setEditingItem(item);
     setActiveDropdownId(null);
+
+    // Parse class and section if combined like "Play (A)"
+    let itemClass = item.className || '';
+    let itemSection = item.section || '';
+    if (itemClass.includes('(') && itemClass.includes(')')) {
+      const match = itemClass.match(/^(.+?)\s*\((.+?)\)$/);
+      if (match) {
+        itemClass = match[1].trim();
+        itemSection = match[2].trim();
+      }
+    }
+
     setFormData({
       certificateName: item.certificateName || '',
-      className: item.className || '',
-      section: item.section || '',
+      className: itemClass,
+      section: itemSection,
       studentName: item.name || '',
+      admissionNo: item.admissionNo,
       studentId: item.studentId || '',
       rollNo: item.rollNo || '',
       avatar: item.avatar || '',
@@ -267,12 +340,13 @@ export const CertificateModule = () => {
   };
 
   // Trigger Print for Row
-  const handlePrintCertificateRow = (item) => {
+  const handlePrintCertificateRow = async (item) => {
     setActiveDropdownId(null);
-    setViewingCertificate(item);
-    setTimeout(() => {
-      window.print();
-    }, 200);
+    try {
+      await certificateService.downloadPdf(item);
+    } catch (e) {
+      setError(e.message || 'Failed to download certificate PDF');
+    }
   };
 
   // Delete Certificate Row
@@ -303,7 +377,7 @@ export const CertificateModule = () => {
 
     try {
       const matchedStudent = studentsList.find(
-        (s) => String(s.id) === String(formData.studentId) || s.name === formData.studentName
+        (s) => (formData.studentId ? String(s.id) === String(formData.studentId) : s.admissionNo === formData.admissionNo)
       );
 
       if (!matchedStudent?.admissionNo) throw new Error('Select an enrolled student with an admission number.');
@@ -336,7 +410,7 @@ export const CertificateModule = () => {
           rollNo: studentRollNo,
           className: studentClass,
           certificateName: formData.certificateName.trim(),
-          bgImage: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?auto=format&fit=crop&w=120&q=80',
+          bgImage: '',
           avatar: studentAvatar,
           date: formData.date || new Date().toLocaleDateString('en-GB'),
           footerLeft: formData.footerLeftText || 'Principal Signature',
@@ -542,7 +616,7 @@ export const CertificateModule = () => {
                           overflow: 'hidden',
                           display: 'flex',
                           alignItems: 'center',
-                          justify: 'center'
+                          justifyContent: 'center'
                         }}
                       >
                         <Award size={20} color="#0d9488" />
@@ -684,23 +758,24 @@ export const CertificateModule = () => {
                     Student <span style={{ color: '#ef4444' }}>*</span>
                   </label>
                   <select
-                    value={formData.studentId || formData.studentName}
+                    value={formData.studentId || ''}
                     onChange={(e) => handleStudentChange(e.target.value)}
                     style={inputStyle}
                     required
+                    disabled={!formData.className}
                   >
                     <option value="">
-                      {isLoadingDropdowns
+                      {!formData.className
+                        ? 'Select Class first'
+                        : isLoadingDropdowns
                         ? 'Loading students from API...'
-                        : filteredStudents.length > 0
-                        ? `Select Student (${filteredStudents.length} available)`
-                        : studentsList.length > 0
-                        ? `Select from ${studentsList.length} total students`
-                        : 'Select Student (0 available)'}
+                        : filteredStudents.length === 0
+                        ? `No students found in ${formData.className}${formData.section ? ` (${formData.section})` : ''}`
+                        : `Select Student (${filteredStudents.length} available)`}
                     </option>
-                    {(filteredStudents.length > 0 ? filteredStudents : studentsList).map((s) => (
+                    {filteredStudents.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.name} {s.rollNo ? `(Roll: ${s.rollNo})` : ''} {s.className ? `[${s.className}${s.section ? ` - ${s.section}` : ''}]` : ''}
+                        {s.name} {s.rollNo ? `(Roll: ${s.rollNo})` : ''} [{s.className || formData.className}{s.section || formData.section ? ` - ${s.section || formData.section}` : ''}]
                       </option>
                     ))}
                   </select>
@@ -805,7 +880,7 @@ export const CertificateModule = () => {
                 padding: '20px 24px',
                 borderTop: '1px solid var(--border-light)',
                 display: 'flex',
-                justify: 'center',
+                justifyContent: 'center',
                 gap: '16px'
               }}
             >
@@ -858,7 +933,7 @@ export const CertificateModule = () => {
             zIndex: 1100,
             display: 'flex',
             alignItems: 'center',
-            justify: 'center',
+            justifyContent: 'center',
             padding: '20px'
           }}
           onClick={() => setIsViewModalOpen(false)}
@@ -866,7 +941,7 @@ export const CertificateModule = () => {
           <div
             onClick={(e) => e.stopPropagation()}
             style={{
-              width: '640px',
+              width: '900px',
               maxWidth: '95vw',
               backgroundColor: '#ffffff',
               borderRadius: '16px',
@@ -897,7 +972,7 @@ export const CertificateModule = () => {
                 color: '#64748b',
                 display: 'flex',
                 alignItems: 'center',
-                justify: 'center',
+                justifyContent: 'center',
                 cursor: 'pointer',
                 boxShadow: '0 4px 10px rgba(0,0,0,0.15)'
               }}
@@ -942,7 +1017,7 @@ export const CertificateModule = () => {
             {/* Certificate Footer Signatures (Screenshot 3) */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', width: '100%', borderTop: '1px solid #e2e8f0', paddingTop: '16px' }}>
               <div style={{ textAlign: 'left' }}>
-                <div style={{ fontFamily: 'cursive', fontSize: '1rem', color: '#1e293b', marginBottom: '2px' }}>Arthur Vance</div>
+                <div style={{ fontFamily: 'cursive', fontSize: '1rem', color: '#1e293b', marginBottom: '2px' }}>{(viewingCertificate.footerLeft || '').split('(')[0].trim()}</div>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', borderTop: '1px solid #94a3b8', paddingTop: '4px' }}>
                   {viewingCertificate.footerLeft || 'Principal Signature'}
                 </div>
@@ -958,14 +1033,14 @@ export const CertificateModule = () => {
                   border: '2px solid #f59e0b',
                   display: 'flex',
                   alignItems: 'center',
-                  justify: 'center'
+                  justifyContent: 'center'
                 }}
               >
                 <Award size={24} color="#d97706" />
               </div>
 
               <div style={{ textAlign: 'right' }}>
-                <div style={{ fontFamily: 'cursive', fontSize: '1rem', color: '#1e293b', marginBottom: '2px' }}>Sarah Jenkins</div>
+                <div style={{ fontFamily: 'cursive', fontSize: '1rem', color: '#1e293b', marginBottom: '2px' }}>{(viewingCertificate.footerRight || '').split('(')[0].trim()}</div>
                 <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', borderTop: '1px solid #94a3b8', paddingTop: '4px' }}>
                   {viewingCertificate.footerRight || 'Class Teacher Signature'}
                 </div>
@@ -975,7 +1050,13 @@ export const CertificateModule = () => {
             {/* Print Action Button */}
             <button
               className="btn btn-primary"
-              onClick={() => window.print()}
+              onClick={() => {
+                if (viewingCertificate?.id) {
+                  window.open(certificateService.getPdfUrl(viewingCertificate.id), '_blank');
+                } else {
+                  window.print();
+                }
+              }}
               style={{
                 marginTop: '24px',
                 padding: '10px 24px',
@@ -987,7 +1068,7 @@ export const CertificateModule = () => {
                 gap: '8px'
               }}
             >
-              <Printer size={16} /> Print Certificate
+              <Printer size={16} /> Download / Print PDF
             </button>
           </div>
         </div>

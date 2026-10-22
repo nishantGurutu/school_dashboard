@@ -170,6 +170,7 @@ class NetworkServiceClass {
 
   async parseResponse(response) {
     const contentType = response.headers.get('content-type') || '';
+    if (response.ok && contentType.includes('application/pdf')) return response.blob();
     const isJson = contentType.includes('application/json');
 
     let data;
