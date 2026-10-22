@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import L from 'leaflet';
-import { X, LocateFixed } from 'lucide-react';
-import { coordinates, sameId } from './trackingMapData';
+import { X, LocateFixed, RefreshCw } from 'lucide-react';
+import { coordinates, sameId, selectBusTrip, recordedRouteFitKey } from './trackingMapData';
 import { transportService } from '../../../services/transportService';
 
 export const BusTrackModal = ({ isOpen, onClose, bus, driver, liveData }) => {
@@ -9,11 +9,15 @@ export const BusTrackModal = ({ isOpen, onClose, bus, driver, liveData }) => {
   const mapRef = useRef(null);
   const layer = useRef(null);
   const fitted = useRef(null);
+  const followLatest = useRef(true);
   const [trips, setTrips] = useState([]);
   const [selected, setSelected] = useState('');
   const [playback, setPlayback] = useState(null);
   const [error, setError] = useState('');
+  const [tripError, setTripError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [routeLoading, setRouteLoading] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
   const busId = bus?.busId ?? bus?.id;
   const schoolId = bus?.schoolId ?? 'SCH-001';
   const live = sameId(liveData?.busId, busId) ? liveData : null;
@@ -27,44 +31,53 @@ export const BusTrackModal = ({ isOpen, onClose, bus, driver, liveData }) => {
     if (!isOpen || busId == null) return;
     let cancelled = false;
     let running = false;
-    setTrips([]); setSelected(''); setPlayback(null); setError(''); setLoading(true);
+    setLoading(true);
     const load = async () => {
       if (running) return;
       running = true;
       try {
         const result = await transportService.getTripReports(schoolId, null, busId);
         if (cancelled) return;
-        setTrips(result);
-        setSelected(previous => result.some(trip => sameId(trip.tripId, previous)) ? previous : String(result[0]?.tripId ?? ''));
-        setError('');
+        const busTrips = result.filter(trip => sameId(trip.busId, busId));
+        setTrips(busTrips);
+        setSelected(previous => selectBusTrip(busTrips, busId, previous, followLatest.current));
+        setTripError('');
       } catch (failure) {
-        if (!cancelled) setError(failure.message || 'Could not load bus trips.');
+        if (!cancelled) setTripError(failure.message || 'Could not load bus trips.');
       } finally { running = false; if (!cancelled) setLoading(false); }
     };
     load();
     const timer = setInterval(load, 10000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [isOpen, busId, schoolId]);
+  }, [isOpen, busId, schoolId, refreshVersion]);
 
   useEffect(() => {
-    setPlayback(null);
-    if (!isOpen || !selected) return;
+    if (!isOpen || !selected) { setRouteLoading(false); return; }
     let cancelled = false;
     let running = false;
+    setRouteLoading(true);
     const load = async () => {
       if (running) return;
       running = true;
       try {
         const result = await transportService.getTripPlayback(selected, schoolId);
+        if (!sameId(result?.tripId, selected)) throw new Error('The recorded route does not match this trip. Please refresh.');
         if (!cancelled) { setPlayback(result); setError(''); }
       } catch (failure) {
         if (!cancelled) setError(failure.message || 'Could not load recorded route.');
-      } finally { running = false; }
+      } finally { running = false; if (!cancelled) setRouteLoading(false); }
     };
     load();
     const timer = setInterval(load, 10000);
     return () => { cancelled = true; clearInterval(timer); };
-  }, [isOpen, selected, schoolId]);
+  }, [isOpen, selected, schoolId, refreshVersion]);
+
+  useEffect(() => {
+    followLatest.current = true;
+    setTrips([]); setSelected(''); setPlayback(null); setError(''); setTripError('');
+  }, [isOpen, busId, schoolId]);
+
+  useEffect(() => { setPlayback(null); }, [selected]);
 
   const fit = () => {
     const bounds = [...points];
@@ -99,7 +112,8 @@ export const BusTrackModal = ({ isOpen, onClose, bus, driver, liveData }) => {
       L.marker([lat, lng], { icon: L.divIcon({ className: 'bus-location-marker', html: '<span style="font-size:30px">🚌</span>', iconSize: [36, 36], iconAnchor: [18, 18] }) })
         .bindTooltip('Latest live bus position').addTo(layer.current);
     }
-    if (fitted.current !== selected && (points.length || lat != null)) { fitted.current = selected; fit(); }
+    const fitKey = recordedRouteFitKey(selected, active, points);
+    if (fitted.current !== fitKey && (points.length || lat != null)) { fitted.current = fitKey; fit(); }
   }, [points, lat, lng, selected, active, isOpen]);
 
   useEffect(() => {
@@ -118,20 +132,24 @@ export const BusTrackModal = ({ isOpen, onClose, bus, driver, liveData }) => {
         <button onClick={onClose} aria-label="Close map"><X size={22} /></button>
       </header>
       <div style={{ padding: '0 18px 12px', display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
-        <label>Trip: <select aria-label="Recorded trip" value={selected} onChange={event => setSelected(event.target.value)} disabled={!trips.length}>
+        <label>Trip: <select aria-label="Recorded trip" value={selected} onChange={event => { followLatest.current = false; setSelected(event.target.value); }} disabled={!trips.length}>
           {!trips.length && <option value="">{loading ? 'Loading trips…' : 'No trips recorded'}</option>}
           {trips.map(trip => <option key={trip.tripId} value={trip.tripId}>{trip.tripDate} · {trip.shift} · {trip.status} · #{trip.tripId}</option>)}
         </select></label>
         <span>Start: {playback?.startTime ? new Date(playback.startTime).toLocaleString() : '—'}</span>
         <span>End: {playback?.endTime ? new Date(playback.endTime).toLocaleString() : active ? 'Trip active' : '—'}</span>
         <button onClick={fit}><LocateFixed size={14} /> Fit route</button>
+        <button onClick={() => { followLatest.current = true; setRefreshVersion(value => value + 1); }} disabled={loading || routeLoading}><RefreshCw size={14} /> Latest trip / Refresh</button>
+        {playback && <span>{playback.routeName} · {Number(playback.totalDistanceKm ?? 0).toFixed(2)} km · {playback.durationMinutes ?? 0} min</span>}
       </div>
-      {error && <p role="alert" style={{ padding: '0 18px', color: '#dc2626' }}>{error}</p>}
+      {(tripError || error) && <p role="alert" style={{ padding: '0 18px', color: '#dc2626' }}>{tripError || error}</p>}
       <div ref={container} style={{ height: 'min(60vh,560px)', minHeight: 260 }} />
       <footer style={{ padding: 16, fontSize: 13 }}>
-        {active ? 'Background GPS is recording on the driver phone. The full driven route appears here after End Trip saves it.'
-          : points.length ? `${points.length} recorded GPS points from Start Trip to End Trip. Green: start. Red: end.`
-          : 'No recorded GPS route available for this trip.'}
+        {routeLoading ? 'Loading the saved GPS route…' : !selected ? 'No trips recorded for this bus yet.'
+          : active ? 'Background GPS is recording on the driver phone. The full driven route appears here after End Trip saves it.'
+          : points.length > 1 ? `${points.length} recorded GPS points from Start Trip to End Trip. Green: start. Red: end.`
+          : points.length === 1 ? 'Only one GPS point was saved. A travelled route needs multiple recorded positions.'
+          : 'No GPS route has been saved for this trip. If the driver ended offline, use Retry save on the driver home screen, then refresh here.'}
       </footer>
     </section>
   </div>;

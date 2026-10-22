@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { trackingDataForBus, coordinates, orderedStops } from './trackingMapData.js';
+import { selectBusTrip, recordedRouteFitKey, trackingDataForBus, coordinates, orderedStops } from './trackingMapData.js';
 
 test('selected bus matches by ID and active trip route wins', () => {
   const bus = { id: '2', assignedRouteId: 10, busNumber: 'duplicate name' };
@@ -26,4 +26,31 @@ test('route markers preserve stop order and discard missing GPS', () => {
     { id: 3, stopOrder: 3, latitude: null, longitude: 85 },
     { id: 1, stopOrder: 1, latitude: 26, longitude: 86 },
   ] }).map(s => s.id), [1, 2]);
+});
+
+const trips = [
+  { tripId: 10, busId: 3, tripDate: '2026-10-21', status: 'COMPLETED' },
+  { tripId: 13, busId: 99, tripDate: '2026-10-22', status: 'IN_PROGRESS' },
+  { tripId: 12, busId: 3, tripDate: '2026-10-22', status: 'COMPLETED' },
+];
+
+test('bus map opens latest saved trip, excluding other buses', () => {
+  assert.equal(selectBusTrip(trips, '3'), '12');
+  assert.equal(selectBusTrip(trips, 3, '10'), '12');
+  assert.equal(selectBusTrip(trips, 4), '');
+});
+
+test('active journey wins, while an explicitly chosen old trip remains selected', () => {
+  const active = [...trips, { tripId: 14, busId: 3, tripDate: '2026-10-22', status: 'IN_PROGRESS' }];
+  assert.equal(selectBusTrip(active, 3), '14');
+  assert.equal(selectBusTrip(active, 3, '10', false), '10');
+  assert.equal(selectBusTrip(active, 3, '999', false), '14');
+});
+
+test('map fits again when completion replaces the start point with the full GPS route', () => {
+  const start = [[28.6, 77.0]];
+  const saved = [...start, [28.61, 77.01], [28.62, 77.02]];
+  assert.notEqual(recordedRouteFitKey(12, true, start), recordedRouteFitKey(12, false, start));
+  assert.notEqual(recordedRouteFitKey(12, false, start), recordedRouteFitKey(12, false, saved));
+  assert.notEqual(recordedRouteFitKey(12, true, []), recordedRouteFitKey(12, true, start));
 });
