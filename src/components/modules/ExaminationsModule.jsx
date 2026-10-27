@@ -143,9 +143,9 @@ export const ExaminationsModule = () => {
       const examItems = Array.isArray(examRes) ? examRes : [];
       const schedItems = Array.isArray(schedRes) ? schedRes : [];
       const resultItems = Array.isArray(resultRes) ? resultRes : [];
-      setExams((prev) => (examItems.length ? examItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setSchedules((prev) => (schedItems.length ? schedItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setResults((prev) => (resultItems.length ? resultItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setExams(examItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setSchedules(schedItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setResults(resultItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
       setSectionsList(Array.isArray(secRes) ? secRes : []);
       setSubjectsList(Array.isArray(subRes) ? subRes : []);
       setClassesList(Array.isArray(clsRes) ? clsRes : []);
@@ -162,6 +162,16 @@ export const ExaminationsModule = () => {
 
   // Modal Form State
   const [modalFormData, setModalFormData] = useState(initialModalFormData);
+
+  const classKey = value => String(value || '').trim().toLowerCase();
+  const scheduleClassNames = [...new Set(classesList.map(c => c.name).filter(Boolean))];
+  const scheduleSections = [...new Set(classesList
+    .filter(c => classKey(c.name) === classKey(modalFormData.className))
+    .map(c => c.section || sectionsList.find(section => String(section.id) === String(c.sectionId))?.name)
+    .filter(Boolean))];
+  const scheduleSubjects = subjectsList.filter(subject =>
+    modalFormData.className && classKey(subject.className) === classKey(modalFormData.className));
+  const labelStyle = { display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' };
 
   const handleSubTabChange = (tabKey) => {
     setCurrentSubTab(tabKey);
@@ -234,6 +244,15 @@ export const ExaminationsModule = () => {
     if (savingRef.current) {
       return;
     }
+    if (currentSubTab === 'schedule' && (
+      !scheduleClassNames.includes(modalFormData.className) ||
+      !scheduleSections.includes(modalFormData.section) ||
+      !scheduleSubjects.some(subject => subject.name === modalFormData.subject) ||
+      !exams.some(exam => exam.name === modalFormData.examName)
+    )) {
+      toast.error('Select a valid class, its section and subject, and an exam.', 'Examinations');
+      return;
+    }
     savingRef.current = true;
     setIsSaving(true);
 
@@ -243,16 +262,13 @@ export const ExaminationsModule = () => {
         if (currentSubTab === 'exam') {
           const updated = await examService.exams.update(id, {
             name: modalFormData.name,
-            date: modalFormData.date || '',
-            startTime: formatTimeForDisplay(modalFormData.startTime) || '',
-            endTime: formatTimeForDisplay(modalFormData.endTime) || '',
             status: modalFormData.status || 'Active'
           });
           setExams((prev) => prev.map((ex) => (ex.id === id ? { ...ex, ...updated } : ex)));
         } else if (currentSubTab === 'schedule') {
           const updated = await examService.schedules.update(id, {
             examName: modalFormData.examName || modalFormData.name || '',
-            className: modalFormData.className || modalFormData.examName || '',
+            className: modalFormData.className,
             section: modalFormData.section || '',
             subject: modalFormData.subject || '',
             date: modalFormData.date || '',
@@ -281,16 +297,13 @@ export const ExaminationsModule = () => {
         if (currentSubTab === 'exam') {
           const created = await examService.exams.create({
             name: modalFormData.name,
-            date: modalFormData.date || '',
-            startTime: formatTimeForDisplay(modalFormData.startTime) || '',
-            endTime: formatTimeForDisplay(modalFormData.endTime) || '',
             status: modalFormData.status || 'Active'
           });
           setExams((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         } else if (currentSubTab === 'schedule') {
           const created = await examService.schedules.create({
             examName: modalFormData.examName || modalFormData.name || '',
-            className: modalFormData.className || modalFormData.examName || '',
+            className: modalFormData.className,
             section: modalFormData.section || '',
             subject: modalFormData.subject || '',
             date: modalFormData.date || '',
@@ -572,9 +585,6 @@ export const ExaminationsModule = () => {
                 {currentSubTab === 'exam' && (
                   <>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Exam Name</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Exam Date</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Start Time</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>End Time</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Status</th>
                   </>
                 )}
@@ -626,9 +636,6 @@ export const ExaminationsModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
                       <td style={{ padding: '14px 16px', fontWeight: 700 }}>{row.name}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.date}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.startTime}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.endTime}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <StatusBadge status={row.status} />
                       </td>
@@ -843,61 +850,7 @@ export const ExaminationsModule = () => {
                     />
                   </div>
 
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Exam Date
-                      </label>
-                      <input
-                        type="date"
-                        value={modalFormData.date || ''}
-                        onChange={(e) => setModalFormData({ ...modalFormData, date: e.target.value })}
-                        onClick={(e) => {
-                          if (typeof e.target.showPicker === 'function') {
-                            try { e.target.showPicker(); } catch (_) {}
-                          }
-                        }}
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Start Time
-                      </label>
-                      <input
-                        type="time"
-                        value={modalFormData.startTime || ''}
-                        onChange={(e) => setModalFormData({ ...modalFormData, startTime: e.target.value })}
-                        onClick={(e) => {
-                          if (typeof e.target.showPicker === 'function') {
-                            try { e.target.showPicker(); } catch (_) {}
-                          }
-                        }}
-                        style={inputStyle}
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        End Time
-                      </label>
-                      <input
-                        type="time"
-                        value={modalFormData.endTime || ''}
-                        onChange={(e) => setModalFormData({ ...modalFormData, endTime: e.target.value })}
-                        onClick={(e) => {
-                          if (typeof e.target.showPicker === 'function') {
-                            try { e.target.showPicker(); } catch (_) {}
-                          }
-                        }}
-                        style={inputStyle}
-                      />
-                    </div>
-
-                    <div style={{ flex: 1 }}>
+                  <div>
                       <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                         Status
                       </label>
@@ -911,7 +864,6 @@ export const ExaminationsModule = () => {
                         <option value="Scheduled">Scheduled</option>
                         <option value="Closed">Closed</option>
                       </select>
-                    </div>
                   </div>
                 </>
               )}
@@ -919,119 +871,41 @@ export const ExaminationsModule = () => {
               {/* Schedule Form Fields (Screenshot 4) */}
               {currentSubTab === 'schedule' && (
                 <>
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Exam Name <span style={{ color: '#ef4444' }}>*</span>
-                      </label>
-                      <select
-                        id="schedule-exam-name-select"
-                        value={modalFormData.examName || modalFormData.name || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          setModalFormData({
-                            ...modalFormData,
-                            examName: val,
-                            name: val,
-                            className: modalFormData.className || val
-                          });
-                        }}
-                        style={inputStyle}
-                        required
-                      >
-                        <option value="">Select Exam</option>
-                        {exams.length > 0 ? (
-                          exams.map((ex) => (
-                            <option key={ex.id || ex.name} value={ex.name}>
-                              {ex.name}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="" disabled>No exams available</option>
-                        )}
-                        {modalFormData.examName && !exams.some((e) => e.name === modalFormData.examName) && (
-                          <option value={modalFormData.examName}>{modalFormData.examName}</option>
-                        )}
-                      </select>
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Section <span style={{ color: '#ef4444' }}>*</span>
-                      </label>
-                      <select
-                        id="schedule-section-select"
-                        value={modalFormData.section || ''}
-                        onChange={(e) => setModalFormData({ ...modalFormData, section: e.target.value })}
-                        style={inputStyle}
-                        required
-                      >
-                        <option value="">Select Section</option>
-                        {sectionsList.length > 0 ? (
-                          sectionsList.map((sec) => (
-                            <option key={sec.id || sec.name} value={sec.name}>
-                              {sec.name}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="" disabled>No sections available</option>
-                        )}
-                        {modalFormData.section && !sectionsList.some((s) => s.name === modalFormData.section) && (
-                          <option value={modalFormData.section}>{modalFormData.section}</option>
-                        )}
-                      </select>
-                    </div>
+                  <div>
+                    <label htmlFor="schedule-class-select" style={labelStyle}>Class *</label>
+                    <select id="schedule-class-select" value={modalFormData.className} style={inputStyle} required
+                      onChange={(e) => setModalFormData(prev => ({ ...prev, className: e.target.value, section: '', subject: '' }))}>
+                      <option value="">Select Class</option>
+                      {scheduleClassNames.map(name => <option key={name} value={name}>{name}</option>)}
+                    </select>
                   </div>
-
-                  <div style={{ display: 'flex', gap: '16px' }}>
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Subject <span style={{ color: '#ef4444' }}>*</span>
-                      </label>
-                      <select
-                        id="schedule-subject-select"
-                        value={modalFormData.subject || ''}
-                        onChange={(e) => setModalFormData({ ...modalFormData, subject: e.target.value })}
-                        style={inputStyle}
-                        required
-                      >
-                        <option value="">Select Subject</option>
-                        {subjectsList.length > 0 ? (
-                          subjectsList.map((sub) => (
-                            <option key={sub.id || sub.name} value={sub.name}>
-                              {sub.name} {sub.code ? `(${sub.code})` : ''}
-                            </option>
-                          ))
-                        ) : (
-                          <option value="" disabled>No subjects available</option>
-                        )}
-                        {modalFormData.subject && !subjectsList.some((s) => s.name === modalFormData.subject) && (
-                          <option value={modalFormData.subject}>{modalFormData.subject}</option>
-                        )}
-                      </select>
-                    </div>
-
-                    <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                        Class (Optional)
-                      </label>
-                      <select
-                        id="schedule-class-select"
-                        value={modalFormData.className || ''}
-                        onChange={(e) => setModalFormData({ ...modalFormData, className: e.target.value })}
-                        style={inputStyle}
-                      >
-                        <option value="">Select Class</option>
-                        {classesList.map((c) => (
-                          <option key={c.id || c.name} value={c.name}>
-                            {c.name} {c.section ? `(${c.section})` : ''}
-                          </option>
-                        ))}
-                        {modalFormData.className && !classesList.some((c) => c.name === modalFormData.className) && (
-                          <option value={modalFormData.className}>{modalFormData.className}</option>
-                        )}
-                      </select>
-                    </div>
+                  <div>
+                    <label htmlFor="schedule-section-select" style={labelStyle}>Section *</label>
+                    <select id="schedule-section-select" value={modalFormData.section} style={inputStyle} required
+                      disabled={!modalFormData.className}
+                      onChange={(e) => setModalFormData(prev => ({ ...prev, section: e.target.value }))}>
+                      <option value="">{modalFormData.className ? 'Select Section' : 'Select Class first'}</option>
+                      {scheduleSections.map(name => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                    {modalFormData.className && !scheduleSections.length && <small>No sections assigned to this class.</small>}
+                  </div>
+                  <div>
+                    <label htmlFor="schedule-subject-select" style={labelStyle}>Subject *</label>
+                    <select id="schedule-subject-select" value={modalFormData.subject} style={inputStyle} required
+                      disabled={!modalFormData.className || !modalFormData.section}
+                      onChange={(e) => setModalFormData(prev => ({ ...prev, subject: e.target.value }))}>
+                      <option value="">{modalFormData.className ? 'Select Subject' : 'Select Class first'}</option>
+                      {scheduleSubjects.map(subject => <option key={subject.id} value={subject.name}>{subject.name} {subject.code ? `(${subject.code})` : ''}</option>)}
+                    </select>
+                    {modalFormData.className && !scheduleSubjects.length && <small>No subjects assigned to this class. Assign subjects under Classes → Subjects.</small>}
+                  </div>
+                  <div>
+                    <label htmlFor="schedule-exam-name-select" style={labelStyle}>Exam Name *</label>
+                    <select id="schedule-exam-name-select" value={modalFormData.examName} style={inputStyle} required
+                      onChange={(e) => setModalFormData(prev => ({ ...prev, examName: e.target.value }))}>
+                      <option value="">Select Exam</option>
+                      {exams.map(exam => <option key={exam.id} value={exam.name}>{exam.name}</option>)}
+                    </select>
                   </div>
 
                   <div style={{ display: 'flex', gap: '16px' }}>
@@ -1309,8 +1183,6 @@ export const ExaminationsModule = () => {
               {currentSubTab === 'exam' && (
                 <>
                   <div><strong>Exam Title:</strong> {viewingItem.name}</div>
-                  <div><strong>Exam Date:</strong> {viewingItem.date}</div>
-                  <div><strong>Timing:</strong> {viewingItem.startTime} - {viewingItem.endTime}</div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <strong>Status:</strong> <StatusBadge status={viewingItem.status} />
                   </div>

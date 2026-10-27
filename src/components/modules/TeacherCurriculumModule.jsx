@@ -34,7 +34,7 @@ export const TeacherCurriculumModule = () => {
   // Loading & Data State
   const [loading, setLoading] = useState(false);
   const [classesList, setClassesList] = useState([]);
-  const [selectedClass, setSelectedClass] = useState('Class 10');
+  const [selectedClass, setSelectedClass] = useState('');
   const [subjects, setSubjects] = useState([]);
   const [selectedSubject, setSelectedSubject] = useState(null);
   const [chapters, setChapters] = useState([]);
@@ -67,6 +67,35 @@ export const TeacherCurriculumModule = () => {
     displayOrder: 1
   });
   const [savingChapter, setSavingChapter] = useState(false);
+  const [chapterSubjects, setChapterSubjects] = useState([]);
+  const [chapterSubjectsLoading, setChapterSubjectsLoading] = useState(false);
+  const [chapterSubjectsError, setChapterSubjectsError] = useState('');
+  const [chapterSubjectsRetry, setChapterSubjectsRetry] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    setChapterSubjects([]);
+    setChapterSubjectsError('');
+    if (!isChapterModalOpen || !chapterForm.className) {
+      setChapterSubjectsLoading(false);
+      return;
+    }
+    setChapterSubjectsLoading(true);
+    curriculumService.getSubjects(chapterForm.className).then(response => {
+      if (cancelled) return;
+      const items = (Array.isArray(response) ? response : []).filter(subject =>
+        subject.className?.trim().toLowerCase() === chapterForm.className.trim().toLowerCase());
+      setChapterSubjects(items);
+      setChapterForm(prev => ({ ...prev,
+        subjectId: items.some(subject => String(subject.id) === String(prev.subjectId)) ? prev.subjectId : '' }));
+    }).catch(() => {
+      if (!cancelled) setChapterSubjectsError('Unable to load subjects. Please retry.');
+    }).finally(() => {
+      if (!cancelled) setChapterSubjectsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [isChapterModalOpen, chapterForm.className, chapterSubjectsRetry]);
+
 
   // 3. Note Modal (Notes chapter ki hogi)
   const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
@@ -90,29 +119,14 @@ export const TeacherCurriculumModule = () => {
 
   const loadClasses = async () => {
     try {
-      const clsRes = await classService.classes.list();
-      if (Array.isArray(clsRes) && clsRes.length > 0) {
-        setClassesList(clsRes);
-        setSelectedClass(clsRes[0]?.name || 'Class 10');
-      } else {
-        // Sensible fallback classes
-        const defaultClasses = [
-          { id: 1, name: 'Class 10' },
-          { id: 2, name: 'Class 9' },
-          { id: 3, name: 'Class 11' },
-          { id: 4, name: 'Class 12' }
-        ];
-        setClassesList(defaultClasses);
-        setSelectedClass('Class 10');
-      }
+      const response = await classService.classes.list();
+      const classes = Array.isArray(response) ? response : [];
+      setClassesList(classes);
+      setSelectedClass(classes[0]?.name || '');
     } catch (err) {
-      console.warn('Could not load classes list, using defaults:', err);
-      setClassesList([
-        { id: 1, name: 'Class 10' },
-        { id: 2, name: 'Class 9' },
-        { id: 3, name: 'Class 11' },
-        { id: 4, name: 'Class 12' }
-      ]);
+      setClassesList([]);
+      setSelectedClass('');
+      showToast('error', 'Failed to load classes. Please refresh and try again.');
     }
   };
 
@@ -282,17 +296,11 @@ export const TeacherCurriculumModule = () => {
   // CHAPTER HANDLERS ("Chapter subject ki hogi")
   // ==========================================
   const handleOpenAddChapter = () => {
-    if (!selectedSubject && subjects.length === 0) {
-      showToast('error', `Please add a subject to ${selectedClass} first!`);
-      handleOpenAddSubject();
-      return;
-    }
-
     setChapterForm({
       subjectId: selectedSubject ? selectedSubject.id : (subjects[0]?.id || ''),
       chapterNumber: `Chapter ${chapters.length + 1}`,
       chapterTitle: '',
-      className: selectedClass || 'Class 10',
+      className: selectedClass || '',
       description: '',
       displayOrder: chapters.length + 1
     });
@@ -321,15 +329,16 @@ export const TeacherCurriculumModule = () => {
       showToast('error', 'Chapter title is required');
       return;
     }
-    const targetSubId = chapterForm.subjectId || selectedSubject?.id;
-    if (!targetSubId) {
+    const targetSubId = chapterForm.subjectId;
+    if (!chapterForm.className || !targetSubId || chapterSubjectsLoading || chapterSubjectsError ||
+        !chapterSubjects.some(subject => String(subject.id) === String(targetSubId))) {
       showToast('error', 'Please select a subject for this chapter');
       return;
     }
 
     try {
       setSavingChapter(true);
-      const targetClass = chapterForm.className || selectedClass || 'Class 10';
+      const targetClass = chapterForm.className;
       let saved;
 
       if (chapterModalMode === 'create') {
@@ -357,7 +366,7 @@ export const TeacherCurriculumModule = () => {
       setIsChapterModalOpen(false);
 
       // Keep active subject and class synchronized with the saved chapter
-      const matchedSub = subjects.find((s) => String(s.id) === String(targetSubId));
+      const matchedSub = chapterSubjects.find((s) => String(s.id) === String(targetSubId));
       if (matchedSub && (!selectedSubject || String(selectedSubject.id) !== String(matchedSub.id))) {
         setSelectedSubject(matchedSub);
       }
@@ -1420,55 +1429,28 @@ export const TeacherCurriculumModule = () => {
             </div>
 
             <form onSubmit={handleSaveChapter} style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              {/* Class and Subject Selectors */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                    <label style={{ fontSize: '0.8rem', fontWeight: 700 }}>
-                      Belongs to Subject *
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsChapterModalOpen(false);
-                        handleOpenAddSubject();
-                      }}
-                      style={{ fontSize: '0.72rem', color: '#0d9488', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600 }}
-                    >
-                      + New Subject
-                    </button>
-                  </div>
-                  <select
-                    value={chapterForm.subjectId || selectedSubject?.id || ''}
-                    onChange={(e) => setChapterForm({ ...chapterForm, subjectId: e.target.value ? Number(e.target.value) : '' })}
-                    style={inputStyle}
-                    required
-                  >
-                    {subjects.map((sub) => (
-                      <option key={sub.id} value={sub.id}>
-                        {sub.name} ({sub.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, marginBottom: '6px' }}>
-                    Target Class *
-                  </label>
-                  <select
-                    value={chapterForm.className}
-                    onChange={(e) => setChapterForm({ ...chapterForm, className: e.target.value })}
-                    style={inputStyle}
-                    required
-                  >
-                    {classesList.map((c) => (
-                      <option key={c.id || c.name} value={c.name}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Class first, then subjects assigned to that class. */}
+              <div>
+                <label htmlFor="chapter-class-select" style={{ display: 'block', fontWeight: 700, marginBottom: '6px' }}>Class *</label>
+                <select id="chapter-class-select" value={chapterForm.className} required style={inputStyle}
+                  onChange={(e) => {
+                    setChapterSubjects([]);
+                    setChapterForm(prev => ({ ...prev, className: e.target.value, subjectId: '' }));
+                  }}>
+                  <option value="">Select Class</option>
+                  {[...new Set(classesList.map(c => c.name))].map(name => <option key={name} value={name}>{name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="chapter-subject-select" style={{ display: 'block', fontWeight: 700, marginBottom: '6px' }}>Subject *</label>
+                <select id="chapter-subject-select" value={chapterForm.subjectId} required style={inputStyle}
+                  disabled={!chapterForm.className || chapterSubjectsLoading || !!chapterSubjectsError}
+                  onChange={(e) => setChapterForm(prev => ({ ...prev, subjectId: e.target.value }))}>
+                  <option value="">{chapterSubjectsLoading ? 'Loading subjects...' : 'Select Subject'}</option>
+                  {chapterSubjects.map(subject => <option key={subject.id} value={subject.id}>{subject.name} ({subject.code})</option>)}
+                </select>
+                {chapterSubjectsError ? <div role="alert">{chapterSubjectsError} <button type="button" onClick={() => setChapterSubjectsRetry(value => value + 1)}>Retry</button></div>
+                  : chapterForm.className && !chapterSubjectsLoading && !chapterSubjects.length && <small>No subjects assigned to this class. Add a subject for this class first.</small>}
               </div>
 
               {/* Chapter Number & Title */}
@@ -1519,7 +1501,7 @@ export const TeacherCurriculumModule = () => {
                 <button type="button" onClick={() => setIsChapterModalOpen(false)} style={btnSecondaryStyle}>
                   Cancel
                 </button>
-                <button type="submit" disabled={savingChapter} style={btnPrimaryStyle}>
+                <button type="submit" disabled={savingChapter || chapterSubjectsLoading || !!chapterSubjectsError || !chapterForm.subjectId} style={btnPrimaryStyle}>
                   {savingChapter ? 'Saving...' : 'Save Chapter'}
                 </button>
               </div>

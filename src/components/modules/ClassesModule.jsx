@@ -122,6 +122,7 @@ export const ClassesModule = () => {
   const [modalFormData, setModalFormData] = useState({
     name: '',
     code: '',
+    className: '',
     sectionId: '',
     section: '',
     room: '',
@@ -162,6 +163,7 @@ export const ClassesModule = () => {
     setModalFormData({
       name: '',
       code: '',
+    className: '',
       sectionId: defaultSectionId,
       section: defaultSectionName,
       room: '',
@@ -190,6 +192,7 @@ export const ClassesModule = () => {
     setModalFormData({
       name: item.name || item.room || '',
       code: item.code || '',
+      className: item.className || '',
       sectionId: secId,
       section: secName,
       room: item.room || item.name || '',
@@ -298,6 +301,7 @@ export const ClassesModule = () => {
           const updated = await classService.subjects.update(id, {
             name: modalFormData.name.trim(),
             code: modalFormData.code.trim(),
+            className: modalFormData.className,
             status: modalFormData.status
           });
           setSubjects((prev) => prev.map((sub) => (sub.id === id ? { ...sub, ...updated } : sub)));
@@ -342,6 +346,7 @@ export const ClassesModule = () => {
           const created = await classService.subjects.create({
             name: modalFormData.name.trim(),
             code: modalFormData.code.trim(),
+            className: modalFormData.className,
             status: modalFormData.status
           });
           setSubjects((prev) => [{ ...created, sl: '01' }, ...prev.map((s, i) => ({ ...s, sl: String(i + 2).padStart(2, '0') }))]);
@@ -880,6 +885,7 @@ export const ClassesModule = () => {
                   <>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Subject Name</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Subject Code</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Class</th>
                   </>
                 )}
                 {currentSubTab === 'classList' && (
@@ -1009,6 +1015,7 @@ export const ClassesModule = () => {
                             {row.code}
                           </span>
                         </td>
+                      <td style={{ padding: '14px 16px' }}>{row.className || 'Unassigned'}</td>
                       </>
                     )}
 
@@ -1328,6 +1335,14 @@ export const ClassesModule = () => {
               {/* 2. Subjects Form */}
               {currentSubTab === 'subjects' && (
                 <>
+                  <div>
+                    <label htmlFor="subject-class-select" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>Class *</label>
+                    <select id="subject-class-select" value={modalFormData.className || ''} style={inputStyle} required
+                      onChange={(e) => setModalFormData({ ...modalFormData, className: e.target.value })}>
+                      <option value="">Select Class</option>
+                      {[...new Set(classList.map(c => c.name))].map(name => <option key={name} value={name}>{name}</option>)}
+                    </select>
+                  </div>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                       Subject Name <span style={{ color: '#ef4444' }}>*</span>
