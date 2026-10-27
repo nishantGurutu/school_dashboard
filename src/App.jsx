@@ -1,3 +1,4 @@
+import { StudentReportsModule } from './components/modules/StudentReportsModule';
 import { PortalModule } from './components/modules/PortalModule';
 import React, { useState, useEffect, useCallback } from 'react';
 import { ThemeProvider, useTheme } from './context/ThemeContext';
@@ -77,6 +78,8 @@ const MainLayout = ({ onLogout }) => {
       case 'classes-list':
       case 'classes-room':
         return <ClassesModule />;
+      case 'examinations-reports':
+        return <StudentReportsModule />;
       case 'examinations':
       case 'examinations-exam':
       case 'examinations-schedule':

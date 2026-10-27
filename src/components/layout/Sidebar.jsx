@@ -65,7 +65,8 @@ export const Sidebar = () => {
       subItems: [
         { key: 'examinations-exam', label: 'Exam' },
         { key: 'examinations-schedule', label: 'Exam Schedule' },
-        { key: 'examinations-result', label: 'Exam Result' }
+        { key: 'examinations-result', label: 'Exam Result' },
+        { key: 'examinations-reports', label: 'Student Reports' }
       ]
     },
     {
