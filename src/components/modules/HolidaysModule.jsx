@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   CalendarDays,
   Plus,
@@ -78,6 +79,20 @@ export const HolidaysModule = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState(null);
   const [dayDetailModal, setDayDetailModal] = useState(null); // { date: 'YYYY-MM-DD', holidays: [...] }
+
+  useEffect(() => {
+    if (!isModalOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setIsModalOpen(false);
+    };
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [isModalOpen]);
 
   // Custom Category State inside Modal
   const [isCustomCategory, setIsCustomCategory] = useState(false);
@@ -1607,7 +1622,7 @@ export const HolidaysModule = () => {
       )}
 
       {/* Add / Edit Holiday Modal */}
-      {isModalOpen && (
+      {isModalOpen && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -1617,16 +1632,25 @@ export const HolidaysModule = () => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            zIndex: 1000,
-            padding: '20px'
+            zIndex: 10000,
+            padding: '16px',
+            boxSizing: 'border-box'
           }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="holiday-dialog-title"
             className="card animate-fade-in"
             style={{
               width: '100%',
               maxWidth: '560px',
-              padding: '24px',
+              padding: 0,
+              maxHeight: 'calc(100dvh - 32px)',
+              display: 'flex',
+              flexDirection: 'column',
+              overflow: 'hidden',
+              minHeight: 0,
               boxShadow: '0 20px 40px rgba(0, 0, 0, 0.3)',
               borderRadius: 'var(--radius-lg)'
             }}
@@ -1636,11 +1660,14 @@ export const HolidaysModule = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                marginBottom: '20px'
+                padding: '20px',
+                gap: '12px',
+                flexShrink: 0,
+                borderBottom: '1px solid var(--border-color)'
               }}
             >
               <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
+                <h3 id="holiday-dialog-title" style={{ fontSize: '1.25rem', fontWeight: 800 }}>
                   {editingHoliday ? 'Edit School Holiday' : 'Add New School Holiday'}
                 </h3>
                 <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
@@ -1649,19 +1676,23 @@ export const HolidaysModule = () => {
               </div>
               <button
                 type="button"
+                aria-label="Close holiday dialog"
                 onClick={() => setIsModalOpen(false)}
                 style={{
                   border: 'none',
                   backgroundColor: 'transparent',
                   cursor: 'pointer',
-                  color: 'var(--text-muted)'
+                  color: 'var(--text-muted)',
+                  flexShrink: 0,
+                  padding: '8px'
                 }}
               >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSaveHoliday} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <form onSubmit={handleSaveHoliday} style={{ display: 'flex', flexDirection: 'column', minHeight: 0, flex: 1 }}>
+              <div style={{ overflowY: 'auto', minHeight: 0, padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {/* Holiday Name */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, marginBottom: '6px' }}>
@@ -1848,15 +1879,16 @@ export const HolidaysModule = () => {
                 />
               </div>
 
-              {/* Form Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
+              </div>
+              {/* Buttons stay visible while the fields scroll. */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', flexWrap: 'wrap', gap: '12px', padding: '16px 20px', flexShrink: 0, borderTop: '1px solid var(--border-color)' }}>
                 <button
                   type="button"
                   className="btn"
                   onClick={() => setIsModalOpen(false)}
                   style={{ padding: '10px 18px' }}
                 >
-                  Cancel
+                  Close
                 </button>
                 <button
                   type="submit"
@@ -1883,7 +1915,8 @@ export const HolidaysModule = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Day Details Modal (from Calendar click) */}
