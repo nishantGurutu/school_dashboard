@@ -11,7 +11,7 @@ const classesEndpoints = {
 };
 
 const sectionsEndpoints = {
-  list: () => NetworkService.get(API_ENDPOINTS.CLASSES.SECTIONS),
+  list: (params) => NetworkService.get(API_ENDPOINTS.CLASSES.SECTIONS, params),
   get: (id) => NetworkService.get(API_ENDPOINTS.CLASSES.SECTION_BY_ID(id)),
   create: (data) => NetworkService.post(API_ENDPOINTS.CLASSES.SECTIONS, data),
   update: (id, data) => NetworkService.put(API_ENDPOINTS.CLASSES.SECTION_BY_ID(id), data),

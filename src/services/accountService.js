@@ -2,6 +2,13 @@ import NetworkService from './networkService';
 import { API_ENDPOINTS } from './apiConfig';
 
 export const accountService = {
+  heads: {
+    list: () => NetworkService.get('/accounts/heads'),
+    create: data => NetworkService.post('/accounts/heads', data),
+    update: (id, data) => NetworkService.put(`/accounts/heads/${id}`, data),
+    remove: id => NetworkService.delete(`/accounts/heads/${id}`)
+  },
+  updateTransaction: (id, data) => NetworkService.put(`/accounts/transactions/${id}`, data),
   getSummary: async () => {
     const res = await NetworkService.get(API_ENDPOINTS.ACCOUNTS.SUMMARY);
     return res?.data || res;

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { UserCheck, Plus, Search, Mail, Phone, BookOpen, Edit, Trash2, ShieldCheck, Users } from 'lucide-react';
 import { TeacherForm } from './TeacherForm';
 import { teacherService } from '../../services/teacherService';
+import { staffPassword } from '../../services/staffCredentials';
 import { staffService } from '../../services/staffService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
@@ -167,7 +168,7 @@ export const TeachersModule = () => {
       designationId: formData.designationId ? Number(formData.designationId) : null,
       phone: formData.phone || '+91 9876543210',
       email: formData.loginEmail || formData.email || `${selectedType.toLowerCase()}_${Date.now()}@schooldesk.com`,
-      password: formData.loginPassword || formData.password || 'password',
+      password: staffPassword(formData, Boolean(editingTeacher)),
       address: formData.currentAddress || formData.address || 'School Campus',
       currentAddress: formData.currentAddress || formData.address || '',
       permanentAddress: formData.permanentAddress || '',
@@ -214,27 +215,6 @@ export const TeachersModule = () => {
         const created = await teacherService.create(payload);
         if (resolvedRole === 'DRIVER' && Number(created?.busId) !== Number(payload.busId)) {
           throw new Error('The backend did not confirm the selected bus assignment. Update/restart the backend and check this driver before creating another.');
-        }
-
-        // Also ensure direct StaffService registration for non-teachers (Principal, Staff, Accountant, Librarian, Driver)
-        if (selectedType !== 'Teacher' && selectedType !== 'Driver') {
-          try {
-            await staffService.create({
-              name: `${firstName} ${lastName}`.trim(),
-              role: resolvedRole,
-              staffType: selectedType,
-              department: payload.department,
-              designation: payload.designation,
-              phone: payload.phone,
-              email: payload.email,
-              password: payload.password,
-              status: 'Active',
-              salary: 0,
-              joinDate: payload.joiningDate
-            });
-          } catch (staffErr) {
-            console.log('Staff service sync note:', staffErr?.message);
-          }
         }
 
         setTeachers((prev) => [toTableRow(created), ...prev]);

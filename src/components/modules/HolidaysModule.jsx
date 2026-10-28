@@ -27,6 +27,8 @@ import {
   Layers,
   ArrowUpDown
 } from 'lucide-react';
+import { authStorage } from '../../services/networkService';
+import { roleFor } from '../../config/roleAccess';
 import { holidayService } from '../../services/holidayService';
 import { Spinner } from '../ui/Spinner';
 
@@ -55,6 +57,7 @@ const getCategoryTheme = (category = '') => {
 };
 
 export const HolidaysModule = () => {
+  const canManage = roleFor(authStorage.getUser()) === 'ADMIN';
   const [holidays, setHolidays] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -332,6 +335,7 @@ export const HolidaysModule = () => {
 
   // Modal Handlers
   const handleOpenAddModal = (presetDate = null) => {
+    if (!canManage) return;
     setEditingHoliday(null);
     setIsCustomCategory(false);
     setFormData({
@@ -347,6 +351,7 @@ export const HolidaysModule = () => {
   };
 
   const handleOpenEditModal = (h) => {
+    if (!canManage) return;
     setEditingHoliday(h);
     setIsCustomCategory(!dynamicCategories.includes(h.category));
     setFormData({
@@ -362,6 +367,7 @@ export const HolidaysModule = () => {
   };
 
   const handleDuplicateHoliday = async (h) => {
+    if (!canManage) return;
     try {
       const clone = {
         title: `${h.title} (Copy)`,
@@ -381,6 +387,7 @@ export const HolidaysModule = () => {
 
   const handleSaveHoliday = async (e) => {
     e.preventDefault();
+    if (!canManage) return;
     if (!formData.title.trim()) {
       setError('Holiday title is required');
       return;
@@ -426,6 +433,7 @@ export const HolidaysModule = () => {
   };
 
   const handleDeleteHoliday = async (id) => {
+    if (!canManage) return;
     try {
       await holidayService.remove(id);
       setSuccessMessage('Holiday removed from calendar');
@@ -698,7 +706,7 @@ export const HolidaysModule = () => {
             <Download size={16} /> Export CSV
           </button>
 
-          <button
+          {canManage && (<button
             type="button"
             className="btn btn-primary"
             onClick={() => handleOpenAddModal()}
@@ -712,7 +720,7 @@ export const HolidaysModule = () => {
             }}
           >
             <Plus size={18} /> Add New Holiday
-          </button>
+          </button>)}
         </div>
       </div>
 
@@ -1233,7 +1241,7 @@ export const HolidaysModule = () => {
                   onClick={() => {
                     if (hasHoliday) {
                       setDayDetailModal({ date: cell.dateStr, holidays: dayHolidays });
-                    } else {
+                    } else if (canManage) {
                       handleOpenAddModal(cell.dateStr);
                     }
                   }}
@@ -1354,7 +1362,7 @@ export const HolidaysModule = () => {
               <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '6px' }}>
                 {isFilterActive
                   ? 'Try clearing some filters or searching with different keywords.'
-                  : 'Click "Add New Holiday" above to declare school holidays.'}
+                  : canManage ? 'Click "Add New Holiday" above to declare school holidays.' : 'No holidays have been published yet.'}
               </p>
               {isFilterActive && (
                 <button
@@ -1390,9 +1398,9 @@ export const HolidaysModule = () => {
                     <th style={{ padding: '14px 18px', textAlign: 'left', fontSize: '0.8rem', fontWeight: 700 }}>
                       STATUS
                     </th>
-                    <th style={{ padding: '14px 18px', textAlign: 'center', fontSize: '0.8rem', fontWeight: 700 }}>
+                    {canManage && (<th style={{ padding: '14px 18px', textAlign: 'center', fontSize: '0.8rem', fontWeight: 700 }}>
                       ACTIONS
-                    </th>
+                    </th>)}
                   </tr>
                 </thead>
                 <tbody>
@@ -1551,9 +1559,9 @@ export const HolidaysModule = () => {
                         </td>
 
                         {/* Actions: Edit, Duplicate, Delete */}
-                        <td style={{ padding: '14px 18px', textAlign: 'center' }}>
+                        {canManage && (<td style={{ padding: '14px 18px', textAlign: 'center' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                            <button
+                            {canManage && (<button
                               type="button"
                               onClick={() => handleOpenEditModal(holiday)}
                               style={{
@@ -1570,9 +1578,9 @@ export const HolidaysModule = () => {
                               title="Edit Holiday"
                             >
                               <Edit size={16} />
-                            </button>
+                            </button>)}
 
-                            <button
+                            {canManage && (<button
                               type="button"
                               onClick={() => handleDuplicateHoliday(holiday)}
                               style={{
@@ -1589,9 +1597,9 @@ export const HolidaysModule = () => {
                               title="Duplicate / Clone Holiday"
                             >
                               <Copy size={16} />
-                            </button>
+                            </button>)}
 
-                            <button
+                            {canManage && (<button
                               type="button"
                               onClick={() => setDeleteConfirmId(holiday.id)}
                               style={{
@@ -1608,9 +1616,9 @@ export const HolidaysModule = () => {
                               title="Delete Holiday"
                             >
                               <Trash2 size={16} />
-                            </button>
+                            </button>)}
                           </div>
-                        </td>
+                        </td>)}
                       </tr>
                     );
                   })}
@@ -1622,7 +1630,7 @@ export const HolidaysModule = () => {
       )}
 
       {/* Add / Edit Holiday Modal */}
-      {isModalOpen && createPortal(
+      {canManage && isModalOpen && createPortal(
         <div
           style={{
             position: 'fixed',
@@ -2006,7 +2014,7 @@ export const HolidaysModule = () => {
                     )}
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
-                      <button
+                      {canManage && (<button
                         type="button"
                         className="btn btn-secondary"
                         onClick={() => {
@@ -2016,8 +2024,8 @@ export const HolidaysModule = () => {
                         style={{ padding: '6px 12px', fontSize: '0.75rem' }}
                       >
                         <Edit size={14} style={{ marginRight: '4px' }} /> Edit
-                      </button>
-                      <button
+                      </button>)}
+                      {canManage && (<button
                         type="button"
                         onClick={() => {
                           setDayDetailModal(null);
@@ -2035,7 +2043,7 @@ export const HolidaysModule = () => {
                         }}
                       >
                         <Trash2 size={14} style={{ marginRight: '4px' }} /> Delete
-                      </button>
+                      </button>)}
                     </div>
                   </div>
                 );
@@ -2043,7 +2051,7 @@ export const HolidaysModule = () => {
             </div>
 
             <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'space-between' }}>
-              <button
+              {canManage && (<button
                 type="button"
                 className="btn btn-primary"
                 onClick={() => {
@@ -2054,7 +2062,7 @@ export const HolidaysModule = () => {
                 style={{ padding: '8px 16px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Plus size={16} /> Add Another Holiday
-              </button>
+              </button>)}
 
               <button
                 type="button"
@@ -2070,7 +2078,7 @@ export const HolidaysModule = () => {
       )}
 
       {/* Delete Confirmation Modal */}
-      {deleteConfirmId && (
+      {canManage && deleteConfirmId && (
         <div
           style={{
             position: 'fixed',

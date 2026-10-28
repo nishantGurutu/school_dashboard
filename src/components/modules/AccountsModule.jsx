@@ -1,6 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { DollarSign, ArrowUpRight, ArrowDownRight, FileText } from 'lucide-react';
-import { dashboardService } from '../../services/dashboardService';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { DollarSign, ArrowUpRight, ArrowDownRight, Plus, Download, ChevronDown, Search, MoreVertical, Edit, Trash2, X } from 'lucide-react';
+import { accountService } from '../../services/accountService';
+import { feeService } from '../../services/feeService';
+import { useTheme } from '../../context/ThemeContext';
+import { accountTab, accountRows, accountPayload } from '../../services/accountForm';
 
 const formatCurrency = (value) => {
   const num = Number(value) || 0;
@@ -8,30 +11,82 @@ const formatCurrency = (value) => {
 };
 
 export const AccountsModule = () => {
-  const [summary, setSummary] = useState({ totalIncome: 0, totalExpenses: 0, netBalance: 0 });
-  const [isLoading, setIsLoading] = useState(false);
+  const { activeTab, setActiveTab } = useTheme();
+  const currentSubTab = accountTab(activeTab);
+  const [summary, setSummary] = useState(null);
+  const [transactions, setTransactions] = useState([]);
+  const [heads, setHeads] = useState([]);
+  const [paymentTypes, setPaymentTypes] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
-
-  const fetchSummary = useCallback(async () => {
-    setIsLoading(true);
-    setError('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [selectedRows, setSelectedRows] = useState([]);
+  const [activeDropdownId, setActiveDropdownId] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const saving = useRef(false);
+  const [isIncomeHeadModalOpen, setIsIncomeHeadModalOpen] = useState(false);
+  const [isExpenseHeadModalOpen, setIsExpenseHeadModalOpen] = useState(false);
+  const [isIncomeModalOpen, setIsIncomeModalOpen] = useState(false);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
+  const emptyHead = () => ({name:'',description:'',status:'Active'});
+  const emptyTransaction = () => ({name:'',head:'',amount:'',date:new Date().toLocaleDateString('en-CA'),paymentType:'',description:''});
+  const [incomeHeadForm, setIncomeHeadForm] = useState(emptyHead);
+  const [expenseHeadForm, setExpenseHeadForm] = useState(emptyHead);
+  const [incomeForm, setIncomeForm] = useState(emptyTransaction);
+  const [expenseForm, setExpenseForm] = useState(emptyTransaction);
+  const inputStyle = {width:'100%',padding:'10px 12px',borderRadius:8,border:'1px solid var(--border-color)',background:'var(--bg-app)',color:'var(--text-primary)'};
+  const numbered = rows => rows.map((row,index)=>({...row,sl:String(index+1).padStart(2,'0')}));
+  const incomeHeadList = numbered(heads.filter(h=>h.transactionType==='INCOME'));
+  const expenseHeadList = numbered(heads.filter(h=>h.transactionType==='EXPENSE'));
+  const incomeList = numbered(accountRows(transactions.filter(t=>t.transactionType==='INCOME')));
+  const expenseList = numbered(accountRows(transactions.filter(t=>t.transactionType==='EXPENSE')));
+  const currentRows = currentSubTab==='income-head'?incomeHeadList:currentSubTab==='expense-head'?expenseHeadList:currentSubTab==='income-list'?incomeList:currentSubTab==='expense-list'?expenseList:[...incomeList,...expenseList];
+  const fetchAccounts = useCallback(async () => {
+    setIsLoading(true); setError('');
     try {
-      const data = await dashboardService.accounts();
-      setSummary({
-        totalIncome: Number(data.totalIncome) || 0,
-        totalExpenses: Number(data.totalExpenses) || 0,
-        netBalance: Number(data.netBalance) || 0
-      });
-    } catch (e) {
-      setError(e.message || 'Failed to load accounts summary');
-    } finally {
-      setIsLoading(false);
-    }
+      const [totals, rows, headRows, methods] = await Promise.all([accountService.getSummary(),accountService.listTransactions(),accountService.heads.list(),feeService.paymentTypes()]);
+      if (![rows,headRows,methods].every(Array.isArray) || !totals) throw new Error('Invalid accounts API response.');
+      setSummary(totals); setTransactions(rows); setHeads(headRows); setPaymentTypes(methods);
+    } catch(err) { setError(err.message || 'Could not load accounts.'); }
+    finally { setIsLoading(false); }
   }, []);
-
-  useEffect(() => {
-    fetchSummary();
-  }, [fetchSummary]);
+  useEffect(()=>{fetchAccounts();},[fetchAccounts]);
+  useEffect(()=>{setSelectedRows([]);setActiveDropdownId(null);setSearchTerm('');},[currentSubTab]);
+  const handleSubTabChange = tab => setActiveTab(`accounts-${tab}`);
+  const toggleSelectAll = rows => setSelectedRows(previous=>previous.length===rows.length?[]:rows.map(r=>r.id));
+  const toggleSelectRow = id => setSelectedRows(previous=>previous.includes(id)?previous.filter(value=>value!==id):[...previous,id]);
+  const openHead = (type,row) => {setError('');setActiveDropdownId(null);(type==='INCOME'?setIncomeHeadForm:setExpenseHeadForm)(row?{...row}:emptyHead());(type==='INCOME'?setIsIncomeHeadModalOpen:setIsExpenseHeadModalOpen)(true);};
+  const openTransaction = (type,row) => {setError('');setActiveDropdownId(null);(type==='INCOME'?setIncomeForm:setExpenseForm)(row?{...row,amount:row.rawAmount}:emptyTransaction());(type==='INCOME'?setIsIncomeModalOpen:setIsExpenseModalOpen)(true);};
+  const handleOpenEditIncomeHead = row => openHead('INCOME',row);
+  const handleOpenEditExpenseHead = row => openHead('EXPENSE',row);
+  const handleOpenEditIncome = row => openTransaction('INCOME',row);
+  const handleOpenEditExpense = row => openTransaction('EXPENSE',row);
+  const save = async (event,type,isHead) => {
+    event.preventDefault(); if(saving.current)return; saving.current=true;setIsSaving(true);setError('');
+    try {
+      const form=isHead?(type==='INCOME'?incomeHeadForm:expenseHeadForm):(type==='INCOME'?incomeForm:expenseForm);
+      const payload=isHead?{name:form.name.trim(),description:form.description,section:form.section || null,status:form.status,transactionType:type}:accountPayload(form,type);
+      if(!payload.name || (isHead && !['Active','Inactive'].includes(payload.status))) throw new Error('Enter a name and select a valid status.');
+      if(isHead) await (form.id?accountService.heads.update(form.id,payload):accountService.heads.create(payload));
+      else await (form.id?accountService.updateTransaction(form.id,payload):accountService.createTransaction(payload));
+      (isHead?(type==='INCOME'?setIsIncomeHeadModalOpen:setIsExpenseHeadModalOpen):(type==='INCOME'?setIsIncomeModalOpen:setIsExpenseModalOpen))(false);
+      await fetchAccounts();
+    }catch(err){setError(err.message || 'Could not save account record.');}
+    finally{saving.current=false;setIsSaving(false);}
+  };
+  const handleSaveIncomeHead = event => save(event,'INCOME',true);
+  const handleSaveExpenseHead = event => save(event,'EXPENSE',true);
+  const handleSaveIncome = event => save(event,'INCOME',false);
+  const handleSaveExpense = event => save(event,'EXPENSE',false);
+  const remove = async (id,isHead) => {if(saving.current)return;saving.current=true;setIsSaving(true);setActiveDropdownId(null);try{await(isHead?accountService.heads.remove(id):accountService.deleteTransaction(id));await fetchAccounts();}catch(err){setError(err.message || 'Could not delete account record.');}finally{saving.current=false;setIsSaving(false);}};
+  const handleDeleteIncomeHead = id => remove(id,true);
+  const handleDeleteExpenseHead = id => remove(id,true);
+  const handleDeleteIncome = id => remove(id,false);
+  const handleDeleteExpense = id => remove(id,false);
+  const title = {'income-head':'Income Head','expense-head':'Expense Head','income-list':'Income List','expense-list':'Expense List',transaction:'Transactions'}[currentSubTab];
+  const headerInfo = {title,breadcrumb:`Dashboard / Accounts / ${title}`,addBtnLabel:currentSubTab==='transaction'?null:`Add ${title.replace(' List','')}`,
+    onAdd:()=>currentSubTab.endsWith('-head')?openHead(currentSubTab.startsWith('income')?'INCOME':'EXPENSE'):openTransaction(currentSubTab.startsWith('income')?'INCOME':'EXPENSE')};
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', position: 'relative' }}>
@@ -160,7 +215,7 @@ export const AccountsModule = () => {
             </div>
             <div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Income</div>
-              <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#10b981' }}>$840,500</span>
+              <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#10b981' }}>{summary ? formatCurrency(summary.totalIncome) : '—'}</span>
             </div>
           </div>
           <div className="col-span-4 card animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -169,7 +224,7 @@ export const AccountsModule = () => {
             </div>
             <div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Total Expenses</div>
-              <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ef4444' }}>$512,300</span>
+              <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#ef4444' }}>{summary ? formatCurrency(summary.totalExpenses) : '—'}</span>
             </div>
           </div>
           <div className="col-span-4 card animate-fade-in" style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
@@ -178,12 +233,14 @@ export const AccountsModule = () => {
             </div>
             <div>
               <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Net Surplus Balance</div>
-              <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#2563eb' }}>$328,200</span>
+              <span style={{ fontSize: '1.6rem', fontWeight: 800, color: '#2563eb' }}>{summary ? formatCurrency(summary.netBalance) : '—'}</span>
             </div>
           </div>
         </div>
       )}
 
+      {isLoading && <p role="status">Loading accounts...</p>}
+      {error && <div role="alert" style={{color:'#ef4444'}}>{error} <button type="button" onClick={fetchAccounts}>Retry</button></div>}
       {/* Main Table Card */}
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
         {/* Controls Toolbar Bar */}
@@ -274,7 +331,7 @@ export const AccountsModule = () => {
                 {currentSubTab === 'income-head' && (
                   <>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Name</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Fees Type</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Description</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Status</th>
                   </>
                 )}
@@ -296,7 +353,7 @@ export const AccountsModule = () => {
                 {currentSubTab === 'expense-head' && (
                   <>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Name</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Fees Type</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Description</th>
                     <th style={{ padding: '12px 16px', fontWeight: 600 }}>Status</th>
                   </>
                 )}
@@ -330,6 +387,7 @@ export const AccountsModule = () => {
               </tr>
             </thead>
             <tbody>
+              {!isLoading && !currentRows.length && <tr><td colSpan={12} style={{padding:24,textAlign:'center'}}>No account records found.</td></tr>}
               {/* 1. Income Head Rows (Screenshot 1) */}
               {currentSubTab === 'income-head' &&
                 incomeHeadList
@@ -346,7 +404,7 @@ export const AccountsModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
                       <td style={{ padding: '14px 16px', fontWeight: 600 }}>{row.name}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.feesType}</td>
+                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.description || '—'}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <StatusBadge status={row.status} />
                       </td>
@@ -410,7 +468,7 @@ export const AccountsModule = () => {
                       </td>
                       <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
                       <td style={{ padding: '14px 16px', fontWeight: 600 }}>{row.name}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.feesType}</td>
+                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.description || '—'}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <StatusBadge status={row.status} />
                       </td>
@@ -553,7 +611,7 @@ export const AccountsModule = () => {
               }}
             >
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-                {editingIncomeHead ? 'Edit Income Head' : 'Add Income Head'}
+                {incomeHeadForm.id ? 'Edit Income Head' : 'Add Income Head'}
               </h3>
               <button
                 onClick={() => setIsIncomeHeadModalOpen(false)}
@@ -564,6 +622,7 @@ export const AccountsModule = () => {
             </div>
 
             <form onSubmit={handleSaveIncomeHead} id="income-head-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+              {error && <p role="alert" style={{color:'#ef4444'}}>{error}</p>}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                   Head Name
@@ -632,7 +691,7 @@ export const AccountsModule = () => {
               </button>
 
               <button
-                type="submit"
+                type="submit" disabled={isSaving}
                 form="income-head-form"
                 className="btn btn-primary"
                 style={{
@@ -697,7 +756,7 @@ export const AccountsModule = () => {
               }}
             >
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-                {editingIncome ? 'Edit Income' : 'Add Income'}
+                {incomeForm.id ? 'Edit Income' : 'Add Income'}
               </h3>
               <button
                 onClick={() => setIsIncomeModalOpen(false)}
@@ -708,6 +767,7 @@ export const AccountsModule = () => {
             </div>
 
             <form onSubmit={handleSaveIncome} id="income-list-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+              {error && <p role="alert" style={{color:'#ef4444'}}>{error}</p>}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                   Income Name
@@ -733,7 +793,7 @@ export const AccountsModule = () => {
                     style={inputStyle}
                   >
                     <option value="Select a income head">Select a income head</option>
-                    {incomeHeadList.map((head) => (
+                    {incomeHeadList.filter(head => head.status === 'Active').map((head) => (
                       <option key={head.id} value={head.name}>{head.name}</option>
                     ))}
                   </select>
@@ -744,7 +804,7 @@ export const AccountsModule = () => {
                     Amount
                   </label>
                   <input
-                    type="text"
+                    type="number" min="0.01" step="0.01" required
                     placeholder="Enter Amount"
                     value={incomeForm.amount}
                     onChange={(e) => setIncomeForm({ ...incomeForm, amount: e.target.value })}
@@ -759,8 +819,7 @@ export const AccountsModule = () => {
                     Date
                   </label>
                   <input
-                    type="text"
-                    placeholder="dd/mm/yyyy"
+                    type="date" required
                     value={incomeForm.date}
                     onChange={(e) => setIncomeForm({ ...incomeForm, date: e.target.value })}
                     style={inputStyle}
@@ -777,10 +836,7 @@ export const AccountsModule = () => {
                     style={inputStyle}
                   >
                     <option value="Select Payment Type">Select Payment Type</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Online">Online</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Cheque">Cheque</option>
+                    {paymentTypes.map(method => <option key={method.id} value={method.name}>{method.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -824,7 +880,7 @@ export const AccountsModule = () => {
               </button>
 
               <button
-                type="submit"
+                type="submit" disabled={isSaving}
                 form="income-list-form"
                 className="btn btn-primary"
                 style={{
@@ -889,7 +945,7 @@ export const AccountsModule = () => {
               }}
             >
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-                {editingExpenseHead ? 'Edit Expense Head' : 'Add Expense Head'}
+                {expenseHeadForm.id ? 'Edit Expense Head' : 'Add Expense Head'}
               </h3>
               <button
                 onClick={() => setIsExpenseHeadModalOpen(false)}
@@ -900,6 +956,7 @@ export const AccountsModule = () => {
             </div>
 
             <form onSubmit={handleSaveExpenseHead} id="expense-head-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+              {error && <p role="alert" style={{color:'#ef4444'}}>{error}</p>}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                   Head Name
@@ -948,11 +1005,11 @@ export const AccountsModule = () => {
                     Section
                   </label>
                   <select
-                    value={expenseHeadForm.section}
+                    value={expenseHeadForm.section || ''}
                     onChange={(e) => setExpenseHeadForm({ ...expenseHeadForm, section: e.target.value })}
                     style={inputStyle}
                   >
-                    <option value="Select Section">Select Section</option>
+                    <option value="">Select Section</option>
                     <option value="General">General</option>
                     <option value="Administrative">Administrative</option>
                     <option value="Academic">Academic</option>
@@ -988,7 +1045,7 @@ export const AccountsModule = () => {
               </button>
 
               <button
-                type="submit"
+                type="submit" disabled={isSaving}
                 form="expense-head-form"
                 className="btn btn-primary"
                 style={{
@@ -1053,7 +1110,7 @@ export const AccountsModule = () => {
               }}
             >
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-                {editingExpense ? 'Edit Expense' : 'Add Expense'}
+                {expenseForm.id ? 'Edit Expense' : 'Add Expense'}
               </h3>
               <button
                 onClick={() => setIsExpenseModalOpen(false)}
@@ -1064,6 +1121,7 @@ export const AccountsModule = () => {
             </div>
 
             <form onSubmit={handleSaveExpense} id="expense-list-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+              {error && <p role="alert" style={{color:'#ef4444'}}>{error}</p>}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                   Expense Name
@@ -1089,7 +1147,7 @@ export const AccountsModule = () => {
                     style={inputStyle}
                   >
                     <option value="Select a expense head">Select a expense head</option>
-                    {expenseHeadList.map((head) => (
+                    {expenseHeadList.filter(head => head.status === 'Active').map((head) => (
                       <option key={head.id} value={head.name}>{head.name}</option>
                     ))}
                   </select>
@@ -1100,7 +1158,7 @@ export const AccountsModule = () => {
                     Amount
                   </label>
                   <input
-                    type="text"
+                    type="number" min="0.01" step="0.01" required
                     placeholder="Enter Amount"
                     value={expenseForm.amount}
                     onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
@@ -1115,8 +1173,7 @@ export const AccountsModule = () => {
                     Date
                   </label>
                   <input
-                    type="text"
-                    placeholder="dd/mm/yyyy"
+                    type="date" required
                     value={expenseForm.date}
                     onChange={(e) => setExpenseForm({ ...expenseForm, date: e.target.value })}
                     style={inputStyle}
@@ -1133,10 +1190,7 @@ export const AccountsModule = () => {
                     style={inputStyle}
                   >
                     <option value="Select Payment Type">Select Payment Type</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Online">Online</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Cheque">Cheque</option>
+                    {paymentTypes.map(method => <option key={method.id} value={method.name}>{method.name}</option>)}
                   </select>
                 </div>
               </div>
@@ -1180,7 +1234,7 @@ export const AccountsModule = () => {
               </button>
 
               <button
-                type="submit"
+                type="submit" disabled={isSaving}
                 form="expense-list-form"
                 className="btn btn-primary"
                 style={{

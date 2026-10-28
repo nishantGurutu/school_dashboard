@@ -1372,7 +1372,9 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               <div style={{ position: 'relative' }}>
                 <input
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Enter your password"
+                  placeholder={isEditMode ? "Leave blank to keep current password" : "Enter your password"}
+                  required={!isEditMode}
+                  autoComplete="new-password"
                   value={formData.loginPassword}
                   onChange={(e) => handleChange('loginPassword', e.target.value)}
                   style={{ ...inputStyle, paddingRight: '40px' }}

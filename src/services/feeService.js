@@ -2,6 +2,9 @@ import NetworkService from './networkService';
 import { API_ENDPOINTS } from './apiConfig';
 
 export const feeService = {
+  paymentTypes: () => NetworkService.get('/fees/payment-types'),
+  createPaymentType: data => NetworkService.post('/fees/payment-types', data),
+
   // Direct methods
   listCollections: () => NetworkService.get(API_ENDPOINTS.FEES.COLLECTIONS),
   createCollection: (data) => NetworkService.post(API_ENDPOINTS.FEES.COLLECTIONS, data),

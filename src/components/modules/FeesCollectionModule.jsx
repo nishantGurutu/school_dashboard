@@ -15,6 +15,9 @@ import {
   DollarSign,
   CheckCircle
 } from 'lucide-react';
+import { classService } from '../../services/classService';
+import { activeOptions, classOptions, applicableDiscounts, collectionPayload, discountPayload, discountValueLabel } from '../../services/feeCollectionForm';
+import { PaymentTypePicker } from './PaymentTypePicker';
 import { feeService } from '../../services/feeService';
 import { useApiAction } from '../../hooks/useApiAction';
 import { Spinner } from '../ui/Spinner';
@@ -75,16 +78,16 @@ export const FeesCollectionModule = () => {
       const typeItems = Array.isArray(typeRes) ? typeRes : [];
       const groupItems = Array.isArray(groupRes) ? groupRes : [];
       const discItems = Array.isArray(discRes) ? discRes : [];
-      setCollectList((prev) => (collItems.length ? collItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setFeesTypes((prev) => (typeItems.length ? typeItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setFeesGroups((prev) => (groupItems.length ? groupItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
-      setFeesDiscounts((prev) => (discItems.length ? discItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })) : prev));
+      setCollectList(collItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setFeesTypes(typeItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setFeesGroups(groupItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
+      setFeesDiscounts(discItems.map((item, i) => ({ ...item, sl: String(i + 1).padStart(2, '0') })));
     } catch (e) {
       setError(e.message || 'Failed to load fees data');
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm]);
+  }, []);
 
   useEffect(() => {
     fetchFeesData();
@@ -92,21 +95,61 @@ export const FeesCollectionModule = () => {
 
   // Modal Form State
   const [modalFormData, setModalFormData] = useState({
-    className: 'Select a class',
-    section: 'Select a Section',
+    className: '',
+    section: '',
     rollNo: '',
-    date: '15 Jan 2025',
-    amount: '1500',
-    discount: 'Select a Discount',
-    paymentType: 'Cash',
+    date: new Date().toLocaleDateString('en-CA'),
+    amount: '',
+    discountId: '',
+    feeTypeId: '',
+    paymentType: '',
     note: '',
     name: '',
     code: '',
-    feesType: 'May month fees, Admission fees, Exam fees',
+    feesType: currentSubTab === 'discount' ? 'All' : '',
     discountType: 'Percentage',
     discountValue: '',
     status: 'Select Status'
   });
+
+  const [classes, setClasses] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [paymentTypes, setPaymentTypes] = useState([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
+  const [optionsError, setOptionsError] = useState('');
+  const [sectionsError, setSectionsError] = useState('');
+  const selectedFeeType = feesTypes.find(type => String(type.id) === String(modalFormData.feeTypeId))?.name || '';
+  const discountOptions = applicableDiscounts(feesDiscounts, selectedFeeType);
+
+  useEffect(() => {
+    if (!isModalOpen || currentSubTab !== 'collect') return;
+    let active = true;
+    setOptionsLoading(true); setOptionsError(''); setClasses([]); setPaymentTypes([]);
+    Promise.all([classService.classes.list(), feeService.paymentTypes(), feeService.types.list(), feeService.discounts.list()])
+      .then(([classRows, payments, types, discounts]) => {
+        if (!active) return;
+        if (![classRows, payments, types, discounts].every(Array.isArray)) throw new Error('Invalid fee form options response.');
+        setClasses(classOptions(classRows)); setPaymentTypes(payments.filter(p => p.active));
+        setFeesTypes(types); setFeesDiscounts(discounts);
+      }).catch(err => { if (active) setOptionsError(err.message || 'Could not load fee options.'); })
+      .finally(() => { if (active) setOptionsLoading(false); });
+    return () => { active = false; };
+  }, [isModalOpen, currentSubTab]);
+
+  useEffect(() => {
+    setSections([]); setSectionsError('');
+    if (!isModalOpen || currentSubTab !== 'collect' || !modalFormData.className) { setSectionsLoading(false); return; }
+    let active = true;
+    setSectionsLoading(true);
+    classService.sections.list({ className: modalFormData.className }).then(rows => {
+      if (!active) return;
+      if (!Array.isArray(rows)) throw new Error('Invalid sections response.');
+      setSections(activeOptions(rows));
+    }).catch(err => { if (active) setSectionsError(err.message || 'Could not load sections.'); })
+      .finally(() => { if (active) setSectionsLoading(false); });
+    return () => { active = false; };
+  }, [isModalOpen, currentSubTab, modalFormData.className]);
 
   const handleSubTabChange = (tabKey) => {
     setCurrentSubTab(tabKey);
@@ -119,18 +162,20 @@ export const FeesCollectionModule = () => {
 
   const handleOpenAddModal = () => {
     setEditingItem(null);
+    setError('');
     setModalFormData({
-      className: 'Select a class',
-      section: 'Select a Section',
+      className: '',
+      section: '',
       rollNo: '',
-      date: '15 May 2025',
-      amount: '1500',
-      discount: 'Select a Discount',
-      paymentType: 'Cash',
+      date: new Date().toLocaleDateString('en-CA'),
+      amount: '',
+      discountId: '',
+      feeTypeId: '',
+      paymentType: '',
       note: '',
       name: '',
       code: '',
-      feesType: 'May month fees, Admission fees, Exam fees',
+      feesType: currentSubTab === 'discount' ? 'All' : '',
       discountType: 'Percentage',
       discountValue: '',
       status: 'Select Status'
@@ -142,19 +187,20 @@ export const FeesCollectionModule = () => {
     setEditingItem(item);
     setActiveDropdownId(null);
     setModalFormData({
-      className: item.className || 'Class 1 (A)',
-      section: 'Section A',
-      rollNo: item.rollNo || '12',
-      date: item.date || '15 May 2025',
-      amount: item.amount != null ? String(item.amount).replace('$', '') : '700',
-      discount: 'Select a Discount',
-      paymentType: 'Cash',
-      note: '',
+      className: item.className || '',
+      section: item.section || '',
+      rollNo: item.rollNo || '',
+      date: item.date || '',
+      amount: item.amount != null ? String(item.amount).replace('$', '') : '',
+      discountId: item.discountId || '',
+      feeTypeId: item.feeTypeId || '',
+      paymentType: item.paymentType || '',
+      note: item.note || '',
       name: item.name || '',
       code: item.code || '',
-      feesType: item.feesType || 'May month fees, Admission fees, Exam fees',
+      feesType: item.feesType || (currentSubTab === 'discount' ? 'All' : ''),
       discountType: item.discountType || 'Percentage',
-      discountValue: item.discountValue || '',
+      discountValue: String(item.discountValue ?? '').replace(/%$/, '').trim(),
       status: item.status || 'Active'
     });
     setIsModalOpen(true);
@@ -189,6 +235,9 @@ export const FeesCollectionModule = () => {
 
   const handleSaveModal = async (e) => {
     e.preventDefault();
+    if (currentSubTab === 'collect' && (optionsLoading || sectionsLoading || optionsError || sectionsError)) {
+      setError(optionsError || sectionsError || 'Wait for fee form options to load.'); return;
+    }
 
     if (savingRef.current) {
       return;
@@ -200,15 +249,7 @@ export const FeesCollectionModule = () => {
       if (editingItem) {
         const id = editingItem.id;
         if (currentSubTab === 'collect') {
-          const updated = await feeService.collections.update(id, {
-            className: modalFormData.className,
-            rollNo: modalFormData.rollNo || editingItem.rollNo,
-            amount: Number(modalFormData.amount) || 0,
-            paid: Number(modalFormData.amount) || 0,
-            due: 0,
-            date: modalFormData.date,
-            status: 'Paid'
-          });
+          const updated = await feeService.collections.update(id, collectionPayload(modalFormData, editingItem));
           setCollectList((prev) => prev.map((c) => (c.id === id ? { ...c, ...updated } : c)));
         } else if (currentSubTab === 'type') {
           const updated = await feeService.types.update(id, {
@@ -224,30 +265,12 @@ export const FeesCollectionModule = () => {
           });
           setFeesGroups((prev) => prev.map((fg) => (fg.id === id ? { ...fg, ...updated } : fg)));
         } else if (currentSubTab === 'discount') {
-          const updated = await feeService.discounts.update(id, {
-            name: modalFormData.name,
-            feesType: modalFormData.feesType,
-            discountType: modalFormData.discountType,
-            discountValue: modalFormData.discountValue || editingItem.discountValue,
-            status: modalFormData.status === 'Select Status' ? editingItem.status : modalFormData.status
-          });
+          const updated = await feeService.discounts.update(id, discountPayload(modalFormData));
           setFeesDiscounts((prev) => prev.map((fd) => (fd.id === id ? { ...fd, ...updated } : fd)));
         }
       } else {
         if (currentSubTab === 'collect') {
-          const created = await feeService.collections.create({
-            admissionNo: `AD${Date.now()}`,
-            name: 'Jon Deve',
-            rollNo: modalFormData.rollNo || '10',
-            className: modalFormData.className !== 'Select a class' ? modalFormData.className : 'Class 5 (A)',
-            amount: Number(modalFormData.amount) || 1500,
-            paid: Number(modalFormData.amount) || 1500,
-            due: 0,
-            date: modalFormData.date || '15 Jan 2025',
-            status: 'Paid',
-            paymentType: modalFormData.paymentType,
-            note: modalFormData.note
-          });
+          const created = await feeService.collections.create(collectionPayload(modalFormData));
           setCollectList((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         } else if (currentSubTab === 'type') {
           const created = await feeService.types.create({
@@ -263,13 +286,7 @@ export const FeesCollectionModule = () => {
           });
           setFeesGroups((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         } else if (currentSubTab === 'discount') {
-          const created = await feeService.discounts.create({
-            name: modalFormData.name || 'Class 9 (A) Fees',
-            feesType: modalFormData.feesType || 'May month fees, Admission fees, Exam fees',
-            discountType: modalFormData.discountType || 'Percentage',
-            discountValue: modalFormData.discountValue || '10%',
-            status: modalFormData.status === 'Select Status' ? 'Active' : modalFormData.status
-          });
+          const created = await feeService.discounts.create(discountPayload(modalFormData));
           setFeesDiscounts((prev) => [{ ...created, sl: String(prev.length + 1).padStart(2, '0') }, ...prev]);
         }
       }
@@ -586,8 +603,10 @@ export const FeesCollectionModule = () => {
 
                 {currentSubTab === 'discount' && (
                   <>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Group Name</th>
-                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Fees Type</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Discount Name</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Applicable Fee Type</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Discount Type</th>
+                    <th style={{ padding: '12px 16px', fontWeight: 600 }}>Discount Value</th>
                   </>
                 )}
 
@@ -709,8 +728,8 @@ export const FeesCollectionModule = () => {
               {/* 4. Render Fees Discount (Screenshot 3) */}
               {currentSubTab === 'discount' &&
                 feesDiscounts
-                  .filter((fd) => fd.name.toLowerCase().includes(searchTerm.toLowerCase()) || fd.feesType.toLowerCase().includes(searchTerm.toLowerCase()))
-                  .map((row) => (
+                  .filter(fd => [fd.name, fd.feesType, fd.discountType, discountValueLabel(fd), fd.status].some(value => String(value || '').toLowerCase().includes(searchTerm.toLowerCase())))
+                  .map((row, index) => (
                     <tr key={row.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
                       <td style={{ padding: '14px 16px' }}>
                         <input
@@ -720,9 +739,11 @@ export const FeesCollectionModule = () => {
                           style={{ cursor: 'pointer' }}
                         />
                       </td>
-                      <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{row.sl}</td>
+                      <td style={{ padding: '14px 16px', fontWeight: 500, color: 'var(--text-secondary)' }}>{String(index + 1).padStart(2, '0')}</td>
                       <td style={{ padding: '14px 16px', fontWeight: 600 }}>{row.name}</td>
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.feesType}</td>
+                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>{row.feesType || 'All fee types'}</td>
+                      <td style={{ padding: '14px 16px' }}>{row.discountType || '—'}</td>
+                      <td style={{ padding: '14px 16px', fontWeight: 600 }}>{discountValueLabel(row)}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <StatusBadge status={row.status} />
                       </td>
@@ -809,53 +830,67 @@ export const FeesCollectionModule = () => {
 
             {/* Form Body */}
             <form onSubmit={handleSaveModal} id="fees-modal-form" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '20px', flex: 1, overflowY: 'auto' }}>
+              {error && <p role="alert" style={{ color: '#ef4444' }}>{error}</p>}
               {/* Collect Fees Drawer Form */}
               {currentSubTab === 'collect' && (
                 <>
+                  {optionsError && <p role="alert">{optionsError} Close and reopen this form to retry.</p>}
+                  {sectionsError && <p role="alert">{sectionsError} Select the class again to retry.</p>}
+                  {!optionsLoading && !optionsError && !classes.length && <p role="status">No active classes. Ask an administrator to add a class and its sections.</p>}
+                  {!optionsLoading && !optionsError && !activeOptions(feesTypes).length && <p role="status">No active fee types. Add a fee type in Fees Type before collecting fees.</p>}
+                  {!optionsLoading && !optionsError && !paymentTypes.length && <p role="status">No active payment methods are configured.</p>}
+                  {modalFormData.className && !sectionsLoading && !sectionsError && !sections.length && <p role="status">No active sections are assigned to this class.</p>}
+                  <div>
+                    <label htmlFor="collect-fee-type" style={{ display: 'block', marginBottom: 6 }}>Fee Type</label>
+                    <select id="collect-fee-type" required style={inputStyle} value={modalFormData.feeTypeId}
+                      disabled={optionsLoading || !!optionsError}
+                      onChange={e => setModalFormData({ ...modalFormData, feeTypeId: e.target.value, discountId: '' })}>
+                      <option value="">Select a fee type</option>
+                      {activeOptions(feesTypes).map(type => <option key={type.id} value={type.id}>{type.name}</option>)}
+                    </select>
+                  </div>
+
                   <div style={{ display: 'flex', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      <label htmlFor="collect-class" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                         Class
                       </label>
-                      <select
+                      <select id="collect-class"
                         value={modalFormData.className}
-                        onChange={(e) => setModalFormData({ ...modalFormData, className: e.target.value })}
+                        onChange={(e) => { setSections([]); setModalFormData({ ...modalFormData, className: e.target.value, section: '', rollNo: '' }); }}
+                        required disabled={optionsLoading || !!optionsError}
                         style={inputStyle}
                       >
-                        <option value="Select a class">Select a class</option>
-                        <option value="Class 1 (A)">Class 1 (A)</option>
-                        <option value="Class 2 (B)">Class 2 (B)</option>
-                        <option value="Class 3 (A)">Class 3 (A)</option>
-                        <option value="Class 4 (C)">Class 4 (C)</option>
-                        <option value="Class 5 (B)">Class 5 (B)</option>
+                        <option value="">{optionsLoading ? 'Loading classes...' : 'Select a class'}</option>
+                        {classes.map(name => <option key={name} value={name}>{name}</option>)}
                       </select>
                     </div>
 
                     <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      <label htmlFor="collect-section" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                         Section
                       </label>
-                      <select
+                      <select id="collect-section"
                         value={modalFormData.section}
-                        onChange={(e) => setModalFormData({ ...modalFormData, section: e.target.value })}
+                        onChange={(e) => setModalFormData({ ...modalFormData, section: e.target.value, rollNo: '' })}
+                        required disabled={!modalFormData.className || sectionsLoading || !!sectionsError}
                         style={inputStyle}
                       >
-                        <option value="Select a Section">Select a Section</option>
-                        <option value="Section A">Section A</option>
-                        <option value="Section B">Section B</option>
-                        <option value="Section C">Section C</option>
+                        <option value="">{sectionsLoading ? 'Loading sections...' : 'Select a section'}</option>
+                        {sections.map(section => <option key={section.id} value={section.name}>{section.name}</option>)}
                       </select>
                     </div>
                   </div>
 
                   <div style={{ display: 'flex', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      <label htmlFor="collect-roll" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                         Roll No
                       </label>
-                      <input
+                      <input id="collect-roll"
                         type="text"
                         placeholder="Enter roll no."
+                        required
                         value={modalFormData.rollNo}
                         onChange={(e) => setModalFormData({ ...modalFormData, rollNo: e.target.value })}
                         style={inputStyle}
@@ -863,12 +898,12 @@ export const FeesCollectionModule = () => {
                     </div>
 
                     <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      <label htmlFor="collect-date" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                         Date
                       </label>
-                      <input
-                        type="text"
-                        placeholder="dd/mm/yyyy"
+                      <input id="collect-date"
+                        type="date"
+                        required
                         value={modalFormData.date}
                         onChange={(e) => setModalFormData({ ...modalFormData, date: e.target.value })}
                         style={inputStyle}
@@ -879,12 +914,12 @@ export const FeesCollectionModule = () => {
                   <div style={{ display: 'flex', gap: '16px' }}>
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                        <label style={{ fontSize: '0.85rem', fontWeight: 700 }}>Amount</label>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#ef4444' }}>Due: 2000</span>
+                        <label htmlFor="collect-amount" style={{ fontSize: '0.85rem', fontWeight: 700 }}>Amount</label>
+
                       </div>
-                      <input
-                        type="text"
-                        placeholder="$1500"
+                      <input id="collect-amount"
+                        type="number" min="0.01" step="0.01"
+                        placeholder="Enter fee amount"
                         value={modalFormData.amount}
                         onChange={(e) => setModalFormData({ ...modalFormData, amount: e.target.value })}
                         style={inputStyle}
@@ -893,43 +928,36 @@ export const FeesCollectionModule = () => {
                     </div>
 
                     <div style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                      <label htmlFor="collect-discount" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                         Discount
                       </label>
-                      <select
-                        value={modalFormData.discount}
-                        onChange={(e) => setModalFormData({ ...modalFormData, discount: e.target.value })}
+                      <select id="collect-discount"
+                        value={modalFormData.discountId}
+                        disabled={optionsLoading || !modalFormData.feeTypeId || !!optionsError}
+                        onChange={(e) => setModalFormData({ ...modalFormData, discountId: e.target.value })}
                         style={inputStyle}
                       >
-                        <option value="Select a Discount">Select a Discount</option>
-                        <option value="Sibling 10%">Sibling 10%</option>
-                        <option value="Merit 25%">Merit 25%</option>
-                        <option value="Staff 50%">Staff 50%</option>
+                        <option value="">No discount</option>
+                        {discountOptions.map(discount => <option key={discount.id} value={discount.id}>{discount.name} ({discount.discountValue}{discount.discountType === 'Percentage' && !String(discount.discountValue).includes('%') ? '%' : ''})</option>)}
                       </select>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 6 }}>
+                        {!modalFormData.feeTypeId ? 'Select a fee type first.' : !discountOptions.length ? 'No active discounts apply to this fee type.' : 'Only active discounts for this fee type or all fee types are shown.'}
+                      </p>
                     </div>
                   </div>
 
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Payment Type
-                    </label>
-                    <select
-                      value={modalFormData.paymentType}
-                      onChange={(e) => setModalFormData({ ...modalFormData, paymentType: e.target.value })}
-                      style={inputStyle}
-                    >
-                      <option value="Cash">Cash</option>
-                      <option value="Bank Transfer">Bank Transfer</option>
-                      <option value="Stripe/Card">Stripe/Card</option>
-                      <option value="Cheque">Cheque</option>
-                    </select>
-                  </div>
+                  <PaymentTypePicker
+                    value={modalFormData.paymentType} methods={paymentTypes} inputStyle={inputStyle}
+                    disabled={optionsLoading || !!optionsError}
+                    onChange={paymentType => setModalFormData(previous => ({ ...previous, paymentType }))}
+                    onCreated={created => setPaymentTypes(previous => [...previous.filter(method => method.id !== created.id), created])}
+                  />
 
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
+                    <label htmlFor="collect-note" style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                       Note
                     </label>
-                    <textarea
+                    <textarea id="collect-note"
                       placeholder="Enter note..."
                       rows={3}
                       value={modalFormData.note}
@@ -1029,16 +1057,26 @@ export const FeesCollectionModule = () => {
                 <>
                   <div>
                     <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                      Group Name
+                      Discount Name
                     </label>
                     <input
                       type="text"
-                      placeholder="Enter Group Name"
+                      placeholder="e.g. Sibling Discount"
                       value={modalFormData.name}
                       onChange={(e) => setModalFormData({ ...modalFormData, name: e.target.value })}
                       style={inputStyle}
                       required
                     />
+                  </div>
+
+                  <div>
+                    <label htmlFor="discount-fee-type" style={{ display: 'block', marginBottom: 6 }}>Applicable Fee Type</label>
+                    <select id="discount-fee-type" value={modalFormData.feesType || 'All'}
+                      onChange={e => setModalFormData({ ...modalFormData, feesType: e.target.value })} style={inputStyle}>
+                      <option value="All">All fee types</option>
+                      {activeOptions(feesTypes).map(type => <option key={type.id} value={type.name}>{type.name}</option>)}
+                    </select>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 6 }}>Choose which fee type this discount applies to. All fee types makes it available for every fee collection.</p>
                   </div>
 
                   <div style={{ display: 'flex', gap: '16px' }}>
@@ -1061,8 +1099,8 @@ export const FeesCollectionModule = () => {
                         Discount Value
                       </label>
                       <input
-                        type="text"
-                        placeholder="Ex: 10%"
+                        type="number" min="0" step="0.01" max={modalFormData.discountType === 'Percentage' ? 100 : undefined} required
+                        placeholder={modalFormData.discountType === 'Percentage' ? 'e.g. 10 (10%)' : 'e.g. 200'}
                         value={modalFormData.discountValue}
                         onChange={(e) => setModalFormData({ ...modalFormData, discountValue: e.target.value })}
                         style={inputStyle}
@@ -1117,7 +1155,7 @@ export const FeesCollectionModule = () => {
                 type="submit"
                 form="fees-modal-form"
                 className="btn btn-primary"
-                disabled={isSaving}
+                disabled={isSaving || (currentSubTab === 'collect' && (optionsLoading || sectionsLoading || !!optionsError || !!sectionsError || !classes.length || !sections.length || !activeOptions(feesTypes).length || !paymentTypes.length))}
                 style={{
                   padding: '10px 36px',
                   backgroundColor: '#0d9488',
@@ -1194,12 +1232,15 @@ export const FeesCollectionModule = () => {
                 border: '1px solid #e2e8f0'
               }}
             >
-              <div><strong>Student Name</strong> : {viewingReceiptItem.name || 'Jon Deve'}</div>
-              <div><strong>Date:</strong> {viewingReceiptItem.date || '15 Jan 2025'}</div>
-              <div><strong>Class</strong> : {viewingReceiptItem.className || '5 (A)'}</div>
-              <div><strong>Collected By:</strong> Admin</div>
-              <div><strong>Roll No.</strong> : {viewingReceiptItem.rollNo || '10'}</div>
-              <div><strong>Payment By:</strong> Bank</div>
+              <div><strong>Student Name</strong> : {viewingReceiptItem.name || '—'}</div>
+              <div><strong>Date:</strong> {viewingReceiptItem.date || '—'}</div>
+              <div><strong>Class</strong> : {viewingReceiptItem.className || '—'} / {viewingReceiptItem.section || '—'}</div>
+              <div><strong>Fee Type</strong> : {viewingReceiptItem.feeType || '—'}</div>
+              <div><strong>Discount</strong> : {viewingReceiptItem.discount || 'None'} ({viewingReceiptItem.discountAmount || '0.00'})</div>
+              <div><strong>Payment Type</strong> : {viewingReceiptItem.paymentType || '—'}</div>
+
+              <div><strong>Roll No.</strong> : {viewingReceiptItem.rollNo || '—'}</div>
+
             </div>
 
             {/* Receipt Amount Table (Screenshot 3) */}
@@ -1230,9 +1271,9 @@ export const FeesCollectionModule = () => {
                   textAlign: 'left'
                 }}
               >
-                <div>{viewingReceiptItem.amount || '$2500'}</div>
-                <div style={{ color: '#10b981' }}>{viewingReceiptItem.paid || '$1500'}</div>
-                <div style={{ color: '#ef4444' }}>{viewingReceiptItem.due || '$500'}</div>
+                <div>{viewingReceiptItem.amount ?? '0.00'}</div>
+                <div style={{ color: '#10b981' }}>{viewingReceiptItem.paid ?? '0.00'}</div>
+                <div style={{ color: '#ef4444' }}>{viewingReceiptItem.due ?? '0.00'}</div>
               </div>
             </div>
 

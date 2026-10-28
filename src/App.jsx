@@ -7,6 +7,7 @@ import { Sidebar } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { authStorage } from './services/api';
 import { canAccess, roleFor } from './config/roleAccess';
+import { AccountantDashboard } from './components/dashboard/AccountantDashboard';
 import { TeacherDashboard } from './components/dashboard/TeacherDashboard';
 import { HomeworkModule } from './components/modules/HomeworkModule';
 import { authService } from './services/authService';
@@ -40,13 +41,18 @@ import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerMod
 import { LoginScreen } from './components/auth/LoginScreen';
 
 const MainLayout = ({ onLogout }) => {
-  const { activeTab, isSidebarCollapsed } = useTheme();
+  const { activeTab, setActiveTab, isSidebarCollapsed } = useTheme();
+
+  useEffect(() => {
+    setActiveTab('dashboard');
+  }, [setActiveTab]);
 
   const renderModule = () => {
     if (!canAccess(authStorage.getUser(), activeTab)) return <p role="alert">You do not have access to this module.</p>;
     switch (activeTab) {
       case 'dashboard':
-        return roleFor(authStorage.getUser()) === 'TEACHER' ? <TeacherDashboard /> : <SchoolAdminDashboard />;
+        return roleFor(authStorage.getUser()) === 'ACCOUNTANT' ? <AccountantDashboard />
+          : roleFor(authStorage.getUser()) === 'TEACHER' ? <TeacherDashboard /> : <SchoolAdminDashboard />;
       case 'portal':
         return <PortalModule />;
       case 'homework':
