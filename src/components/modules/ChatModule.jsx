@@ -1,5 +1,5 @@
 import { mergeChatMessages } from '../../services/chatMessages';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Client } from '@stomp/stompjs';
 import { NetworkService, authStorage } from '../../services/api';
 import { API_BASE_URL } from '../../services/apiConfig';
@@ -11,7 +11,7 @@ export function ChatModule() {
   const [text, setText] = useState(''), [attachment, setAttachment] = useState(null);
   const [error, setError] = useState(''), [busy, setBusy] = useState(false), [online, setOnline] = useState(false);
   const [creating, setCreating] = useState(false), [group, setGroup] = useState(false), [name, setName] = useState(''), [selected, setSelected] = useState([]);
-  const cursor = useRef(0), selectedRoom = useRef(null), syncing = useRef(false), bottom = useRef(null), draft = useRef(null);
+  const cursor = useRef(0), selectedRoom = useRef(null), syncing = useRef(false), messageList = useRef(null), followBottom = useRef(true), draft = useRef(null);
   const userId = authStorage.getUser()?.userId;
   const room = rooms.find(r => r.id === roomId);
   const sync = useCallback(async () => {
@@ -33,7 +33,7 @@ export function ChatModule() {
       if (after) await NetworkService.post(`/chat/rooms/${current}/receipts`, { through: after, read: !document.hidden });
     } catch (e) { setError(e.message); } finally { syncing.current = false; }
   }, []);
-  useEffect(() => { selectedRoom.current = roomId; cursor.current = 0; setMessages([]); setAttachment(null); draft.current = null; sync(); }, [roomId, sync]);
+  useEffect(() => { followBottom.current = true; selectedRoom.current = roomId; cursor.current = 0; setMessages([]); setAttachment(null); draft.current = null; sync(); }, [roomId, sync]);
   useEffect(() => {
     let disposed = false, socket, base;
     async function connect() {
@@ -65,7 +65,10 @@ export function ChatModule() {
     document.addEventListener('visibilitychange', sync);
     return () => { disposed = true; clearInterval(timer); clearInterval(reauth); socket?.deactivate(); document.removeEventListener('visibilitychange', sync); };
   }, [sync]);
-  useEffect(() => { bottom.current?.scrollIntoView({ block: 'nearest' }); }, [messages.length]);
+  useLayoutEffect(() => {
+    const list = messageList.current;
+    if (list && followBottom.current) list.scrollTop = list.scrollHeight;
+  }, [messages, roomId, room?.id]);
   async function create(event) {
     event.preventDefault(); setBusy(true); setError('');
     try { const result = await NetworkService.post('/chat/rooms', { name, groupChat: group, memberIds: selected }); setCreating(false); setSelected([]); setRoomId(result.id); await sync(); }
@@ -76,6 +79,7 @@ export function ChatModule() {
     const current = retry?.roomId || roomId;
     if (!current || (!retry && ((!text.trim() && !attachment) || busy))) return;
     const message = retry || { id: `local-${crypto.randomUUID()}`, roomId: current, clientId: crypto.randomUUID(), senderId: userId, senderName: authStorage.getUser()?.name || 'You', text, sentAt: new Date().toISOString(), attachment, localState: 'sending' };
+    followBottom.current = true;
     if (!retry) { setText(''); setAttachment(null); }
     setError('');
     if (selectedRoom.current === current) setMessages(previous => mergeChatMessages(previous, [{ ...message, localState: 'sending' }]));
@@ -113,7 +117,7 @@ export function ChatModule() {
     <div className="chat-columns"><aside aria-label="Conversations">{rooms.length === 0 && <p>No conversations yet. Start one with an authorized contact.</p>}{rooms.map(r => <button key={r.id} disabled={busy} className={r.id === roomId ? 'selected' : ''} onClick={() => setRoomId(r.id)}><strong>{r.groupChat ? '👥 ' : ''}{r.name}</strong>{r.unreadCount > 0 && <b>{r.unreadCount}</b>}<small>{r.lastMessage || 'No messages yet'}</small></button>)}</aside>
     <main>{!room ? <div className="chat-empty">Select a conversation to start messaging.</div> : <>
       <h3>{room.name}<small>{room.members.map(m => m.name).join(', ')}</small></h3>
-      <div className="chat-messages">{messages.map(m => <article key={m.id} className={String(m.senderId) === String(userId) ? 'mine' : ''}><strong>{m.senderName}</strong><p>{m.text}</p>{m.localState === 'failed' && <button onClick={() => send(null, m)}>Retry send</button>}{m.attachment && <button onClick={() => download(m.attachment)}>📎 {m.attachment.name}</button>}<small>{new Date(m.sentAt).toLocaleString()}{String(m.senderId) === String(userId) && ` · ${status(m)}`}</small></article>)}<div ref={bottom} /></div>
+      <div className="chat-messages" ref={messageList} onScroll={e => { const list = e.currentTarget; followBottom.current = list.scrollHeight - list.scrollTop - list.clientHeight < 80; }}>{messages.map(m => <article key={m.id} className={String(m.senderId) === String(userId) ? 'mine' : ''}><strong>{m.senderName}</strong><p>{m.text}</p>{m.localState === 'failed' && <button onClick={() => send(null, m)}>Retry send</button>}{m.attachment && <button onClick={() => download(m.attachment)}>📎 {m.attachment.name}</button>}<small>{new Date(m.sentAt).toLocaleString()}{String(m.senderId) === String(userId) && ` · ${status(m)}`}</small></article>)}</div>
       <form className="chat-compose" onSubmit={send}>{attachment && <span>📎 {attachment.name}<button type="button" onClick={() => setAttachment(null)}>Remove</button></span>}<textarea aria-label="Message" maxLength={4000} value={text} onChange={e => setText(e.target.value)} placeholder="Write a message…" /><label className="chat-attach">Attach image/PDF<input type="file" hidden accept="image/png,image/jpeg,image/webp,application/pdf" disabled={busy} onChange={e => { upload(e.target.files[0]); e.target.value = ''; }} /></label><button disabled={busy || (!text.trim() && !attachment)}>{busy ? 'Working…' : 'Send'}</button></form>
     </>}</main></div>
   </section>;
