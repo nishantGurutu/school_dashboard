@@ -1,5 +1,5 @@
 const modules = {
-  ADMIN: ['dashboard', 'portal', 'students', 'teachers', 'staff', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
+  ADMIN: ['settings', 'dashboard', 'portal', 'students', 'teachers', 'staff', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
   PRINCIPAL: ['dashboard', 'portal', 'students', 'teachers', 'staff', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
   TEACHER: ['dashboard', 'portal', 'students', 'curriculum', 'homework', 'examinations', 'attendance-student', 'certificate', 'holidays', 'leaves-request', 'notice', 'classes-timetable'],
   ACCOUNTANT: ['dashboard', 'fees', 'accounts', 'holidays', 'notice'],

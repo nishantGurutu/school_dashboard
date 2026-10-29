@@ -1,8 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import NetworkService from '../../services/networkService';
-import { API_BASE_URL } from '../../services/apiConfig';
-import { authStorage } from '../../services/api';
 
 const empty = { className: '', section: '', admissionNo: '', title: '', term: '', description: '', file: null };
 export const StudentReportsModule = () => {
@@ -56,9 +54,8 @@ export const StudentReportsModule = () => {
   };
   const download = async report => {
     try {
-      const response = await fetch(`${API_BASE_URL}/student-reports/${report.id}/pdf?attachment=true`, { headers: { Authorization: `Bearer ${authStorage.getAccessToken()}` } });
-      if (!response.ok) throw new Error('Unable to download report. Please sign in again and retry.');
-      const url = URL.createObjectURL(await response.blob());
+      const blob = await NetworkService.get(`/student-reports/${report.id}/pdf?attachment=true`);
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a'); link.href = url; link.download = report.fileName || 'Report.pdf'; link.click();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (e) { setError(e.message); }

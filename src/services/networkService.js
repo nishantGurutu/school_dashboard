@@ -1,4 +1,5 @@
 import { API_BASE_URL, API_ENDPOINTS } from './apiConfig';
+import { refreshRuntimeConfig } from './runtimeConfig';
 
 const TOKEN_KEY = 'edudash_access_token';
 const REFRESH_KEY = 'edudash_refresh_token';
@@ -28,58 +29,37 @@ export const authStorage = {
 };
 
 class NetworkServiceClass {
-  constructor() {
-    this.baseUrl = API_BASE_URL;
-    this.isRefreshing = false;
-    this.refreshSubscribers = [];
-  }
+  constructor() { this.refreshPromise = null; }
 
-  onRefreshed(token) {
-    this.refreshSubscribers.forEach((cb) => cb(token));
-    this.refreshSubscribers = [];
-  }
+  get baseUrl() { return API_BASE_URL; }
 
-  addRefreshSubscriber(cb) {
-    this.refreshSubscribers.push(cb);
-  }
-
-  async refreshAccessToken() {
-    const refreshToken = authStorage.getRefreshToken();
-    if (!refreshToken) return null;
-
-    try {
-      const response = await fetch(`${this.baseUrl}${API_ENDPOINTS.AUTH.REFRESH}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refreshToken })
+  async refreshAccessToken(baseUrl = this.baseUrl) {
+    if (this.refreshPromise) return this.refreshPromise;
+    this.refreshPromise = (async () => {
+      const refreshToken = authStorage.getRefreshToken();
+      if (!refreshToken) return null;
+      const response = await fetch(`${baseUrl}${API_ENDPOINTS.AUTH.REFRESH}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refreshToken }), signal: AbortSignal.timeout(15000)
       });
-
-      if (!response.ok) return null;
-
+      if ([400, 401, 403].includes(response.status)) return null;
+      if (!response.ok) throw new Error('Token refresh is temporarily unavailable. Please retry.');
       const data = await response.json();
-      const currentUser = authStorage.getUser() || {
-        userId: data.userId,
-        email: data.email,
-        name: data.name,
-        role: data.role
-      };
-
-      authStorage.setSession({
-        accessToken: data.accessToken,
+      if (!data.accessToken) throw new Error('Invalid token refresh response. Please retry.');
+      authStorage.setSession({ accessToken: data.accessToken,
         refreshToken: data.refreshToken || refreshToken,
-        user: currentUser
-      });
-
+        user: authStorage.getUser() || data });
       return data.accessToken;
-    } catch {
-      return null;
-    }
+    })();
+    try { return await this.refreshPromise; }
+    finally { this.refreshPromise = null; }
   }
 
   async request(endpoint, options = {}) {
-    const { method = 'GET', headers = {}, body, params, ...customConfig } = options;
+    await refreshRuntimeConfig(endpoint.includes('/auth/login'));
+    const { method = 'GET', headers = {}, body, params, baseUrl = this.baseUrl, ...customConfig } = options;
 
-    let url = endpoint.startsWith('http') ? endpoint : `${this.baseUrl}${endpoint}`;
+    let url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
 
     const resolvedParams =
       params && typeof params === 'object' && params.params && typeof params.params === 'object'
@@ -134,35 +114,17 @@ class NetworkServiceClass {
 
     // Handle 401 Unauthorized (Token Expiration for authenticated requests only)
     if (response.status === 401 && token && !isAuthEndpoint) {
-      if (this.isRefreshing) {
-        const newToken = await new Promise((resolve) => {
-          this.addRefreshSubscriber(resolve);
-        });
-
-        if (newToken) {
-          fetchConfig.headers['Authorization'] = `Bearer ${newToken}`;
-          response = await fetch(url, fetchConfig);
-        } else {
-          authStorage.clear();
-          window.dispatchEvent(new CustomEvent('auth:expired'));
-          throw new Error('Session expired. Please log in again.');
-        }
-      } else {
-        this.isRefreshing = true;
-        const newToken = await this.refreshAccessToken();
-        this.isRefreshing = false;
-
-        this.onRefreshed(newToken);
-
-        if (newToken) {
-          fetchConfig.headers['Authorization'] = `Bearer ${newToken}`;
-          response = await fetch(url, fetchConfig);
-        } else {
-          authStorage.clear();
-          window.dispatchEvent(new CustomEvent('auth:expired'));
-          throw new Error('Session expired. Please log in again.');
-        }
+      // A delayed 401 may arrive after another request already refreshed.
+      const currentToken = authStorage.getAccessToken();
+      const newToken = currentToken && currentToken !== token
+        ? currentToken : await this.refreshAccessToken(baseUrl);
+      if (!newToken) {
+        authStorage.clear();
+        window.dispatchEvent(new CustomEvent('auth:expired'));
+        throw new Error('Session expired. Please log in again.');
       }
+      fetchConfig.headers['Authorization'] = `Bearer ${newToken}`;
+      response = await fetch(url, fetchConfig);
     }
 
     return this.parseResponse(response);

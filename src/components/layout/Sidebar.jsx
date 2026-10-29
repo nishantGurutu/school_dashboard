@@ -35,6 +35,7 @@ export const Sidebar = () => {
   const normalizedRole = roleFor(currentUser);
 
   const menuItems = [
+    { key: 'settings', label: 'Settings', icon: UserCog, hasSub: false },
     { key: 'dashboard', label: 'Dashboard', icon: Home, hasSub: true },
     { key: 'students', label: 'Students', icon: GraduationCap, hasSub: true },
     { key: 'teachers', label: 'Staff', icon: UserCheck, hasSub: false },

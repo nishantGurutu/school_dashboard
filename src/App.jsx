@@ -1,3 +1,4 @@
+import { SettingsModule } from './components/modules/SettingsModule';
 import { StudentReportsModule } from './components/modules/StudentReportsModule';
 import { PortalModule } from './components/modules/PortalModule';
 import React, { useState, useEffect, useCallback } from 'react';
@@ -50,6 +51,7 @@ const MainLayout = ({ onLogout }) => {
   const renderModule = () => {
     if (!canAccess(authStorage.getUser(), activeTab)) return <p role="alert">You do not have access to this module.</p>;
     switch (activeTab) {
+      case 'settings': return <SettingsModule />;
       case 'dashboard':
         return roleFor(authStorage.getUser()) === 'ACCOUNTANT' ? <AccountantDashboard />
           : roleFor(authStorage.getUser()) === 'TEACHER' ? <TeacherDashboard /> : <SchoolAdminDashboard />;

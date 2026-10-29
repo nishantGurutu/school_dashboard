@@ -1,3 +1,4 @@
+import { API_BASE_URL } from '../../services/apiConfig';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   BookOpen,
@@ -1136,7 +1137,7 @@ export const TeacherCurriculumModule = () => {
                           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                             {note.fileUrl && (
                               <a
-                                href={note.fileUrl.startsWith('http') ? note.fileUrl : `http://localhost:8080${note.fileUrl}`}
+                                href={note.fileUrl.startsWith('http') ? note.fileUrl : new URL(note.fileUrl, API_BASE_URL).href}
                                 target="_blank"
                                 rel="noreferrer"
                                 style={{
@@ -1236,7 +1237,7 @@ export const TeacherCurriculumModule = () => {
                       <div style={{ display: 'inline-flex', gap: '6px' }}>
                         {n.fileUrl && (
                           <a
-                            href={n.fileUrl.startsWith('http') ? n.fileUrl : `http://localhost:8080${n.fileUrl}`}
+                            href={n.fileUrl.startsWith('http') ? n.fileUrl : new URL(n.fileUrl, API_BASE_URL).href}
                             target="_blank"
                             rel="noreferrer"
                             style={{ ...btnSecondaryStyle, padding: '4px 8px', fontSize: '0.75rem', textDecoration: 'none' }}

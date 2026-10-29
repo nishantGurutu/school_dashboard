@@ -1,10 +1,11 @@
 /**
  * Centralized API Configuration and Endpoint Definitions
- * Base URL defaults to Spring Boot Backend running on http://localhost:8080/api
+ * API URL follows the shared runtime environment selection.
  */
 
-export const API_BASE_URL = 'https://school-springboot-backend.onrender.com/api';
-// export const API_BASE_URL = import.meta.env?.VITE_API_BASE_URL || 'http://localhost:8080/api';
+import { getRuntimeUrl, onRuntimeUrl } from './runtimeConfig';
+export let API_BASE_URL = getRuntimeUrl();
+onRuntimeUrl(url => { API_BASE_URL = url; });
 
 export const API_ENDPOINTS = {
   // Authentication & Session
