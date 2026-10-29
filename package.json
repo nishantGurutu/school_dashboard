@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@hello-pangea/dnd": "^16.6.0",
+    "@stomp/stompjs": "^7.5.0",
     "apexcharts": "^4.0.0",
     "clsx": "^2.1.1",
     "leaflet": "^1.9.4",

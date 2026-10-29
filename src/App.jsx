@@ -1,3 +1,4 @@
+import { ChatModule } from './components/modules/ChatModule';
 import { SettingsModule } from './components/modules/SettingsModule';
 import { StudentReportsModule } from './components/modules/StudentReportsModule';
 import { PortalModule } from './components/modules/PortalModule';
@@ -51,6 +52,7 @@ const MainLayout = ({ onLogout }) => {
   const renderModule = () => {
     if (!canAccess(authStorage.getUser(), activeTab)) return <p role="alert">You do not have access to this module.</p>;
     switch (activeTab) {
+      case 'chat': return <ChatModule />;
       case 'settings': return <SettingsModule />;
       case 'dashboard':
         return roleFor(authStorage.getUser()) === 'ACCOUNTANT' ? <AccountantDashboard />

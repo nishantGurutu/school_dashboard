@@ -57,7 +57,7 @@ class NetworkServiceClass {
 
   async request(endpoint, options = {}) {
     await refreshRuntimeConfig(endpoint.includes('/auth/login'));
-    const { method = 'GET', headers = {}, body, params, baseUrl = this.baseUrl, ...customConfig } = options;
+    const { method = 'GET', headers = {}, body, params, baseUrl = this.baseUrl, responseType, ...customConfig } = options;
 
     let url = endpoint.startsWith('http') ? endpoint : `${baseUrl}${endpoint}`;
 
@@ -127,6 +127,7 @@ class NetworkServiceClass {
       response = await fetch(url, fetchConfig);
     }
 
+    if (response.ok && responseType === 'blob') return response.blob();
     return this.parseResponse(response);
   }
 
