@@ -1,70 +1,23 @@
 import { mergeChatMessages } from '../../services/chatMessages';
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { Client } from '@stomp/stompjs';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useChatSession } from '../../context/ChatSessionContext';
 import { NetworkService, authStorage } from '../../services/api';
-import { API_BASE_URL } from '../../services/apiConfig';
 import './ChatModule.css';
 
 export function ChatModule() {
-  const [rooms, setRooms] = useState([]), [contacts, setContacts] = useState([]);
-  const [roomId, setRoomId] = useState(null), [messages, setMessages] = useState([]);
+  const { rooms, contacts, roomId, setRoomId, messages, setMessages, error, setError, online, selectedRoom, sync, visible } = useChatSession();
   const [text, setText] = useState(''), [attachment, setAttachment] = useState(null);
-  const [error, setError] = useState(''), [busy, setBusy] = useState(false), [online, setOnline] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [creating, setCreating] = useState(false), [group, setGroup] = useState(false), [name, setName] = useState(''), [selected, setSelected] = useState([]);
-  const cursor = useRef(0), selectedRoom = useRef(null), syncing = useRef(false), messageList = useRef(null), followBottom = useRef(true), draft = useRef(null);
+  const messageList = useRef(null), followBottom = useRef(true), draft = useRef(null);
   const userId = authStorage.getUser()?.userId;
   const room = rooms.find(r => r.id === roomId);
-  const sync = useCallback(async () => {
-    if (syncing.current) return;
-    syncing.current = true;
-    try {
-      const nextRooms = await NetworkService.get('/chat/rooms'); setRooms(nextRooms);
-      const current = selectedRoom.current;
-      if (!current) return;
-      let after = cursor.current, more = true, received = [];
-      while (more && selectedRoom.current === current) {
-        const page = await NetworkService.get(`/chat/rooms/${current}/messages`, { after });
-        received.push(...page.messages); more = page.hasMore;
-        if (page.messages.length) after = page.messages.at(-1).id; else more = false;
-      }
-      if (selectedRoom.current !== current) return;
-      cursor.current = after;
-      if (received.length) setMessages(previous => mergeChatMessages(previous, received));
-      if (after) await NetworkService.post(`/chat/rooms/${current}/receipts`, { through: after, read: !document.hidden });
-    } catch (e) { setError(e.message); } finally { syncing.current = false; }
-  }, []);
-  useEffect(() => { followBottom.current = true; selectedRoom.current = roomId; cursor.current = 0; setMessages([]); setAttachment(null); draft.current = null; sync(); }, [roomId, sync]);
   useEffect(() => {
-    let disposed = false, socket, base;
-    async function connect() {
-      try {
-        await NetworkService.get('/chat/rooms'); // Refresh access token before STOMP CONNECT.
-        if (disposed) return;
-        base = API_BASE_URL;
-        socket = new Client({ brokerURL: base.replace(/^http/, 'ws') + '/chat/ws', reconnectDelay: 5000,
-          heartbeatIncoming: 10000, heartbeatOutgoing: 10000,
-          beforeConnect: async () => { try { await NetworkService.get('/chat/rooms'); } catch (e) { if (!disposed) setError(e.message); } socket.connectHeaders = { Authorization: `Bearer ${authStorage.getAccessToken()}` }; },
-          onConnect: () => { setOnline(true); socket.subscribe('/user/queue/chat', frame => {
-            const event = JSON.parse(frame.body);
-            if (event.type === 'message' && event.message) {
-              if (event.roomId === selectedRoom.current) setMessages(previous => mergeChatMessages(previous, [event.message]));
-              setRooms(previous => previous.map(r => r.id === event.roomId ? { ...r, lastMessage: event.message.text || 'Attachment' } : r));
-            }
-            if (event.type === 'receipt') {
-              setRooms(previous => previous.map(r => r.id === event.roomId ? { ...r, members: r.members.map(m => String(m.id) === String(event.userId) ? { ...m, readThrough: Math.max(m.readThrough || 0, event.readThrough || 0), deliveredThrough: Math.max(m.deliveredThrough || 0, event.deliveredThrough || 0) } : m) } : r));
-            } else sync();
-          }); sync(); },
-          onWebSocketClose: () => setOnline(false), onStompError: () => { setOnline(false); socket.forceDisconnect(); }
-        }); socket.activate();
-      } catch (e) { if (!disposed) setError(e.message); }
-    }
-    connect(); sync();
-    NetworkService.get('/chat/contacts').then(setContacts).catch(e => setError(e.message));
-    const timer = setInterval(() => { sync(); if (base && base !== API_BASE_URL) { socket?.deactivate(); connect(); } }, 5000);
-    const reauth = setInterval(() => { socket?.deactivate().then(connect); }, 20 * 60 * 1000);
-    document.addEventListener('visibilitychange', sync);
-    return () => { disposed = true; clearInterval(timer); clearInterval(reauth); socket?.deactivate(); document.removeEventListener('visibilitychange', sync); };
-  }, [sync]);
+    visible.current = true;
+    void sync();
+    return () => { visible.current = false; };
+  }, [sync, visible]);
+  useEffect(() => { followBottom.current = true; setAttachment(null); draft.current = null; }, [roomId]);
   useLayoutEffect(() => {
     const list = messageList.current;
     if (list && followBottom.current) list.scrollTop = list.scrollHeight;

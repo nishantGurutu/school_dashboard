@@ -1,4 +1,5 @@
 import { ChatModule } from './components/modules/ChatModule';
+import { ChatSessionProvider } from './context/ChatSessionContext';
 import { SettingsModule } from './components/modules/SettingsModule';
 import { StudentReportsModule } from './components/modules/StudentReportsModule';
 import { PortalModule } from './components/modules/PortalModule';
@@ -204,7 +205,7 @@ export default function App() {
   return (
     <ThemeProvider>
       <ToastProvider>
-        {isAuthenticated ? <MainLayout onLogout={handleLogout} /> : <LoginScreen onLogin={() => setIsAuthenticated(true)} />}
+        {isAuthenticated ? <ChatSessionProvider><MainLayout onLogout={handleLogout} /></ChatSessionProvider> : <LoginScreen onLogin={() => setIsAuthenticated(true)} />}
       </ToastProvider>
     </ThemeProvider>
   );

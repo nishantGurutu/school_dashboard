@@ -33,6 +33,27 @@ class NetworkServiceClass {
 
   get baseUrl() { return API_BASE_URL; }
 
+  async socketAccessToken() {
+    await refreshRuntimeConfig();
+    let token = authStorage.getAccessToken();
+    if (!token) throw new Error('Sign in to connect chat');
+    let expires;
+    try {
+      const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      expires = JSON.parse(atob(payload)).exp;
+      if (typeof expires !== 'number') throw new Error('Unknown token format');
+    } catch {
+      await this.get('/chat/rooms');
+      token = authStorage.getAccessToken();
+      if (!token) throw new Error('Chat session expired');
+      return token;
+    }
+    if (expires * 1000 > Date.now() + 30000) return token;
+    token = await this.refreshAccessToken();
+    if (!token) throw new Error('Chat session expired');
+    return token;
+  }
+
   async refreshAccessToken(baseUrl = this.baseUrl) {
     if (this.refreshPromise) return this.refreshPromise;
     this.refreshPromise = (async () => {

@@ -52,3 +52,21 @@ test('retry stops after one refresh and configuration-server refresh stays on th
   await assert.rejects(api.request('/admin/runtime-config',{baseUrl:'https://config.example/api'}));
   assert.equal(refreshes,1);assert.equal(calls,2);
 });
+
+const jwt = exp => `header.${Buffer.from(JSON.stringify({exp})).toString('base64url')}.signature`;
+test('socket reuses a valid JWT without fetching rooms or refreshing', async () => {
+  reset(); const token = jwt(Math.floor(Date.now() / 1000) + 3600);
+  auth.setSession({accessToken:token});
+  globalThis.fetch = async () => { throw new Error('Unexpected HTTP request'); };
+  assert.equal(await api.socketAccessToken(), token);
+});
+test('concurrent socket connects refresh an expired JWT once', async () => {
+  reset(); auth.setSession({accessToken:jwt(1)}); let refreshes = 0;
+  globalThis.fetch = async url => {
+    assert.ok(url.endsWith('/auth/refresh')); refreshes++;
+    await new Promise(resolve => setTimeout(resolve, 5));
+    return response(200, {accessToken:'renewed'});
+  };
+  assert.deepEqual(await Promise.all([api.socketAccessToken(), api.socketAccessToken()]), ['renewed','renewed']);
+  assert.equal(refreshes, 1);
+});
