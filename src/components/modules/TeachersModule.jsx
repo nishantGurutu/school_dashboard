@@ -1,3 +1,5 @@
+import { mediaUrl } from '../../services/mediaService';
+import { MediaPreview } from '../ui/MediaUpload';
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserCheck, Plus, Search, Mail, Phone, BookOpen, Edit, Trash2, ShieldCheck, Users } from 'lucide-react';
 import { TeacherForm } from './TeacherForm';
@@ -193,9 +195,8 @@ export const TeachersModule = () => {
       prevSchoolName: formData.prevSchoolName || '',
       prevSchoolAddress: formData.prevSchoolAddress || '',
       teacherBio: formData.teacherBio || '',
-      avatar: formData.avatar || formData.teacherPhoto || (selectedType === 'Principal'
-        ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'
-        : 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150'),
+      avatar: formData.teacherPhoto || '',
+      docFile: formData.uploadFile || '',
       status: 'ACTIVE'
     };
 
@@ -478,10 +479,10 @@ export const TeachersModule = () => {
               <div key={t.id} className="col-span-4 card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-                    <img src={t.avatar} alt={t.name} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover' }} />
+                    <img src={mediaUrl(t.avatar)} alt={t.name} style={{ width: '56px', height: '56px', borderRadius: '50%', objectFit: 'cover' }} />
                     <div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{t.name}</h3>
+                        <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{t.name}</h3>{t.docFile && <MediaPreview value={t.docFile} kind="document" label="Staff document" size={24} />}
                         <span
                           style={{
                             fontSize: '0.72rem',

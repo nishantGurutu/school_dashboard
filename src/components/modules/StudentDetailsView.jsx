@@ -1,3 +1,5 @@
+import { mediaUrl } from '../../services/mediaService';
+import { MediaPreview } from '../ui/MediaUpload';
 import React, { useState } from 'react';
 import {
   ArrowLeft,
@@ -29,6 +31,12 @@ export const StudentDetailsView = ({ student, onBack, onEdit }) => {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {['studentPhoto','fatherPhoto','motherPhoto','guardianPhoto','docFile'].some(key => student[key]) && <section className="card" aria-label="Saved photos and documents">
+        <h3>Photos & documents</h3>
+        <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginTop: 16 }}>
+          {[['studentPhoto','Student'],['fatherPhoto','Father'],['motherPhoto','Mother'],['guardianPhoto','Guardian'],['docFile','Document']].map(([key,label]) => student[key] && <div key={key}><div>{label}</div><MediaPreview value={student[key]} kind={key === 'docFile' ? 'document' : 'photo'} label={label} size={80} /></div>)}
+        </div>
+      </section>}
       {/* Top Header Card / Hero Profile Banner */}
       <div className="card animate-fade-in" style={{ padding: 0, overflow: 'hidden', border: '1px solid var(--border-color)' }}>
         {/* Cover Background */}
@@ -45,7 +53,7 @@ export const StudentDetailsView = ({ student, onBack, onEdit }) => {
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px', marginTop: '-50px' }}>
             <div className="student-profile-heading" style={{ display: 'flex', alignItems: 'flex-end', gap: '20px' }}>
               <img
-                src={student.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
+                src={mediaUrl(student.avatar || student.studentPhoto) || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
                 alt={student.name}
                 style={{
                   width: '100px',

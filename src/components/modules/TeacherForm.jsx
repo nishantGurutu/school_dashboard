@@ -1,3 +1,5 @@
+import { MediaUpload as DropzoneArea } from '../ui/MediaUpload';
+import { mediaReady } from '../../services/mediaService';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   Upload,
@@ -221,7 +223,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
     email: initialData?.email && initialData.email !== 'N/A' ? initialData.email : '',
     experience: initialData?.experience || (initialData?.experienceYears ? `${initialData.experienceYears} Years` : ''),
     qualification: initialData?.qualification || '',
-    teacherPhoto: null,
+    teacherPhoto: initialData?.avatar || null,
 
     // Medical Details
     bloodGroup: initialData?.bloodGroup || 'A+',
@@ -236,7 +238,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
     // Upload Documents
     docName: initialData?.docName || '',
-    uploadFile: null,
+    uploadFile: initialData?.docFile || null,
 
     // Previous School Details
     prevSchoolName: initialData?.prevSchoolName || '',
@@ -455,6 +457,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
       !e.metaKey
     ) {
       e.preventDefault();
+    if (!mediaReady(e.currentTarget)) return;
     }
   };
 
@@ -572,7 +575,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         email: initialData.email && initialData.email !== 'N/A' ? initialData.email : '',
         experience: initialData.experience || (initialData?.experienceYears ? `${initialData.experienceYears} Years` : ''),
         qualification: initialData.qualification || '',
-        teacherPhoto: null,
+        teacherPhoto: initialData?.avatar || null,
         bloodGroup: initialData.bloodGroup || 'A+',
         height: initialData.height || '',
         weight: initialData.weight || '',
@@ -581,7 +584,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         ifscCode: initialData.ifscCode || '',
         nationalIdNumber: initialData.nationalIdNumber || '',
         docName: initialData.docName || '',
-        uploadFile: null,
+        uploadFile: initialData?.docFile || null,
         prevSchoolName: initialData.prevSchoolName || '',
         prevSchoolAddress: initialData.prevSchoolAddress || '',
         currentAddress: initialData.currentAddress || initialData.address || '',
@@ -622,7 +625,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         email: '',
         experience: '',
         qualification: '',
-        teacherPhoto: null,
+        teacherPhoto: initialData?.avatar || null,
         bloodGroup: 'A+',
         height: '',
         weight: '',
@@ -631,7 +634,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
         ifscCode: '',
         nationalIdNumber: '',
         docName: '',
-        uploadFile: null,
+        uploadFile: initialData?.docFile || null,
         prevSchoolName: '',
         prevSchoolAddress: '',
         currentAddress: '',
@@ -1099,9 +1102,9 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
 
             <div className="col-span-6">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                {formData.type} Photo <span style={{ color: '#ef4444' }}>*</span>
+                {formData.type} Photo (optional)
               </label>
-              <DropzoneArea placeholder="Drag & drop a file here or click" />
+              <DropzoneArea placeholder="Choose staff photo" preview={formData.teacherPhoto} onFileSelect={url => handleChange('teacherPhoto', url)} />
             </div>
           </div>
         </div>
@@ -1248,7 +1251,7 @@ export const TeacherForm = ({ onBack, onSaveTeacher, initialData = null, isEditM
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Upload File
               </label>
-              <DropzoneArea placeholder="Drag & drop a file here or click" />
+              <DropzoneArea kind="document" placeholder="Choose staff document" preview={formData.uploadFile} onFileSelect={url => handleChange('uploadFile', url)} />
             </div>
           </div>
         </div>
@@ -1452,31 +1455,4 @@ const inputStyle = {
   outline: 'none',
   fontFamily: 'var(--font-sans)',
   transition: 'border-color 0.2s ease'
-};
-
-// Dropzone File Component matching reference images
-const DropzoneArea = ({ placeholder }) => {
-  return (
-    <div
-      style={{
-        border: '2px dashed var(--border-color)',
-        borderRadius: 'var(--radius-md)',
-        padding: '12px',
-        textAlign: 'center',
-        backgroundColor: 'var(--bg-app)',
-        color: 'var(--text-muted)',
-        fontSize: '0.8rem',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        minHeight: '42px',
-        transition: 'all 0.2s ease'
-      }}
-    >
-      <Upload size={14} />
-      <span>{placeholder}</span>
-    </div>
-  );
 };

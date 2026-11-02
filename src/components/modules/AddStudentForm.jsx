@@ -1,3 +1,5 @@
+import { MediaUpload as DropzoneArea } from '../ui/MediaUpload';
+import { mediaReady } from '../../services/mediaService';
 import React, { useRef, useState, useEffect, useMemo } from 'react';
 import {
   Upload,
@@ -139,7 +141,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     ifscCode: initialData?.ifscCode || '',
     nationalIdNumber: initialData?.nationalIdNumber || '',
 
-    // Previous School Details
+    // Previous School Details (optional)
     prevSchoolName: initialData?.prevSchoolName || '',
     prevSchoolAddress: initialData?.prevSchoolAddress || '',
 
@@ -147,11 +149,11 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
     currentAddress: initialData?.currentAddress || '',
     permanentAddress: initialData?.permanentAddress || '',
 
-    // Hostel Details
+    // Hostel Details (optional)
     hostelName: initialData?.hostelName || '',
     roomNo: initialData?.roomNo || '',
 
-    // Upload Documents
+    // Upload Documents (optional)
     docName: initialData?.docName || '',
     docFile: initialData?.docFile || null,
 
@@ -226,17 +228,13 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
       !e.metaKey
     ) {
       e.preventDefault();
+    if (!mediaReady(e.currentTarget)) return;
     }
   };
 
   const handlePhoneChange = (field, e) => {
     const numericValue = e.target.value.replace(/\D/g, '').slice(0, 15);
     handleChange(field, numericValue);
-  };
-
-  const handleBankAccountChange = (e) => {
-    const numericValue = e.target.value.replace(/\D/g, '').slice(0, 25);
-    handleChange('bankAccountNumber', numericValue);
   };
 
   const handleChange = (field, value) => {
@@ -384,7 +382,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
             {/* Row 2 */}
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Admission No <span style={{ color: '#ef4444' }}>*</span>
+                Admission No (optional)
               </label>
               <input
                 type="text"
@@ -392,7 +390,6 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
                 value={formData.admissionNo}
                 onChange={(e) => handleChange('admissionNo', e.target.value)}
                 style={inputStyle}
-                required
               />
             </div>
 
@@ -412,7 +409,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
             <div className="col-span-3">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Category <span style={{ color: '#ef4444' }}>*</span>
+                Category (optional)
               </label>
               <input
                 type="text"
@@ -771,76 +768,11 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
           </div>
         </div>
 
-        {/* Section 5: Bank Details */}
-        <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <h3 style={{ fontSize: '1.15rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-            Bank Details
-          </h3>
-
-          <div className="grid-responsive">
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Bank Account Number
-              </label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={25}
-                placeholder="Enter bank account number"
-                value={formData.bankAccountNumber}
-                onChange={handleBankAccountChange}
-                onKeyDown={handleNumericKeyDown}
-                style={inputStyle}
-              />
-            </div>
-
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Bank Name
-              </label>
-              <input
-                type="text"
-                placeholder="Enter bank name"
-                value={formData.bankName}
-                onChange={(e) => handleChange('bankName', e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                IFSC Code
-              </label>
-              <input
-                type="text"
-                placeholder="Enter IFSC Code"
-                value={formData.ifscCode}
-                onChange={(e) => handleChange('ifscCode', e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-
-            <div className="col-span-3">
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                National Identification Number
-              </label>
-              <input
-                type="text"
-                placeholder="Enter national identification number"
-                value={formData.nationalIdNumber}
-                onChange={(e) => handleChange('nationalIdNumber', e.target.value)}
-                style={inputStyle}
-              />
-            </div>
-          </div>
-        </div>
-
         {/* Section 6: Previous School Details & Address */}
         <div className="grid-responsive">
           <div className="col-span-6 card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-              Previous School Details
+              Previous School Details (optional)
             </h3>
             <div style={{ display: 'flex', gap: '16px' }}>
               <div style={{ flex: 1 }}>
@@ -907,7 +839,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
         <div className="grid-responsive">
           <div className="col-span-6 card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-              Hostel Details
+              Hostel Details (optional)
             </h3>
             <div style={{ display: 'flex', gap: '16px' }}>
               <div style={{ flex: 1 }}>
@@ -939,7 +871,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
 
           <div className="col-span-6 card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 800, borderBottom: '1px solid var(--border-light)', paddingBottom: '12px' }}>
-              Upload Documents
+              Upload Documents (optional)
             </h3>
             <div style={{ display: 'flex', gap: '16px' }}>
               <div style={{ flex: 1 }}>
@@ -959,6 +891,7 @@ export const AddStudentForm = ({ onBack, onSaveStudent, initialData = null, isEd
                   Document File
                 </label>
                 <DropzoneArea
+                  kind="document"
                   placeholder="Drag & drop document file or click"
                   onFileSelect={(dataUrl) => handleChange('docFile', dataUrl)}
                   preview={formData.docFile}
@@ -1096,67 +1029,4 @@ const inputStyle = {
   outline: 'none',
   fontFamily: 'var(--font-sans)',
   transition: 'border-color 0.2s ease'
-};
-
-// Drag & Drop File Zone Component matching reference image
-const DropzoneArea = ({ placeholder, onFileSelect, preview }) => {
-  const fileInputRef = useRef(null);
-
-  const handleFileChange = (e) => {
-    const file = e.target.files?.[0];
-    if (file && onFileSelect) {
-      const reader = new FileReader();
-      reader.onload = (uploadEvent) => {
-        onFileSelect(uploadEvent.target.result);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  return (
-    <div
-      onClick={() => fileInputRef.current?.click()}
-      style={{
-        border: '2px dashed var(--border-color)',
-        borderRadius: 'var(--radius-md)',
-        padding: '10px 12px',
-        textAlign: 'center',
-        backgroundColor: 'var(--bg-app)',
-        color: 'var(--text-muted)',
-        fontSize: '0.8rem',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        minHeight: '42px',
-        transition: 'all 0.2s ease',
-        overflow: 'hidden'
-      }}
-    >
-      <input
-        type="file"
-        ref={fileInputRef}
-        onChange={handleFileChange}
-        style={{ display: 'none' }}
-        accept="image/*,.pdf,.doc,.docx"
-      />
-      {preview ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <img
-            src={preview}
-            alt="Preview"
-            style={{ width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' }}
-            onError={(e) => { e.target.style.display = 'none'; }}
-          />
-          <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>File Selected (Click to change)</span>
-        </div>
-      ) : (
-        <>
-          <Upload size={14} />
-          <span>{placeholder}</span>
-        </>
-      )}
-    </div>
-  );
 };

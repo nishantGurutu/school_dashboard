@@ -1,3 +1,4 @@
+import { mediaUrl } from '../../services/mediaService';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   GraduationCap,
@@ -89,7 +90,7 @@ export const StudentsModule = () => {
       try {
         const created = await studentService.create({
           ...studentPayload,
-          admissionNo: formData.admissionNo || `ADM-${Date.now()}`
+          admissionNo: formData.admissionNo?.trim() || null
         });
         setStudentsData((prev) => [created, ...prev]);
         setShowAddForm(false);
@@ -272,7 +273,7 @@ export const StudentsModule = () => {
                           }}
                         >
                           {s.avatar || s.studentPhoto ? (
-                            <img src={s.avatar || s.studentPhoto} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            <img src={mediaUrl(s.avatar || s.studentPhoto)} alt={s.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                           ) : (
                             (s.name || 'S').charAt(0).toUpperCase()
                           )}

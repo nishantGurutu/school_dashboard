@@ -1,3 +1,5 @@
+import { MediaUpload as DropzoneArea } from '../ui/MediaUpload';
+import { mediaReady } from '../../services/mediaService';
 import React, { useRef, useState, useEffect } from 'react';
 import { Upload, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { Spinner } from '../ui/Spinner';
@@ -26,8 +28,9 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
     occupation: initialData?.occupation || '',
     guardianAddress: initialData?.address || '',
     studentAdmissionNo: initialData?.studentAdmissionNo || initialData?.admissionNo || '',
-    guardianPhoto: null,
+    guardianPhoto: initialData?.photo || null,
     email: initialData?.email || '',
+    docFile: initialData?.docFile || null,
     password: ''
   });
 
@@ -35,6 +38,8 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
     if (initialData) {
       setFormData((prev) => ({
         ...prev,
+        guardianPhoto: initialData.photo || null,
+        docFile: initialData.docFile || null,
         guardianType: initialData.relation || initialData.guardianType || prev.guardianType,
         guardianName: initialData.name || initialData.guardianName || prev.guardianName,
         instagram: initialData.phone || prev.instagram,
@@ -52,9 +57,11 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!mediaReady(e.currentTarget)) return;
     if (!onSaveGuardian || savingRef.current) {
       return;
     }
+    if (!formData.studentAdmissionNo.trim()) { e.currentTarget.reportValidity(); return; }
     savingRef.current = true;
     setIsSaving(true);
     try {
@@ -74,7 +81,8 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
         occupation: initialData.occupation || '',
         guardianAddress: initialData.address || '',
         studentAdmissionNo: initialData.studentAdmissionNo || initialData.admissionNo || '',
-        guardianPhoto: null,
+        guardianPhoto: initialData?.photo || null,
+        docFile: initialData?.docFile || null,
         email: initialData.email || '',
         password: ''
       });
@@ -86,7 +94,8 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
         occupation: '',
         guardianAddress: '',
         studentAdmissionNo: '',
-        guardianPhoto: null,
+        guardianPhoto: initialData?.photo || null,
+        docFile: initialData?.docFile || null,
         email: '',
         password: ''
       });
@@ -196,9 +205,10 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
 
             <div className="col-span-4">
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                Link Student / Child (Ward)
+                Link Student / Child (Ward) <span style={{ color: '#ef4444' }}>*</span>
               </label>
               <select
+                required
                 value={formData.studentAdmissionNo}
                 onChange={(e) => handleChange('studentAdmissionNo', e.target.value)}
                 style={inputStyle}
@@ -216,7 +226,9 @@ export const GuardianForm = ({ onBack, onSaveGuardian, initialData = null, isEdi
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                 Guardian Photo
               </label>
-              <DropzoneArea placeholder="Drag & drop photo here or click" />
+              <DropzoneArea placeholder="Choose guardian photo" preview={formData.guardianPhoto} onFileSelect={url => handleChange('guardianPhoto', url)} />
+              <div style={{ marginTop: 16 }}>Document (optional)</div>
+              <DropzoneArea kind="document" placeholder="Choose guardian document" preview={formData.docFile} onFileSelect={url => handleChange('docFile', url)} />
             </div>
           </div>
         </div>
@@ -327,31 +339,4 @@ const inputStyle = {
   outline: 'none',
   fontFamily: 'var(--font-sans)',
   transition: 'border-color 0.2s ease'
-};
-
-// Dropzone Area Component
-const DropzoneArea = ({ placeholder }) => {
-  return (
-    <div
-      style={{
-        border: '2px dashed var(--border-color)',
-        borderRadius: 'var(--radius-md)',
-        padding: '10px',
-        textAlign: 'center',
-        backgroundColor: 'var(--bg-app)',
-        color: 'var(--text-muted)',
-        fontSize: '0.8rem',
-        cursor: 'pointer',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        minHeight: '42px',
-        transition: 'all 0.2s ease'
-      }}
-    >
-      <Upload size={14} />
-      <span>{placeholder}</span>
-    </div>
-  );
 };

@@ -1,3 +1,5 @@
+import { MediaUpload } from '../ui/MediaUpload';
+import { mediaReady } from '../../services/mediaService';
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import {
@@ -363,6 +365,7 @@ export const CertificateModule = () => {
   // Save Drawer Form
   const handleSaveForm = async (e) => {
     e.preventDefault();
+    if (!mediaReady(e.currentTarget)) return;
     if (!formData.certificateName || !formData.certificateName.trim()) {
       setError('Certificate name is required');
       return;
@@ -828,48 +831,7 @@ export const CertificateModule = () => {
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
                     Student Photo
                   </label>
-                  <label
-                    style={{
-                      border: '1.5px dashed var(--border-color)',
-                      borderRadius: 'var(--radius-md)',
-                      padding: '8px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: '10px',
-                      backgroundColor: 'var(--bg-app)',
-                      color: 'var(--text-muted)',
-                      fontSize: '0.8rem',
-                      cursor: 'pointer',
-                      minHeight: '42px'
-                    }}
-                  >
-                    {formData.avatar ? (
-                      <img
-                        src={formData.avatar}
-                        alt="Student"
-                        style={{ width: '28px', height: '28px', borderRadius: '50%', objectFit: 'cover' }}
-                      />
-                    ) : (
-                      <UploadCloud size={18} />
-                    )}
-                    <span>{formData.avatar ? 'Change photo' : 'Upload student photo'}</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      style={{ display: 'none' }}
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onload = (uploadEvent) => {
-                            setFormData((prev) => ({ ...prev, avatar: uploadEvent.target.result }));
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                    />
-                  </label>
+                  <MediaUpload placeholder="Choose certificate photo" preview={formData.avatar} onFileSelect={url => setFormData(previous => ({ ...previous, avatar: url }))} />
                 </div>
               </div>
             </form>

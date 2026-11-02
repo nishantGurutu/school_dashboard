@@ -1,3 +1,4 @@
+import { MediaPreview } from '../ui/MediaUpload';
 import React, { useState, useEffect, useCallback } from 'react';
 import { UserCheck, Plus, Search, Phone, Mail, MapPin, Edit, Trash2 } from 'lucide-react';
 import { GuardianForm } from './GuardianForm';
@@ -63,6 +64,8 @@ export const GuardianModule = () => {
       occupation: formData.occupation,
       email: formData.email,
       address: formData.guardianAddress || formData.address,
+      photo: formData.guardianPhoto ?? null,
+      docFile: formData.docFile ?? null,
       feeStatus: 'Clear',
       studentAdmissionNo: formData.studentAdmissionNo || undefined,
       password: formData.password || undefined
@@ -212,7 +215,7 @@ export const GuardianModule = () => {
               <tbody>
                 {filteredGuardians.map((g) => (
                   <tr key={g.id} style={{ borderBottom: '1px solid var(--border-light)' }}>
-                    <td style={{ padding: '14px 20px', fontWeight: 700 }}>{g.name || g.guardianName}</td>
+                    <td style={{ padding: '14px 20px', fontWeight: 700 }}><div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><MediaPreview value={g.photo} label={g.name || 'Guardian'} size={40} /><div>{g.name || g.guardianName}{g.docFile && <div><MediaPreview value={g.docFile} kind="document" label="Guardian document" size={28} /></div>}</div></div></td>
                     <td style={{ padding: '14px 20px' }}>
                       <div style={{ fontWeight: 600 }}>{g.studentName || g.studentAdmissionNo || 'N/A'}</div>
                       <span className="badge badge-info" style={{ marginTop: '4px' }}>
