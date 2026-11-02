@@ -36,7 +36,6 @@ export const Sidebar = () => {
 
   const menuItems = [
     { key: 'chat', label: 'Messages', icon: BookMarked, hasSub: false },
-    { key: 'settings', label: 'Settings', icon: UserCog, hasSub: false },
     { key: 'dashboard', label: 'Dashboard', icon: Home, hasSub: true },
     { key: 'students', label: 'Students', icon: GraduationCap, hasSub: true },
     { key: 'teachers', label: 'Staff', icon: UserCheck, hasSub: false },

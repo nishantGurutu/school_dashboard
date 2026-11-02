@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { useTheme } from '../../context/ThemeContext';
+import { canAccess } from '../../config/roleAccess';
 import { authStorage } from '../../services/api';
 import { Spinner } from '../ui/Spinner';
 import {
@@ -11,11 +12,13 @@ import {
   PanelLeft,
   Globe,
   LogOut,
+  Settings,
   ChevronDown
 } from 'lucide-react';
 
 export const Header = ({ onLogout }) => {
   const {
+    setActiveTab,
     theme,
     toggleTheme,
     toggleSidebar,
@@ -206,6 +209,19 @@ export const Header = ({ onLogout }) => {
                 <div style={{ fontSize: '0.85rem', fontWeight: 700 }}>{(currentUser && currentUser.name) || 'Admin'}</div>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{(currentUser && currentUser.email) || 'admin@school.com'}</div>
               </div>
+              {canAccess(currentUser, 'settings') && (
+                <button
+                  onClick={() => { setActiveTab('settings'); setIsUserMenuOpen(false); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '8px', width: '100%',
+                    padding: '12px 16px', border: 'none', background: 'transparent',
+                    color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Settings size={16} /> Settings
+                </button>
+              )}
               {onLogout && (
                 <button
                   onClick={handleLogout}

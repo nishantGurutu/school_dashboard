@@ -1,6 +1,6 @@
 const modules = {
   STAFF: ['dashboard', 'chat'],
-  ADMIN: ['chat', 'settings', 'dashboard', 'portal', 'students', 'teachers', 'staff', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
+  ADMIN: ['chat', 'dashboard', 'portal', 'students', 'teachers', 'staff', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'fees', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'accounts', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
   PRINCIPAL: ['chat', 'dashboard', 'portal', 'students', 'teachers', 'staff', 'guardian', 'classes', 'curriculum', 'homework', 'examinations', 'attendance', 'holidays', 'leaves', 'certificate', 'library', 'hrm', 'notice', 'banners', 'gallery', 'transport'],
   TEACHER: ['chat', 'dashboard', 'portal', 'students', 'curriculum', 'homework', 'examinations', 'attendance-student', 'certificate', 'holidays', 'leaves-request', 'notice', 'classes-timetable'],
   ACCOUNTANT: ['chat', 'dashboard', 'fees', 'accounts', 'holidays', 'notice'],
@@ -12,7 +12,13 @@ export function roleFor(user) {
   return ['MASTER_ADMIN', 'SUPER_ADMIN', 'ADMIN'].includes(role) ? 'ADMIN' : role;
 }
 
+export function isSuperAdmin(user) {
+  const role = String(user?.role || user?.userType || '').toUpperCase().replace(/^ROLE_/, '');
+  return ['MASTER_ADMIN', 'SUPER_ADMIN'].includes(role);
+}
+
 export function canAccess(user, key) {
+  if (key === 'settings' || key.startsWith('settings-')) return isSuperAdmin(user);
   return (modules[roleFor(user)] || []).some(allowed => key === allowed || key.startsWith(`${allowed}-`));
 }
 

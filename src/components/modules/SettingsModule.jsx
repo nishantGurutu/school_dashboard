@@ -23,29 +23,26 @@ export function SettingsModule() {
   async function save(event) {
     event.preventDefault(); setBusy(true); setMessage('');
     try {
-      const saved = await request('PUT', config);
+      const saved = await request('PUT', { liveUrl: config.liveUrl });
       setConfig(saved);
-      applyRuntimeConfig({ activeUrl: saved.environment === 'live' ? saved.liveUrl : saved.developmentUrl });
-      setMessage('Both URLs and the selected environment have been saved to the database. Dashboard and mobile app use the selected URL within 15 seconds. A separate server may require signing in again.');
+      applyRuntimeConfig(saved);
+      setMessage('Live URL saved. Dashboard and app running in production mode will use it within 15 seconds. You may need to sign in again.');
     } catch (e) { setMessage(e.message); } finally { setBusy(false); }
   }
   return <section style={{ maxWidth: 760, padding: 24 }}>
-    <h2>Settings — API Environment</h2>
-    <p>Select the environment shared by the dashboard and Flutter app. Both URLs and the selected environment are stored in the database. This screen loads the saved values whenever you open it. Click Save settings to apply changes.</p>
-    <p style={{ overflowWrap: 'anywhere' }}>Configuration server: {CONFIG_BASE_URL}</p>
+    <h2>Settings — Live API URL</h2>
+    <p>Update the live server URL used by the dashboard and app in production mode.</p>
     {message && <p role="status">{message}</p>}
     {!config ? <button onClick={load} disabled={busy}>{busy ? 'Loading…' : 'Retry'}</button> :
       <form onSubmit={save}>
         <fieldset disabled={busy} style={{ display: 'grid', gap: 18, padding: 20 }}>
-          <legend>Active environment</legend>
-          {['live', 'development'].map(env => <label key={env} style={{ display: 'grid', gap: 8 }}>
-            <span><input type="radio" name="environment" checked={config.environment === env}
-              onChange={() => setConfig({ ...config, environment: env })} /> {env === 'live' ? 'Live' : 'Development'}</span>
-            <input aria-label={`${env} API URL`} type="url" required value={config[`${env}Url`]}
-              onChange={e => setConfig({ ...config, [`${env}Url`]: e.target.value })}
+          <legend>Live server</legend>
+          <label style={{ display: 'grid', gap: 8 }}>
+            Live API URL
+            <input aria-label="Live API URL" type="url" required value={config.liveUrl}
+              onChange={e => setConfig({ ...config, liveUrl: e.target.value })}
               placeholder="https://your-server.com/api" style={{ padding: 12, width: '100%', boxSizing: 'border-box' }} />
-          </label>)}
-          <p>Use a full HTTP(S) server URL. /api is added automatically. Development must be reachable from the phone; localhost refers to the phone itself.</p>
+          </label>
           <button type="submit">{busy ? 'Saving…' : 'Save settings'}</button>
         </fieldset>
       </form>}

@@ -33,16 +33,12 @@ export const LoginScreen = ({ onLogin }) => {
 
     try {
       const result = await authService.login(trimmedInput, trimmedPassword);
-
-      // STRICT VALIDATION: Navigate to dashboard ONLY if 200 success response returned
       if (result && result.success && result.user && result.user.userId) {
         onLogin(result.user);
       } else {
-        // Under no circumstances navigate if response is not completely successful
         setError(result?.message || 'Invalid credentials');
       }
     } catch (err) {
-      // Do NOT navigate. Show the API's exact message to the user
       const apiMessage = err.apiMessage || err.message || 'Invalid credentials';
       setError(apiMessage);
     } finally {
