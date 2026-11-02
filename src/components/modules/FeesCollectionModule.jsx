@@ -359,7 +359,7 @@ export const FeesCollectionModule = () => {
         className="card animate-fade-in"
         style={{
           display: 'flex',
-          justify: 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           flexWrap: 'wrap',
           gap: '16px'
@@ -370,9 +370,9 @@ export const FeesCollectionModule = () => {
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{headerInfo.breadcrumb}</p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="module-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           {/* Sub-Nav Tabs */}
-          <div style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-app)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
+          <div className="module-tabs" style={{ display: 'flex', gap: '4px', backgroundColor: 'var(--bg-app)', padding: '4px', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-light)' }}>
             <button
               onClick={() => handleSubTabChange('collect')}
               style={{
@@ -796,7 +796,7 @@ export const FeesCollectionModule = () => {
               boxShadow: '-8px 0 24px rgba(0, 0, 0, 0.2)',
               display: 'flex',
               flexDirection: 'column',
-              justify: 'space-between',
+              justifyContent: 'space-between',
               zIndex: 1001,
               animation: 'slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
             }}
@@ -808,7 +808,7 @@ export const FeesCollectionModule = () => {
                 borderBottom: '1px solid var(--border-light)',
                 display: 'flex',
                 alignItems: 'center',
-                justify: 'space-between'
+                justifyContent: 'space-between'
               }}
             >
               <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>

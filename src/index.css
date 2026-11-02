@@ -350,3 +350,78 @@ button:disabled {
     padding: 16px;
   }
 }
+
+/* Shared responsive shell: the desktop rail becomes a separate mobile drawer. */
+.app-container { width: 100%; }
+.page-body, .grid-responsive > *, .card { min-width: 0; }
+.grid-responsive { grid-template-columns: repeat(12, minmax(0, 1fr)); }
+.header-start, .header-search, .header-actions { min-width: 0; }
+.header-actions, .btn-icon { flex-shrink: 0; }
+.sidebar-backdrop { position: fixed; inset: 0; z-index: 110; border: 0; background: rgb(15 23 42 / 48%); }
+.mobile-nav-close { position: absolute; top: 14px; right: 8px; z-index: 1; }
+.page-body div:has(> table) { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.page-body img, .page-body video { max-width: 100%; }
+
+@media (max-width: 900px) {
+  .main-content { margin-left: 0 !important; width: 100%; }
+  .app-header { left: 0 !important; padding: 0 16px !important; gap: 12px; }
+  .app-sidebar { width: min(300px, calc(100vw - 48px)) !important; height: 100dvh !important; z-index: 120 !important; transform: translateX(-100%); visibility: hidden; transition: transform .25s ease, visibility .25s !important; }
+  .app-sidebar.is-open { transform: translateX(0); visibility: visible; }
+  .app-sidebar > div:first-of-type { flex-shrink: 0; padding-right: 44px !important; }
+  .header-user-text, .header-language { display: none !important; }
+  .header-actions { gap: 4px !important; }
+  .header-start { gap: 8px !important; }
+}
+
+@media (max-width: 600px) {
+  .page-body { padding: 12px; }
+  .card { padding: 16px; max-width: 100%; }
+  .grid-responsive { gap: 14px; }
+  .grid-responsive > [class*="col-span-"] { grid-column: 1 / -1; }
+  .app-header { padding: 0 10px !important; }
+  .header-search { display: none !important; }
+  .header-start { flex: 0 0 auto !important; }
+  .header-start::after { content: 'School Desk'; font-weight: 800; white-space: nowrap; font-size: .95rem; }
+  .header-actions { margin-left: auto; }
+  .header-actions > .btn-icon[title="Theme Customizer"] { display: none; }
+  .page-body div[style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .page-body div[style*="min-width"] { min-width: 0 !important; }
+  .page-body .card > div[style*="justify-content: space-between"],
+  .page-body > div > div:first-child[style*="justify-content: space-between"] { flex-wrap: wrap; gap: 12px; }
+  .page-body .card > div[style*="justify-content: space-between"] > div { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+  .page-body input:not([type="checkbox"]):not([type="radio"]), .page-body select, .page-body textarea { min-width: 0; max-width: 100%; font-size: 16px !important; }
+  .page-body table { min-width: 640px; }
+  .page-body th, .page-body td { white-space: nowrap; }
+  .page-body h1, .page-body h2 { overflow-wrap: anywhere; }
+  .page-body .btn { min-height: 40px; white-space: normal; }
+  .page-body [style*="display: flex"][style*="flex-wrap: wrap"] > [style*="width:"] { max-width: 100%; }
+  div[style*="position: fixed"][style*="inset: 0"] { padding: 12px !important; }
+  div[style*="position: fixed"][style*="inset: 0"] > div { min-width: 0 !important; max-width: 100% !important; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .apexcharts-canvas, .apexcharts-svg { max-width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar, .main-content, .app-header { transition: none !important; }
+}
+@media (max-width: 600px) {
+  .header-actions > div:last-child { margin-left: 0 !important; }
+  .header-actions > div:last-child > div > svg { display: none; }
+  .header-actions .btn-icon { width: 36px; height: 40px; }
+  .school-chat > header { flex-wrap: wrap; gap: 12px; }
+  .chat-columns { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(360px, 1fr); height: auto; }
+  .chat-columns > aside { display: flex; gap: 8px; max-height: 130px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--border-color); }
+  .chat-columns > aside > button { flex: 0 0 160px; width: 160px; margin: 0; }
+  .chat-columns main { height: 65dvh; min-height: 360px; }
+  .chat-create input, .chat-create select { width: 100%; min-width: 0; }
+  .chat-compose { padding: 10px; }
+}
+@media (max-width: 900px) {
+  .module-header-actions { width: 100%; min-width: 0; flex-wrap: wrap; }
+  .module-tabs { width: 100%; min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+  .module-tabs > button { flex-shrink: 0; white-space: nowrap; }
+}
+@media (max-width: 600px) {
+  .page-body div:has(> table) { overflow-x: auto !important; }
+  .student-profile-heading { flex-direction: column; align-items: flex-start !important; width: 100%; }
+  .student-profile-heading > div > div { flex-wrap: wrap; }
+}

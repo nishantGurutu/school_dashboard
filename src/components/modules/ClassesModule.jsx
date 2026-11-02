@@ -543,9 +543,9 @@ export const ClassesModule = () => {
           <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '4px', marginBottom: 0 }}>{headerInfo.breadcrumb}</p>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+        <div className="module-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
           {/* Sub-Nav Tabs */}
-          <div style={{
+          <div className="module-tabs" style={{
             display: 'flex',
             gap: '4px',
             backgroundColor: 'var(--bg-app)',
@@ -770,7 +770,7 @@ export const ClassesModule = () => {
       <div className="card animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '20px' }}>
         {/* Controls Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          <div className="module-header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
             <button
               className="btn btn-secondary"
               onClick={handleExportCSV}

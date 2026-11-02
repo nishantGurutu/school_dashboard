@@ -23,6 +23,7 @@ export const Header = ({ onLogout }) => {
     toggleTheme,
     toggleSidebar,
     isSidebarCollapsed,
+    isMobile, isMobileSidebarOpen,
     setIsCustomizerOpen
   } = useTheme();
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -44,12 +45,12 @@ export const Header = ({ onLogout }) => {
   };
 
   return (
-    <header
+    <header className="app-header"
       style={{
         position: 'fixed',
         top: 0,
         right: 0,
-        left: isSidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)',
+        left: isMobile ? 0 : isSidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)',
         height: 'var(--header-height)',
         backgroundColor: 'var(--bg-header)',
         backdropFilter: 'blur(12px)',
@@ -64,12 +65,12 @@ export const Header = ({ onLogout }) => {
       }}
     >
       {/* Search & Sidebar Toggle */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, maxWidth: '480px' }}>
-        <button className="btn-icon" onClick={toggleSidebar} title="Toggle Sidebar">
+      <div className="header-start" style={{ display: 'flex', alignItems: 'center', gap: '16px', flex: 1, maxWidth: '480px' }}>
+        <button className="btn-icon" onClick={toggleSidebar} title="Toggle Sidebar" aria-label={isMobile ? "Open navigation" : "Toggle sidebar"} aria-controls="main-navigation" aria-expanded={isMobile ? isMobileSidebarOpen : !isSidebarCollapsed}>
           <PanelLeft size={20} />
         </button>
 
-        <div
+        <div className="header-search"
           style={{
             position: 'relative',
             width: '100%',
@@ -113,9 +114,9 @@ export const Header = ({ onLogout }) => {
       </div>
 
       {/* Right Icons & User Avatar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
         {/* Language selector */}
-        <button className="btn-icon" title="Language: English">
+        <button className="btn-icon header-language" title="Language: English">
           <span style={{ fontSize: '1.2rem', display: 'flex', alignItems: 'center' }}>🇬🇧</span>
         </button>
 
@@ -179,7 +180,7 @@ export const Header = ({ onLogout }) => {
                 }}
               />
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+            <div className="header-user-text" style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
               <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                 {(currentUser && currentUser.name) || 'Admin'}
               </span>

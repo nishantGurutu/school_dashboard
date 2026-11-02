@@ -44,7 +44,7 @@ import { ThemeCustomizerModal } from './components/customizer/ThemeCustomizerMod
 import { LoginScreen } from './components/auth/LoginScreen';
 
 const MainLayout = ({ onLogout }) => {
-  const { activeTab, setActiveTab, isSidebarCollapsed } = useTheme();
+  const { activeTab, setActiveTab, isSidebarCollapsed, isMobile, isMobileSidebarOpen, closeMobileSidebar } = useTheme();
 
   useEffect(() => {
     setActiveTab('dashboard');
@@ -166,10 +166,11 @@ const MainLayout = ({ onLogout }) => {
   return (
     <div className="app-container">
       <Sidebar />
+      {isMobile && isMobileSidebarOpen && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={closeMobileSidebar} />}
       <div
         className="main-content"
         style={{
-          marginLeft: isSidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)'
+          marginLeft: isMobile ? 0 : isSidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)'
         }}
       >
         <Header onLogout={onLogout} />

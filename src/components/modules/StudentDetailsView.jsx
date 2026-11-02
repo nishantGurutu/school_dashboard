@@ -43,7 +43,7 @@ export const StudentDetailsView = ({ student, onBack, onEdit }) => {
         {/* Profile Details Header */}
         <div style={{ padding: '0 28px 24px 28px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: '16px', marginTop: '-50px' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-end', gap: '20px' }}>
+            <div className="student-profile-heading" style={{ display: 'flex', alignItems: 'flex-end', gap: '20px' }}>
               <img
                 src={student.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&q=80'}
                 alt={student.name}

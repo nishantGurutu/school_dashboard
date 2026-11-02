@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useTheme } from '../../context/ThemeContext';
 import { authStorage } from '../../services/api';
 import { roleFor, visibleMenu } from '../../config/roleAccess';
@@ -25,11 +25,20 @@ import {
   ChevronDown,
   FolderKanban,
   Kanban,
-  Bus
+  Bus, X
 } from 'lucide-react';
 
 export const Sidebar = () => {
-  const { activeTab, setActiveTab, isSidebarCollapsed } = useTheme();
+  const { activeTab, setActiveTab, isSidebarCollapsed: desktopCollapsed, isMobile, isMobileSidebarOpen, closeMobileSidebar } = useTheme();
+  const isSidebarCollapsed = !isMobile && desktopCollapsed;
+  const sidebarRef = useRef(null);
+  useEffect(() => {
+    if (!isMobile || !isMobileSidebarOpen) return;
+    const previous = document.activeElement;
+    sidebarRef.current?.querySelector('button')?.focus();
+    return () => previous?.focus();
+  }, [isMobile, isMobileSidebarOpen]);
+  const navigate = key => { setActiveTab(key); if (isMobile) closeMobileSidebar(); };
   const [openSubMenu, setOpenSubMenu] = useState('classes'); // Default open classes sub-menu
   const currentUser = authStorage.getUser();
   const normalizedRole = roleFor(currentUser);
@@ -200,7 +209,7 @@ export const Sidebar = () => {
           setActiveTab('transport-overview');
         }
     } else {
-      setActiveTab(item.key);
+      navigate(item.key);
     }
   };
 
@@ -220,6 +229,19 @@ export const Sidebar = () => {
 
   return (
     <aside
+      ref={sidebarRef}
+      id="main-navigation"
+      className={`app-sidebar${isMobileSidebarOpen ? ' is-open' : ''}`}
+      aria-label="Main navigation"
+      aria-hidden={isMobile && !isMobileSidebarOpen ? true : undefined}
+      inert={isMobile && !isMobileSidebarOpen ? '' : undefined}
+      onKeyDown={event => {
+        if (!isMobile || event.key !== 'Tab') return;
+        const buttons = [...sidebarRef.current.querySelectorAll('button:not([disabled])')];
+        const first = buttons[0], last = buttons[buttons.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }}
       style={{
         width: isSidebarCollapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)',
         backgroundColor: 'var(--bg-sidebar)',
@@ -236,6 +258,7 @@ export const Sidebar = () => {
         overflowX: 'hidden'
       }}
     >
+      {isMobile && <button className="btn-icon mobile-nav-close" aria-label="Close menu" onClick={closeMobileSidebar}><X size={20} /></button>}
       {/* Brand Header */}
       <div
         style={{
@@ -333,7 +356,7 @@ export const Sidebar = () => {
                     return (
                       <button
                         key={sub.key}
-                        onClick={() => setActiveTab(sub.key)}
+                        onClick={() => navigate(sub.key)}
                         style={{
                           display: 'flex',
                           alignItems: 'center',
