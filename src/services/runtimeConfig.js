@@ -1,6 +1,6 @@
 // Change this switch, then restart the dev server or rebuild the dashboard.
 // true = production API; false = localhost API (ignores saved live configuration).
-export const USE_PRODUCTION = false;
+export const USE_PRODUCTION = true;
 const liveDefault = 'https://school-springboot-backend.onrender.com/api';
 export const CONFIG_BASE_URL = (import.meta.env?.VITE_CONFIG_BASE_URL || liveDefault).replace(/\/+$/, '');
 export const DEFAULT_API_URL = USE_PRODUCTION ? CONFIG_BASE_URL
