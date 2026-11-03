@@ -1,398 +1,118 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  Image,
-  Plus,
-  Edit2,
-  Trash2,
-  CheckCircle,
-  AlertCircle,
-  RefreshCw,
-  FolderPlus,
-  X
-} from 'lucide-react';
-import { Spinner } from '../ui/Spinner';
+import React, { useState, useEffect } from 'react';
+import { Plus, Trash2, X, RefreshCw, Edit2 } from 'lucide-react';
 import { galleryService } from '../../services/galleryService';
+import { saveImage, mediaUrl, MAX_MEDIA_BYTES } from '../../services/mediaService';
+
+const photosOf = album => album.images?.length ? album.images : (album.coverImage ? [album.coverImage] : []);
 
 export const GalleryModule = () => {
   const [albums, setAlbums] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [success, setSuccess] = useState('');
+  const [editor, setEditor] = useState(null);
+  const [photos, setPhotos] = useState([]);
+  const [saving, setSaving] = useState(false);
+  const [progress, setProgress] = useState('');
+  const [viewing, setViewing] = useState(null);
 
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [editingAlbum, setEditingAlbum] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
+  const load = async () => {
+    setLoading(true);
+    try { const data = await galleryService.list(); setAlbums(Array.isArray(data) ? data : data?.data || []); }
+    catch (err) { setError(err.message || 'Failed to load gallery'); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+  useEffect(() => () => { photos.forEach(photo => { if (photo.file) URL.revokeObjectURL(photo.url); }); }, [photos]);
 
-  const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    coverImage: '',
-    photoCount: 1,
-    status: 'Active',
-    displayOrder: 1
-  });
-
-  const fetchAlbums = useCallback(async () => {
-    setIsLoading(true);
-    setError('');
-    try {
-      const data = await galleryService.list();
-      setAlbums(Array.isArray(data) ? data : (data?.data || []));
-    } catch (err) {
-      setError(err?.message || 'Failed to load gallery albums');
-    } finally {
-      setIsLoading(false);
+  const open = (album = {}) => {
+    setError(''); setSuccess(''); setEditor(album);
+    setPhotos(photosOf(album).map(url => ({ url })));
+  };
+  const select = event => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (files.some(file => !file.type.startsWith('image/') || file.type === 'image/svg+xml' || !file.size || file.size > MAX_MEDIA_BYTES)) {
+      setError('Select valid images up to 8 MB each.'); return;
     }
-  }, []);
-
-  useEffect(() => {
-    fetchAlbums();
-  }, [fetchAlbums]);
-
-  const handleOpenAdd = () => {
-    setEditingAlbum(null);
-    setFormData({
-      title: '',
-      description: '',
-      coverImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80',
-      photoCount: 5,
-      status: 'Active',
-      displayOrder: albums.length + 1
-    });
-    setShowModal(true);
-  };
-
-  const handleOpenEdit = (album) => {
-    setEditingAlbum(album);
-    setFormData({
-      title: album.title || '',
-      description: album.description || '',
-      coverImage: album.coverImage || '',
-      photoCount: album.photoCount || 1,
-      status: album.status || 'Active',
-      displayOrder: album.displayOrder || 1
-    });
-    setShowModal(true);
-  };
-
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this gallery album?')) return;
-    try {
-      await galleryService.delete(id);
-      setAlbums((prev) => prev.filter((a) => a.id !== id));
-      setSuccessMessage('Album deleted successfully!');
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      setError(err?.message || 'Failed to delete album');
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSaving(true);
     setError('');
+    // Recreate previews so effect cleanup can safely release the previous selection.
+    setPhotos(previous => [...previous.map(photo => photo.file ? { ...photo, url: URL.createObjectURL(photo.file) } : photo),
+      ...files.map(file => ({ file, url: URL.createObjectURL(file) }))]);
+  };
+  const removePhoto = index => setPhotos(previous => previous.filter((_, i) => i !== index).map(photo => photo.file ? { ...photo, url: URL.createObjectURL(photo.file) } : photo));
+  const save = async event => {
+    event.preventDefault();
+    if (!photos.length || saving) return;
+    setSaving(true); setError('');
     try {
-      if (editingAlbum) {
-        const updated = await galleryService.update(editingAlbum.id, formData);
-        setAlbums((prev) => prev.map((a) => (a.id === editingAlbum.id ? { ...a, ...updated } : a)));
-        setSuccessMessage('Album updated successfully!');
-      } else {
-        const created = await galleryService.create(formData);
-        setAlbums((prev) => [...prev, created]);
-        setSuccessMessage('New album created successfully!');
+      const images = [];
+      for (const photo of photos) {
+        setProgress(`Saving photo ${images.length + 1} of ${photos.length}...`);
+        const url = photo.file ? (await saveImage(photo.file)).fileUrl : photo.url;
+        const parsed = new URL(url, window.location.origin);
+        images.push(parsed.pathname.startsWith('/api/files/media/') ? parsed.pathname : url);
       }
-      setShowModal(false);
-      setTimeout(() => setSuccessMessage(''), 3000);
-    } catch (err) {
-      setError(err?.message || 'Failed to save album');
-    } finally {
-      setIsSaving(false);
-    }
+      const payload = { title: editor.title || 'School Gallery', images, status: 'Active', displayOrder: editor.displayOrder ?? albums.length + 1 };
+      if (editor.id) await galleryService.update(editor.id, payload);
+      else await galleryService.create(payload);
+      setEditor(null); setPhotos([]); setSuccess('Photos saved successfully.'); await load();
+    } catch (err) { setError(err.message || 'Failed to save photos. Please retry.'); }
+    finally { setSaving(false); setProgress(''); }
   };
-
-  const inputStyle = {
-    width: '100%',
-    padding: '10px 14px',
-    borderRadius: 'var(--radius-md, 8px)',
-    border: '1px solid var(--border-color, #e2e8f0)',
-    backgroundColor: 'var(--bg-app, #f8fafc)',
-    color: 'var(--text-primary, #0f172a)',
-    fontSize: '0.875rem',
-    outline: 'none',
-    boxSizing: 'border-box'
+  const remove = async album => {
+    if (!window.confirm('Delete these gallery photos?')) return;
+    try { await galleryService.delete(album.id); setAlbums(previous => previous.filter(item => item.id !== album.id)); }
+    catch (err) { setError(err.message || 'Failed to delete photos'); }
   };
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-      {/* Top Header */}
-      <div className="card animate-fade-in" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '4px' }}>
-            Mobile App / Content / <strong style={{ color: 'var(--text-primary)' }}>School Photo Gallery</strong>
-          </div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800 }}>School Photo Gallery Albums</h2>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-            Manage photo albums and event memories shown on Student & Parent Mobile App Home Screens
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', gap: '10px' }}>
-          <button className="btn btn-secondary" onClick={fetchAlbums} style={{ padding: '9px 14px' }}>
-            <RefreshCw size={16} /> Refresh
-          </button>
-          <button className="btn btn-primary" onClick={handleOpenAdd} style={{ padding: '9px 16px' }}>
-            <FolderPlus size={18} /> Add New Album
-          </button>
+  const overlay = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 };
+  const grid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: 12 };
+  return <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="card" style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16 }}>
+      <div><h2>School Gallery</h2><p>Select and save photos for the dashboard and mobile app.</p></div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button className="btn btn-secondary" onClick={load} disabled={loading}><RefreshCw size={16} /> Refresh</button>
+        <button className="btn btn-primary" onClick={() => open()}><Plus size={18} /> Add Photos</button>
+      </div>
+    </div>
+    {success && <div role="status">{success}</div>}
+    {error && !editor && <div role="alert" style={{ color: '#dc2626' }}>{error}</div>}
+    {loading && <p>Loading gallery...</p>}
+    {!loading && !albums.length && <div className="card">No photos yet. Select Add Photos to upload images.</div>}
+    {albums.map(album => <section className="card" key={album.id}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+        <span>{photosOf(album).length} photos</span>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-secondary" onClick={() => open(album)}><Edit2 size={16} /> Edit Photos</button>
+          <button className="btn btn-secondary" aria-label="Delete photos" onClick={() => remove(album)}><Trash2 size={16} /></button>
         </div>
       </div>
-
-      {/* Alerts */}
-      {successMessage && (
-        <div style={{ padding: '12px 16px', borderRadius: '8px', backgroundColor: '#dcfce7', color: '#15803d', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <CheckCircle size={18} /> {successMessage}
+      <div style={grid}>{photosOf(album).map((url, index) => <button key={`${url}-${index}`} aria-label={`View photo ${index + 1}`} onClick={() => setViewing(url)} style={{ padding: 0, border: 0, cursor: 'pointer', background: 'transparent' }}>
+        <img src={mediaUrl(url)} alt={`Gallery photo ${index + 1}`} loading="lazy" style={{ width: '100%', height: 150, objectFit: 'cover', borderRadius: 10 }} />
+      </button>)}</div>
+    </section>)}
+    {editor && <div style={overlay}><div className="card" role="dialog" aria-modal="true" aria-label="Save Gallery Photos" style={{ width: '100%', maxWidth: 650, maxHeight: '90vh', overflowY: 'auto' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}><h3>{editor.id ? 'Edit Gallery Photos' : 'Add Gallery Photos'}</h3><button className="btn btn-secondary" disabled={saving} aria-label="Close" onClick={() => setEditor(null)}><X size={18} /></button></div>
+      <form onSubmit={save}>
+        <label htmlFor="gallery-photos">Select multiple images</label>
+        <input id="gallery-photos" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple disabled={saving} onChange={select} style={{ display: 'block', margin: '12px 0' }} />
+        <p>{photos.length} photos selected · Up to 8 MB per image</p>
+        {error && <p role="alert" style={{ color: '#dc2626' }}>{error}</p>}
+        <div style={{ ...grid, marginTop: 16 }}>{photos.map((photo, index) => <div key={index} style={{ position: 'relative' }}>
+          <img src={mediaUrl(photo.url)} alt={`Selected photo ${index + 1}`} style={{ width: '100%', height: 130, objectFit: 'cover', borderRadius: 8 }} />
+          <button type="button" className="btn btn-secondary" disabled={saving} aria-label={`Remove photo ${index + 1}`} onClick={() => removePhoto(index)} style={{ position: 'absolute', right: 4, top: 4, padding: 4 }}><X size={16} /></button>
+        </div>)}</div>
+        {saving && <p role="status">{progress}</p>}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
+          <button type="button" className="btn btn-secondary" disabled={saving} onClick={() => setEditor(null)}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={saving || !photos.length}>{saving ? 'Saving...' : 'Save Photos'}</button>
         </div>
-      )}
-      {error && (
-        <div style={{ padding: '12px 16px', borderRadius: '8px', backgroundColor: '#fee2e2', color: '#b91c1c', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600 }}>
-          <AlertCircle size={18} /> {error}
-        </div>
-      )}
-
-      {/* Albums Grid */}
-      {isLoading && albums.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px' }}>
-          <Spinner size={24} color="var(--accent-primary)" />
-          <div style={{ marginTop: '10px', color: 'var(--text-secondary)' }}>Loading gallery albums...</div>
-        </div>
-      ) : albums.length === 0 ? (
-        <div className="card" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-          No gallery albums found. Click <strong>Add New Album</strong> to publish your first album!
-        </div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-          {albums.map((album) => (
-            <div
-              key={album.id}
-              className="card"
-              style={{
-                padding: '0',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'space-between',
-                border: '1px solid var(--border-color, #e2e8f0)',
-                borderRadius: '16px'
-              }}
-            >
-              {/* Cover Photo Preview */}
-              <div style={{ position: 'relative', width: '100%', height: '180px', backgroundColor: '#e2e8f0' }}>
-                <img
-                  src={album.coverImage || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&auto=format&fit=crop&q=80'}
-                  alt={album.title}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  onError={(e) => {
-                    e.target.src = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=600&auto=format&fit=crop&q=80';
-                  }}
-                />
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '12px',
-                    right: '12px',
-                    backgroundColor: 'rgba(15, 23, 42, 0.75)',
-                    backdropFilter: 'blur(4px)',
-                    color: '#fff',
-                    padding: '3px 8px',
-                    borderRadius: '12px',
-                    fontSize: '11px',
-                    fontWeight: 700
-                  }}
-                >
-                  {album.photoCount || 1} Photos
-                </span>
-                <span
-                  style={{
-                    position: 'absolute',
-                    bottom: '12px',
-                    left: '12px',
-                    backgroundColor: album.status === 'Active' ? '#22c55e' : '#64748b',
-                    color: '#fff',
-                    padding: '2px 8px',
-                    borderRadius: '8px',
-                    fontSize: '10px',
-                    fontWeight: 800
-                  }}
-                >
-                  {album.status || 'Active'}
-                </span>
-              </div>
-
-              {/* Album Body */}
-              <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', flex: 1, justifyContent: 'space-between' }}>
-                <div>
-                  <h4 style={{ margin: '0 0 6px 0', fontSize: '16px', fontWeight: 800, color: 'var(--text-primary, #0f172a)' }}>
-                    {album.title}
-                  </h4>
-                  {album.description && (
-                    <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-secondary, #64748b)', lineHeight: 1.4 }}>
-                      {album.description}
-                    </p>
-                  )}
-                </div>
-
-                {/* Footer Actions */}
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px', paddingTop: '10px', borderTop: '1px solid var(--border-light, #f1f5f9)' }}>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => handleOpenEdit(album)}
-                    style={{ padding: '6px 10px', fontSize: '12px' }}
-                  >
-                    <Edit2 size={13} /> Edit
-                  </button>
-                  <button
-                    className="btn btn-danger"
-                    onClick={() => handleDelete(album.id)}
-                    style={{ padding: '6px 10px', fontSize: '12px', backgroundColor: '#fee2e2', color: '#dc2626', border: 'none' }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Add / Edit Album Modal */}
-      {showModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            backgroundColor: 'rgba(0,0,0,0.5)',
-            zIndex: 1000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px'
-          }}
-        >
-          <div
-            className="card animate-scale-up"
-            style={{
-              width: '100%',
-              maxWidth: '520px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              position: 'relative',
-              padding: '24px'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: 800 }}>
-                {editingAlbum ? 'Edit Gallery Album' : 'Create New Gallery Album'}
-              </h3>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Album Title <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Festival, Annual Function, Sports Day"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  style={inputStyle}
-                  required
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Description / Event Notes
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Brief description of the photo collection..."
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  style={{ ...inputStyle, resize: 'vertical' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                    Photo Count
-                  </label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={formData.photoCount}
-                    onChange={(e) => setFormData({ ...formData, photoCount: Number(e.target.value) || 1 })}
-                    style={inputStyle}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                    Status
-                  </label>
-                  <select
-                    value={formData.status}
-                    onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                    style={inputStyle}
-                  >
-                    <option value="Active">Active (Visible in App)</option>
-                    <option value="Inactive">Inactive (Hidden)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, marginBottom: '6px' }}>
-                  Cover Image URL
-                </label>
-                <input
-                  type="text"
-                  placeholder="https://images.unsplash.com/..."
-                  value={formData.coverImage}
-                  onChange={(e) => setFormData({ ...formData, coverImage: e.target.value })}
-                  style={inputStyle}
-                />
-              </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowModal(false)}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={isSaving}
-                >
-                  {isSaving ? 'Saving...' : editingAlbum ? 'Update Album' : 'Create Album'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+      </form>
+    </div></div>}
+    {viewing && <div style={overlay} onClick={() => setViewing(null)} role="dialog" aria-modal="true" aria-label="Gallery photo">
+      <button className="btn btn-secondary" aria-label="Close photo" style={{ position: 'absolute', top: 20, right: 20 }} onClick={() => setViewing(null)}><X /></button>
+      <img src={mediaUrl(viewing)} alt="Gallery photo" style={{ maxWidth: '95%', maxHeight: '90vh', objectFit: 'contain' }} />
+    </div>}
+  </div>;
 };
-
 export default GalleryModule;

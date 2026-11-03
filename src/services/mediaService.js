@@ -6,6 +6,10 @@ const documents = ['application/pdf', 'application/msword', 'application/vnd.ope
 
 export function mediaUrl(value) {
   if (!value || typeof value !== 'string') return '';
+  try {
+    const parsed = new URL(value, NetworkService.baseUrl);
+    if (parsed.pathname.startsWith('/api/files/media/')) return new URL(parsed.pathname, NetworkService.baseUrl).href;
+  } catch { return ''; }
   if (value.startsWith('/api/')) return new URL(value, NetworkService.baseUrl).href;
   return /^(https?:|blob:|data:image\/)/.test(value) ? value : '';
 }
